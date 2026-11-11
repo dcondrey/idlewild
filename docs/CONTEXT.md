@@ -4,7 +4,7 @@
 
 Idlewild replaces the abandoned vivid-id hackathon concept. The intended real-world use is helping game and animation creators make synchronized motion and procedural sound from a short performance, then reuse that performance across scenes. Product usefulness and the quality of live control still need validation.
 
-The requested subjects are a baby dragon, a European dragon, a robot, a pulsating star, bubbles, runners with different character choices, and an educational body-brain visualization. The owner authorized replacing unsuitable models with better free assets. Prioritize two polished demonstration scenes while retaining the remaining requested options in the development plan.
+The requested subjects are a baby dragon, a European dragon, a robot, a pulsating star, bubbles, runners with different character choices, and an educational body-brain visualization. The owner authorized replacing unsuitable models with better free assets. Prioritize two polished demonstration scenes while retaining the remaining requested options for subsequent development.
 
 The workflow is consent, acquisition/warm-up, performance, recording, scene retargeting, trim/loop, and export. Rehearsal is explicitly synthetic. No rewards for unrestricted rapid breathing; any racing mapping uses comfortable calibrated bounds. Bubbles use a validated movement-based approximation, not a claim to measure airflow.
 

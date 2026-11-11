@@ -7,3 +7,4 @@ artifacts/
 *.log
 *.key
 *.pem
+/docs/DEVELOPMENT_PLAN.md

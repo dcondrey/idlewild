@@ -4,7 +4,6 @@ A planned camera-driven animation and sound studio for the Presage challenge: pe
 
 Current state: Electron/Vite/TypeScript/Three.js dependency scaffold and two rigged model candidates. Application source, camera integration, and runnable test commands are not implemented yet. Dependency installation completed; native loading and application startup remain unverified.
 
-- [Development plan and execution prompts](docs/DEVELOPMENT_PLAN.md)
 - [Product and research context](docs/CONTEXT.md)
 - [Model provenance](public/models/ATTRIBUTION.md)
 - [Contributor rules](AGENTS.md)
