@@ -1,0 +1,40 @@
+{
+  "name": "robot",
+  "url": "https://raw.githubusercontent.com/mrdoob/three.js/eba30de865cfbf31ac736f792defd9a60ff28d57/examples/models/gltf/RobotExpressive/RobotExpressive.glb",
+  "sha256": "047f5e5fb3bb6d378bd1df16ca6137f2a596c99b3a1b5690b4020c05aaf6f319",
+  "bytes": 463988,
+  "asset": {
+    "generator": "FBX2glTF",
+    "version": "2.0"
+  },
+  "animations": [
+    "Dance",
+    "Death",
+    "Idle",
+    "Jump",
+    "No",
+    "Punch",
+    "Running",
+    "Sitting",
+    "Standing",
+    "ThumbsUp",
+    "Walking",
+    "WalkJump",
+    "Wave",
+    "Yes"
+  ],
+  "meshes": 14,
+  "joints": [
+    43,
+    43
+  ],
+  "morphs": [
+    {
+      "targetNames": [
+        "Angry",
+        "Surprised",
+        "Sad"
+      ]
+    }
+  ]
+}

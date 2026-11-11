@@ -1,0 +1,37 @@
+{
+  "name": "dragon",
+  "url": "https://afk.ai/auto-rig-models/dragon.glb",
+  "sha256": "b949b8c2964a91bf593db0a6c15d3dceafe7b2e516b423fe1a9d4b9a7095dd47",
+  "bytes": 2282292,
+  "asset": {
+    "generator": "Khronos glTF Blender I/O v5.1.18",
+    "version": "2.0"
+  },
+  "animations": [
+    "Fly Flap",
+    "Fly Glide",
+    "Idle",
+    "Rest Pose",
+    "Walk",
+    "Fire Breath",
+    "Fly Glide Left",
+    "Fly Glide Right",
+    "Fly Hover",
+    "Roar",
+    "Tail Swipe",
+    "Bite",
+    "Death",
+    "Dive Attack",
+    "Hit",
+    "Land",
+    "Perch",
+    "Sleep Curled",
+    "Take Off",
+    "Wing Shield"
+  ],
+  "meshes": 1,
+  "joints": [
+    100
+  ],
+  "morphs": []
+}
