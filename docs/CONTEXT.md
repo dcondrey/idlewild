@@ -14,9 +14,21 @@ The [Presage challenge](https://dev.to/challenges/presage-2026-11-04) requires a
 
 The independent repository is `/Volumes/A/idlewild`; the original Rust project remains at `/Volumes/A/vivid-id`. Its prior research is in `docs/READINESS.md` and `docs/ACQUISITION.md` there. Do not build or modify the original Rust workspace for this app.
 
-The scaffold selects Electron, Vite, TypeScript, Three.js, and `@smartspectra/node-sdk` 3.5.0. Resolve exact versions from `package.json` and `package-lock.json`. The initial npm install reported pending install-script review for `koffi` and `protobufjs`; dependency presence does not establish native usability. Review scripts before the orchestrator runs the first native-load check.
+The application uses Electron, Vite, TypeScript, Three.js, and `@smartspectra/node-sdk` 3.5.0. Resolve exact versions from `package.json` and `package-lock.json`. Dependency lifecycle scripts were reviewed; the documented `npm ci --ignore-scripts` path and require-only native loading passed on macOS arm64. No SDK instance, camera or metered session has run.
 
-Two downloaded GLBs have SHA-256 receipts and documented source licenses. The studio now has application source and original procedural subjects; current verification is recorded below. Historical assessments in this document describe the state before implementation.
+Robot and dragon downloads and the adapted Snow character have SHA-256 receipts and documented redistribution licenses. All seven requested scenes and the imported-character workflow run locally. Detailed verification is recorded below; older dated assessments describe the state before implementation.
+
+| Completion gate | Current evidence and limit |
+| --- | --- |
+| Live capture | Implemented and covered with fake adapters; consented live validation with David remains unmet. No paid-use authorization was received. |
+| Creative controls | Motion, sensitivity, sound and supported facial mapping verified with synthetic input; live response remains unmeasured. |
+| Reusable takes | Record/replay/scrub/trim/loop/delete, deterministic mapping and limits passed unit and Electron checks. |
+| Exports | Control JSON, decoded WAV/WebM and meaningful baked GLB export/reimport passed; measured timing and format limits are below. |
+| Scenes | Seven distinct scenes plus Snow passed local rendering/export checks with documented rights and cleanup. |
+| Robustness | Local lifecycle, input boundaries, cancellation, keyboard, reduced motion, viewport and resource checks passed; actual camera failure/recovery and other platforms remain unverified. |
+| Reproducible setup | Separate clean-checkout install/build/start passed; manifests are unchanged and the latest committed source/asset build and Electron checks also passed. |
+
+The remaining live gate needs David's time at the camera, session-only key entry, explicit authorization for the proposed 60-second metered validation, and separate in-app camera/measurement consent. Earlier model-selection replies did not authorize that run. Public release also awaits end-user/privacy terms, distribution/signing qualification and explicit publication authorization; no production-ready claim is made.
 
 ## Signal and privacy constraints
 
@@ -54,7 +66,7 @@ The previously suggested Atom Ant is fan art with unresolved underlying-characte
 
 ## Expanded creator requirements (2026-11-10)
 
-The resumed mission is `/tmp/idlewild/DEVELOPMENT_PLAN.md`, as corrected by David; its current contents are the build mission, superseding the earlier phased prompt plan. All seven DONE requirements remain unmet. No live session or native load has run.
+The resumed mission is `/tmp/idlewild/DEVELOPMENT_PLAN.md`, as corrected by David; its contents superseded the earlier phased prompt plan. At this historical assessment, all seven DONE requirements were unmet and neither a live session nor native load had run; the current gate status is above.
 
 David additionally requested facial actions, lip/speech movement, blink and gaze matching wherever supported, multimodal control of subtle character motion, import of users' own rigged characters and animation clips, reusable baked animation exports, and a replayable in-app walkthrough with clear documentation. These are required product scope, not substitutes for the original scenes and exports. Initial import/export target is GLB/glTF; actual rig and morph compatibility must be reported. Speech audio requires separate microphone consent. Video export alone does not satisfy reusable character animation.
 
