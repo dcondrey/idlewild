@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { sceneDynamics } from './dynamics.ts';
+import { sceneDynamics, signalValue } from './dynamics.ts';
 import { disposeObject, fitModel } from './resources.ts';
 import type { SceneSubject } from './types.ts';
 
@@ -78,7 +78,9 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
         chest.scale.z *= 1 + breath * 0.04;
       } else root.scale.set(1 + breath * 0.012, 1, 1 + breath * 0.025);
       if (jaw) jaw.rotation.x += talking * 0.08;
-      for (const morph of morphs) morph.mesh.morphTargetInfluences![morph.index] = morph.kind === 'blink' ? blink : talking * 0.65;
+      for (const morph of morphs) {
+        if (signalValue(input, morph.kind) !== null) morph.mesh.morphTargetInfluences![morph.index] = morph.kind === 'blink' ? blink : talking * 0.65;
+      }
       root.rotation.z = breath * 0.015;
       root.updateMatrixWorld(true);
     },

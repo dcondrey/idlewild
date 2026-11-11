@@ -49,7 +49,7 @@ Live measurement uses vendor networking and may consume account credits. Telemet
 
 Creative exports exclude camera images and API keys. No microphone is requested or recorded: WAV and preview audio are synthesized. Control exports from live sessions still contain personal signal data; keep them outside the repository or under ignored `.local/`. Deleting in-memory data is not a guarantee of physical memory erasure.
 
-Signal quality and provenance remain visible. Optional breathing-animation continuity replays a bounded quiet-period cache during detected speech and labels it **CACHED BREATH**; it is not a new measurement. Relative traces do not measure airflow or calibrated blood pressure. Averaged pulse rate does not establish beat timing. The brain scene is an illustration, not measured neural activity, a diagnosis or a personalized activation map. Gaze matching and detailed lip movement are not implemented.
+Signal quality and provenance remain visible. Optional breathing-animation continuity replays a bounded quiet-period cache during detected speech and labels it **CACHED BREATH**; it is not a new measurement. Relative traces do not measure airflow or calibrated blood pressure. Averaged pulse rate does not establish beat timing. The brain scene is an illustration, not measured neural activity, a diagnosis or a personalized activation map. Gaze matching and detailed lip movement are not implemented. Live measurement is for adults 18 or older under [Presage's SDK terms](https://presagetech.com/legal/terms-of-service).
 
 ## Troubleshooting
 

@@ -44,7 +44,7 @@ export function mountStudio(root: HTMLElement) {
         <p class="fine">Open a preview first. Live measurement uses account credits and vendor network processing. Automatic vitals insights may upload data; retention is unverified. Telemetry is disabled. This integration awaits consented live validation.</p>
         <label for="api-key">Presage API key · this session only</label><input id="api-key" type="password" autocomplete="off" spellcheck="false" maxlength="512" placeholder="Enter your own key">
         <div class="row"><button id="save-key">Use key</button><button id="clear-key">Clear key</button></div><p id="key-status" class="fine">No key set.</p>
-        <label class="check consent"><input id="live-consent" type="checkbox"> I authorize metered measurement and the disclosed vendor processing.</label><button id="live" class="wide">Start live measurement</button>
+        <label class="check consent"><input id="live-consent" type="checkbox"> I am 18 or older and authorize metered measurement and the disclosed vendor processing.</label><button id="live" class="wide">Start live measurement</button>
       </details>
       <p class="dialog-message message" role="status" aria-live="polite"></p><div class="dialog-actions"><button data-close>Done</button></div>
     </dialog>

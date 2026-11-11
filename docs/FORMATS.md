@@ -72,6 +72,8 @@ Animation-only files require a previously imported character. Their target node 
 
 For additional performance mapping, bone names are compared without punctuation or case. Imported chest mapping recognizes `Chest`, `Spine1`, `Spine2`, `mixamorigSpine1` and `mixamorigSpine2`; jaw mapping recognizes `Jaw` and `mixamorigJaw`. Blink morphs recognize `Blink`, `BlinkLeft`, `BlinkRight`, `EyeBlinkLeft` and `EyeBlinkRight`; talking morphs recognize `JawOpen` and `MouthOpen`. A talking detection opens the jaw; it does not reconstruct speech or gaze.
 
+Missing, invalid or stale facial input preserves the character's authored facial animation. A valid zero is an active control value and overrides the corresponding blink or mouth morph.
+
 ## Baked animation GLB
 
 **Baked GLB** writes a self-contained `model/gltf-binary` file with an `Idlewild_Performance` clip. It samples the selected scene at 20 Hz, adds the exact duration endpoint, and writes changed node translation, quaternion rotation, scale and morph-weight tracks. Skinning and model geometry are included. Materials are static: animated glow, shader appearance and procedural audio are not baked into glTF material tracks. Use the preview for the rendered appearance and WAV for sound.

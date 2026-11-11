@@ -9,14 +9,15 @@ export function randomFor(seed: number, index: number): number {
   return ((value ^ (value >>> 15)) >>> 0) / 0x100000000;
 }
 
-export function signalValue(input: SceneFrame, channel: Channel): number {
+export function signalValue(input: SceneFrame, channel: Channel): number | null {
   const frame = input.frame;
   const signal = frame?.signals[channel];
   if (!frame || !signal || signal.quality !== 'valid' || signal.value === null || !Number.isFinite(signal.value) ||
-      !Number.isFinite(signal.sampledAtMs) || signal.sampledAtMs > frame.timeMs) return 0;
+      !Number.isFinite(signal.sampledAtMs) || signal.sampledAtMs > frame.timeMs) return null;
   const unit = channel === 'pulseRate' ? 'beats/min' : channel === 'breathingRate' ? 'breaths/min' : channel === 'blink' || channel === 'talking' ? 'boolean' : 'relative';
-  if (signal.unit !== unit) return 0;
+  if (signal.unit !== unit) return null;
   const age = Math.max(input.timeMs, frame.timeMs) - signal.sampledAtMs;
+  if (age >= SIGNAL_STALE_MS) return null;
   return signal.value * clamp((SIGNAL_STALE_MS - age) / 500);
 }
 
@@ -26,8 +27,8 @@ export function sceneDynamics(input: SceneFrame) {
   return {
     time: motion === 0 ? 0 : Math.max(0, Number.isFinite(input.timeMs) ? input.timeMs : 0) / 1000,
     motion,
-    breath: motion === 0 ? 0 : clamp(signalValue(input, 'breath'), -1, 1) * sensitivity * motion,
-    blink: clamp(signalValue(input, 'blink')) * motion,
-    talking: clamp(signalValue(input, 'talking')) * motion,
+    breath: motion === 0 ? 0 : clamp(signalValue(input, 'breath') ?? 0, -1, 1) * sensitivity * motion,
+    blink: clamp(signalValue(input, 'blink') ?? 0) * motion,
+    talking: clamp(signalValue(input, 'talking') ?? 0) * motion,
   };
 }

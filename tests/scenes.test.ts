@@ -23,18 +23,20 @@ test('scene signals become neutral for invalid, future and stale input', () => {
   const signal = frame.frame!.signals.breath;
   signal.value = 1;
   signal.sampledAtMs = 501;
-  assert.ok(signalValue(frame, 'breath') > 0);
+  assert.ok((signalValue(frame, 'breath') ?? 0) > 0);
   signal.sampledAtMs = 500;
-  assert.equal(signalValue(frame, 'breath'), 0);
+  assert.equal(signalValue(frame, 'breath'), null);
   signal.sampledAtMs = 499;
-  assert.equal(signalValue(frame, 'breath'), 0);
+  assert.equal(signalValue(frame, 'breath'), null);
   signal.sampledAtMs = 2001;
-  assert.equal(signalValue(frame, 'breath'), 0);
+  assert.equal(signalValue(frame, 'breath'), null);
   signal.sampledAtMs = 2000;
   signal.quality = 'unstable';
-  assert.equal(signalValue(frame, 'breath'), 0);
+  assert.equal(signalValue(frame, 'breath'), null);
   signal.quality = 'valid';
   signal.value = null;
+  assert.equal(signalValue(frame, 'breath'), null);
+  signal.value = 0;
   assert.equal(signalValue(frame, 'breath'), 0);
   const reduced = sceneDynamics(input(500, true));
   assert.deepEqual([reduced.motion, reduced.breath, reduced.blink, reduced.talking], [0, 0, 0, 0]);
@@ -82,6 +84,43 @@ test('character overlays do not accumulate on repeated frame or seek', () => {
   subject.update(input(500, true));
   assert.deepEqual(jaw.quaternion.toArray(), [0, 0, 0, 1]);
   assert.deepEqual(chest.scale.toArray(), [1, 1, 1]);
+  subject.dispose();
+});
+
+test('missing facial input preserves authored animation while valid zero overrides it', () => {
+  const model = new THREE.Group();
+  const geometry = new THREE.BoxGeometry(1, 1, 1);
+  geometry.morphAttributes.position = [geometry.attributes.position.clone(), geometry.attributes.position.clone()];
+  geometry.morphAttributes.position[0].name = 'BlinkLeft';
+  geometry.morphAttributes.position[1].name = 'JawOpen';
+  const face = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial());
+  face.name = 'Face';
+  model.add(face);
+  const track = new THREE.NumberKeyframeTrack('Face.morphTargetInfluences', [0, 1], [0.35, 0.25, 0.35, 0.25]);
+  const subject = createCharacter(model, [new THREE.AnimationClip('Idle', 1, [track])], 'imported');
+  const frame = input(500);
+  frame.controls.motion = 1;
+  const expectWeights = (blink: number, jaw: number) => {
+    assert.ok(Math.abs(face.morphTargetInfluences![0] - blink) < 1e-6);
+    assert.ok(Math.abs(face.morphTargetInfluences![1] - jaw) < 1e-6);
+  };
+  subject.update({ ...frame, frame: null });
+  expectWeights(0.35, 0.25);
+  for (const value of [0, 1, 0]) {
+    frame.frame!.signals.blink.value = value;
+    frame.frame!.signals.talking.value = value;
+    subject.update(frame);
+    expectWeights(value, value * 0.65);
+  }
+  frame.frame!.signals.blink.value = null;
+  frame.frame!.signals.talking.quality = 'unstable';
+  subject.update(frame);
+  expectWeights(0.35, 0.25);
+  const stale = input(2000);
+  stale.frame!.signals.blink.sampledAtMs = 500;
+  stale.frame!.signals.talking.sampledAtMs = 500;
+  subject.update(stale);
+  expectWeights(0.35, 0.25);
   subject.dispose();
 });
 
