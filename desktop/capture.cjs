@@ -187,7 +187,7 @@ function createCaptureController({ loadSDK, onFrame, onStatus, now }) {
           timer = setInterval(() => {
             try { emit(Math.max(0, clock() - epochMs)); }
             catch { fail('Capture clock or consumer failed. Stop and retry the session.'); }
-          }, 100);
+          }, 50);
           timer.unref?.();
         } catch {
           const cancelled = token !== generation || disposed;
