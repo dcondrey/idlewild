@@ -13,3 +13,7 @@ The downloaded GLB contains 14 clips and expression targets named Angry, Surpris
 `dragon.glb` is the downloadable sample from [afk.ai's dragon page](https://afk.ai/auto-rig/dragon), which explicitly offers the sample and its animations under CC0. The file contains a 100-joint skin and 20 animation entries, including Rest Pose; the source advertises 19 animations. See [receipt](dragon.receipt.json).
 
 Only the existing free sample was downloaded. No paid/cloud rigging or generation job was submitted. Source license declarations were checked on 2026-11-10; they do not establish runtime or artistic suitability.
+
+## Original procedural subjects
+
+`src/scenes/procedural.ts` constructs Idlewild's bubbles, star, baby dragon, three runner variants and abstract educational brain from mathematical geometry. These contain no downloaded third-party artwork. The baby dragon has its own juvenile proportions, articulated wings/limbs, eyes and jaw; it is not a scaled European-dragon asset. The brain is a whole-brain illustration without anatomical region labels. Generated geometry and baked animation may be reused in the creator's projects. User-imported assets retain their own rights and licenses.
