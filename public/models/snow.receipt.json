@@ -1,0 +1,41 @@
+{
+  "title": "Snow for Idlewild",
+  "author": "Blender Foundation / Blender Studio",
+  "source": "https://studio.blender.org/characters/snow/v4/",
+  "sourceDownload": "https://studio.blender.org/download-source/files/ba/0f/ba0fe6d810333b1d73c1c359e4dc03cb-6.zip",
+  "sourceSha256": "98d58ef3a07083ede14140bc462cccb55d317062846aa0eb652d2e4a7ac422a6",
+  "sourceBytes": 111580346,
+  "license": "CC BY 4.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+  "copyright": "Snow Rig (CC) Blender Foundation | studio.blender.org; https://studio.blender.org/characters/snow/v4/; CC BY 4.0 https://creativecommons.org/licenses/by/4.0/; Modified for Idlewild: evaluated facial morphs, reduced deformation rig, subdivision level 1, relaxed arm pose, authored idle and subtle expression clips, simplified materials, omitted outer corneas and reduced textures.",
+  "retrieved": "2026-11-11",
+  "derivation": "scripts/prepare-snow.py, Blender 4.5.9 LTS, scripts disabled",
+  "sha256": "2e043782837192f991f4854e223f5654b985084ec833277f51af6f38e93e6f61",
+  "bytes": 8060880,
+  "vertices": 32960,
+  "joints": 74,
+  "morphs": [
+    "BlinkLeft",
+    "BlinkRight",
+    "BrowDown",
+    "JawOpen",
+    "MouthFf",
+    "MouthFunnel",
+    "SmileOpen"
+  ],
+  "clips": [
+    "Idle",
+    "Soft smile",
+    "Brow motion"
+  ],
+  "texturePixels": 6291456,
+  "skippedPoseBones": [
+    "STR-TIP-Nostril.L",
+    "STR-TIP-Nostril.R"
+  ],
+  "skippedPoseProperties": [
+    "Jaw.preserve_volume",
+    "Jaw.teeth_follow_mouth"
+  ],
+  "maxDiscardedSkinWeight": 0.048587286068214906
+}

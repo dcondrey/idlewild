@@ -95,6 +95,9 @@ function refreshActions() {
   button('enable-sound').disabled = busy || exporting !== null;
   input('camera').disabled = busy || exporting !== null;
   for (const id of ['motion', 'sensitivity', 'sound', 'runner-variant', 'import-data', 'import-model', 'reduced-motion']) input(id).disabled = exporting !== null || busy;
+  for (const id of ['try-snow', 'detail-view']) button(id).disabled = exporting !== null || busy;
+  input('imported-clip').disabled = exporting !== null || busy || !importedClips.length;
+  button('remove-model').disabled = exporting !== null || busy || !importedRoot;
   for (const picker of element('scene-picker').querySelectorAll('button')) picker.disabled = busy || exporting !== null || (picker.dataset.scene === 'imported' && !importedRoot);
   button('cancel-export').hidden = !exporting;
   for (const id of ['open-export', 'open-edit']) button(id).disabled = !selected || busy || recorder !== null || exporting !== null;
@@ -244,12 +247,22 @@ function animate(now: number) {
   raf = requestAnimationFrame(animate);
 }
 
+function chooseScene(id: SceneId) {
+  const item = scenes.find(item => item.id === id);
+  if (!item) throw new Error('Unknown scene');
+  stage?.setScene(id); scene = id;
+  element('scene-title').textContent = item.title; element('scene-caption').textContent = item.caption;
+  button('detail-view').hidden = id !== 'imported'; button('detail-view').textContent = 'Close view'; button('detail-view').setAttribute('aria-pressed', 'false');
+  for (const other of element('scene-picker').querySelectorAll('button')) other.setAttribute('aria-pressed', String(other.dataset.scene === scene));
+}
+on('detail-view', () => {
+  const enabled = button('detail-view').getAttribute('aria-pressed') !== 'true';
+  stage?.setDetailView(enabled); button('detail-view').setAttribute('aria-pressed', String(enabled)); button('detail-view').textContent = enabled ? 'Full view' : 'Close view';
+});
 for (const item of scenes) {
   const pick = document.createElement('button'); pick.textContent = item.label; pick.dataset.scene = item.id; pick.setAttribute('aria-pressed', String(item.id === scene));
   pick.addEventListener('click', () => { void run(() => {
-    stage?.setScene(item.id); scene = item.id;
-    element('scene-title').textContent = item.title; element('scene-caption').textContent = item.caption;
-    for (const other of element('scene-picker').querySelectorAll('button')) other.setAttribute('aria-pressed', String(other.dataset.scene === scene));
+    chooseScene(item.id);
   }); });
   element('scene-picker').append(pick);
 }
@@ -392,7 +405,7 @@ input('import-data').addEventListener('change', () => { const file = input('impo
   if (!take.samples.length) throw new Error('The imported take contains no samples.');
   await stopInput(); takes = addTake(takes, take); selectTake(take); message('Control take imported. Its original source and signal quality are preserved.');
 }); });
-input('import-model').addEventListener('change', () => { const file = input('import-model').files?.[0]; input('import-model').value = ''; if (file) void run(async () => {
+async function loadCharacter(file: File) {
   element<HTMLDialogElement>('import-dialog').close();
   if (!stage) throw new Error('Wait for the stage to finish loading.');
   const imported = await importCharacter(file);
@@ -408,17 +421,25 @@ input('import-model').addEventListener('change', () => { const file = input('imp
     try { stage.setImported(imported.root, imported.clips); importedRoot = imported.root; importedClips = imported.clips; }
     catch (error) { disposeImported(imported.root); throw error; }
   }
-  element('import-status').textContent = imported.summary; button('remove-model').hidden = !importedRoot; message('Import ready. Select Your character to view it.');
+  chooseScene('imported');
+  element('import-status').textContent = imported.summary; button('remove-model').hidden = !importedRoot;
+  message(selected ? 'Import ready. Play your take or choose an animation in Import.' : 'Import ready. Start rehearsal to bring the character to life.');
   const copyright = importedRoot ? getAssetCopyright(importedRoot) : undefined;
   element('import-credits').hidden = !copyright; element('import-credit-text').textContent = copyright ?? '';
   const clips = element<HTMLSelectElement>('imported-clip'); clips.replaceChildren();
   importedClips.forEach((clip, index) => clips.add(new Option(clip.name || `Clip ${index + 1}`, String(index))));
   clips.disabled = !importedClips.length;
   const idle = importedClips.findIndex(clip => clip.name.toLowerCase() === 'idle'); clips.value = String(Math.max(0, idle));
-}); });
-input('imported-clip').addEventListener('change', () => { const clip = importedClips[Number(input('imported-clip').value)]; if (clip) stage?.setImportedClips([clip]); });
+}
+input('import-model').addEventListener('change', () => { const file = input('import-model').files?.[0]; input('import-model').value = ''; if (file) void run(() => loadCharacter(file)); });
+on('try-snow', async () => {
+  const response = await fetch('./models/snow.glb', { signal: AbortSignal.timeout(15_000) });
+  if (!response.ok) throw new Error('Snow could not load. Retry or import your own character.');
+  await loadCharacter(new File([await response.arrayBuffer()], 'snow.glb', { type: 'model/gltf-binary' }));
+});
+input('imported-clip').addEventListener('change', () => { void run(() => { const clip = importedClips[Number(input('imported-clip').value)]; if (clip) stage?.setImportedClips([clip]); }); });
 on('remove-model', () => {
-  if (scene === 'imported') { stage?.setScene('robot'); scene = 'robot'; element('scene-title').textContent = scenes[0].title; element('scene-caption').textContent = scenes[0].caption; }
+  if (scene === 'imported') chooseScene('robot');
   stage?.setImported(null, []); importedRoot = null; importedClips = []; input('imported-clip').disabled = true; element('imported-clip').replaceChildren(); button('remove-model').hidden = true;
   element('import-status').textContent = 'Imported character removed.';
   element('import-credits').hidden = true; element('import-credit-text').textContent = '';

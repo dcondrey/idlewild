@@ -13,7 +13,7 @@ export function mountStudio(root: HTMLElement) {
         <div class="acquisition"><span id="source-badge" class="tag">NO INPUT</span><p id="status" role="status" aria-live="polite">Ready for a rehearsal.</p><button id="stop-input" class="wide danger" title="Stop input and release the camera" hidden>Stop input</button><button id="open-signals" class="text-button" hidden>View signal details</button></div>
       </aside>
       <section class="stage-panel" aria-label="Creative stage">
-        <div class="stage-heading"><h2 id="scene-title">The robot</h2><span id="stage-state" class="tag">LOADING</span></div>
+        <div class="stage-heading"><h2 id="scene-title">The robot</h2><button id="detail-view" class="quiet" aria-pressed="false" hidden>Close view</button><span id="stage-state" class="tag">LOADING</span></div>
         <div class="viewport"><canvas id="stage" aria-label="Animated creative scene"></canvas><div class="stage-caption"><span id="scene-caption">Breathing gives a character its own rhythm.</span><span id="input-watermark">NO INPUT</span></div></div>
         <div id="scene-picker" class="scene-picker" role="group" aria-label="Choose a scene"></div>
         <div id="transport" class="transport" hidden>
@@ -57,6 +57,7 @@ export function mountStudio(root: HTMLElement) {
     <dialog id="import-dialog" aria-labelledby="import-title">
       <button class="close" data-close aria-label="Close imports">×</button><span class="eyebrow">BRING YOUR OWN</span><h2 id="import-title">Import a character or take.</h2>
       <p>A saved take works across scenes. A character gives that same performance a new home.</p>
+      <button id="try-snow" class="wide">Try Snow · expressive character</button>
       <label class="file-button"><strong>Import control data</strong><span>A previously exported JSON take</span><input id="import-data" type="file" accept=".json,application/json"></label>
       <label class="file-button"><strong>Import character or clips</strong><span>Self-contained GLB or embedded glTF</span><input id="import-model" type="file" accept=".glb,.gltf"></label>
       <p id="import-status" class="fine">For clip reuse, named nodes and morph targets must match your imported character.</p>

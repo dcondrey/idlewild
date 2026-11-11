@@ -39,6 +39,8 @@ Takes and imported characters are held in memory. Export before closing. **Guide
 
 Open **Import** for a self-contained GLB or embedded-resource glTF. Static models support creative root movement; compatible named bones and morphs receive additional controls. Import an animation-only file after its matching character and choose its animation clip in the import dialog. See [formats, rig mapping and reuse](docs/FORMATS.md) for limits and supported features.
 
+Choose **Import → Try Snow** for the included detailed Blender Studio character. **Close view** brings its face forward; choose Idle, Soft smile or Brow motion in the import dialog. Rehearsal or a saved take can drive its blinks and mouth movement. These authored expressions do not measure microexpressions or emotions. Snow permits commercial reuse under CC BY 4.0; retain its [credit and modification notice](public/models/ATTRIBUTION.md#snow) with shared exports.
+
 ## Camera, keys and data
 
 Startup does not request camera or microphone access. Open **Use camera**, check camera-preview consent, choose a system camera and select **Open preview**. Preview alone does not initialize SmartSpectra or consume measurement credits. An iPhone is selectable only when the operating system exposes it as a webcam; device compatibility has not been verified locally.
@@ -55,7 +57,7 @@ Signal quality and provenance remain visible. Optional breathing-animation conti
 
 | Symptom | Action |
 | --- | --- |
-| Desktop cannot start or an asset is missing | Run `npm ci --ignore-scripts`, then `npm run build`, and launch from the repository root. Confirm `public/models/robot.glb` and `dragon.glb` are present; model receipts and provenance are below. |
+| Desktop cannot start or an asset is missing | Run `npm ci --ignore-scripts`, then `npm run build`, and launch from the repository root. Confirm `public/models/robot.glb`, `dragon.glb` and `snow.glb` are present; model receipts and provenance are below. |
 | Blank stage or graphics lost | Use a WebGL-capable desktop session, close other GPU-heavy applications, then reopen Idlewild. Export takes before restarting when possible. |
 | Camera denied or disconnected | Stop input, allow camera access in system privacy settings, reconnect the intended device, select Refresh, and explicitly reopen preview. Close another application if it owns the camera. |
 | Authentication or unavailable signals | Clear and re-enter the key; verify account entitlements and network access. Missing/stale channels are not replaced with synthetic live signals. |

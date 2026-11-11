@@ -14,6 +14,7 @@ export interface Stage {
   resize(width: number, height: number): void;
   dispose(): void;
   setScene(scene: SceneId): void;
+  setDetailView(enabled: boolean): void;
   setRunnerVariant(variant: 0 | 1 | 2): void;
   getExportRoot(): THREE.Object3D;
   setImported(root: THREE.Group | null, clips: THREE.AnimationClip[]): void;
@@ -66,6 +67,7 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
 
   const subjects = new Map<SceneId, SceneSubject>();
   let selected: SceneId = 'robot';
+  let detailView = false;
   let disposed = false;
   let contextLost = false;
   const assets: Record<'robot' | 'dragon', AssetState> = {
@@ -74,6 +76,22 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
   };
   const pending = new Set<AbortController>();
   function frameCamera() {
+    const subject = subjects.get('imported');
+    if (detailView && selected === 'imported' && subject) {
+      const bounds = new THREE.Box3().setFromObject(subject.root, true);
+      const height = bounds.getSize(new THREE.Vector3()).y;
+      const target = bounds.getCenter(new THREE.Vector3());
+      let head: THREE.Object3D | null = null;
+      subject.root.traverse(node => {
+        if (node instanceof THREE.Bone && ['head', 'defhead', 'mixamorighead'].includes(node.name.toLowerCase().replace(/[^a-z]/g, ''))) head = node;
+      });
+      if (head) { (head as THREE.Object3D).getWorldPosition(target); target.y += height * 0.07; }
+      const radius = Math.max(0.15, height * (head ? 0.15 : 0.3));
+      const distance = radius / (Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * Math.min(1, camera.aspect)) + radius;
+      camera.position.set(target.x, target.y + radius * 0.06, target.z + distance);
+      camera.lookAt(target);
+      return;
+    }
     const distance = Math.max(selected === 'dragon' ? 7.5 : 8.1, 2.8 / (Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect) + 1.2);
     camera.position.set(0, selected === 'dragon' ? 2.1 : 2.5, distance);
     camera.lookAt(0, selected === 'dragon' ? 0.7 : 1.6, 0);
@@ -158,8 +176,14 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
       if (disposed) throw new Error('Stage is disposed');
       if (!['robot', 'bubbles', 'star', 'dragon', 'baby-dragon', 'runner', 'brain', 'imported'].includes(id)) throw new Error('Unknown scene');
       selected = id;
+      detailView = false;
       frameCamera();
       for (const [name, subject] of subjects) subject.root.visible = name === id;
+    },
+    setDetailView(enabled) {
+      if (disposed) throw new Error('Stage is disposed');
+      detailView = enabled;
+      frameCamera();
     },
     setRunnerVariant(variant) {
       if (!Number.isInteger(variant) || variant < 0 || variant > 2) throw new Error('Unknown runner');
