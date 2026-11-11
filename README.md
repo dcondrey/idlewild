@@ -9,12 +9,16 @@ Scenes include a robot, bubbles, star, European dragon, original baby dragon, th
 Use Node.js **22.12 or newer**, npm and a desktop session with WebGL support. From the repository directory:
 
 ```sh
-npm ci
+npm ci --ignore-scripts
 npm run check
 npm start
 ```
 
-`npm run check` runs unit tests, TypeScript/Vite compilation and the Electron UI checks; UI artifacts go to ignored `artifacts/ui/`. These checks use synthetic input and fake SDK adapters, not paid measurement. `npm start` rebuilds before opening Electron. After a successful build, launch the existing output without rebuilding:
+`npm run check` runs unit tests, TypeScript/Vite compilation and the Electron UI checks; UI artifacts go to ignored `artifacts/ui/`. These checks use synthetic input and fake SDK adapters, not paid measurement. `npm start` rebuilds before opening Electron.
+
+The first Electron launch downloads its version-pinned desktop binary if it is not cached. The documented install skips dependency lifecycle scripts; the macOS arm64 SDK prebuild was verified with this installation path.
+
+After a successful build, launch the existing output without rebuilding:
 
 ```sh
 ./node_modules/.bin/electron .
@@ -51,7 +55,7 @@ Signal quality and provenance remain visible. Optional breathing-animation conti
 
 | Symptom | Action |
 | --- | --- |
-| Desktop cannot start or an asset is missing | Run `npm ci`, then `npm run build`, and launch from the repository root. Confirm `public/models/robot.glb` and `dragon.glb` are present; model receipts and provenance are below. |
+| Desktop cannot start or an asset is missing | Run `npm ci --ignore-scripts`, then `npm run build`, and launch from the repository root. Confirm `public/models/robot.glb` and `dragon.glb` are present; model receipts and provenance are below. |
 | Blank stage or graphics lost | Use a WebGL-capable desktop session, close other GPU-heavy applications, then reopen Idlewild. Export takes before restarting when possible. |
 | Camera denied or disconnected | Stop input, allow camera access in system privacy settings, reconnect the intended device, select Refresh, and explicitly reopen preview. Close another application if it owns the camera. |
 | Authentication or unavailable signals | Clear and re-enter the key; verify account entitlements and network access. Missing/stale channels are not replaced with synthetic live signals. |
