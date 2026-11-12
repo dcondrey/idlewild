@@ -8,3 +8,5 @@ artifacts/
 *.key
 *.pem
 /docs/DEVELOPMENT_PLAN.md
+release/
+!/build/

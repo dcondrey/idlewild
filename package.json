@@ -11,7 +11,11 @@
     "start": "npm run build && electron .",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "test:ui": "node scripts/check-ui.mjs",
-    "check": "npm test && npm run build && npm run test:ui"
+    "check": "npm test && npm run build && npm run test:ui",
+    "notices": "node scripts/third-party-notices.mjs",
+    "notices:check": "node scripts/third-party-notices.mjs --check",
+    "dist": "npm run notices:check && npm run build && IDLEWILD_SIGN_LABEL=unsigned electron-builder --mac --arm64 -c.mac.identity=- -c.mac.notarize=false",
+    "dist:signed": "node -e \"const e=process.env;const n=(e.APPLE_API_KEY&&e.APPLE_API_KEY_ID&&e.APPLE_API_ISSUER)||(e.APPLE_ID&&e.APPLE_APP_SPECIFIC_PASSWORD&&e.APPLE_TEAM_ID)||(e.APPLE_KEYCHAIN&&e.APPLE_KEYCHAIN_PROFILE);if(!n||!(e.CSC_LINK||e.CSC_NAME)){console.error('dist:signed requires a signing identity (CSC_LINK or CSC_NAME) and one notarization credential set; see docs/RELEASE.md.');process.exit(1)}\" && npm run notices:check && npm run build && IDLEWILD_SIGN_LABEL=signed electron-builder --mac --arm64 -c.mac.notarize=true"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "1.2.3",
@@ -23,6 +27,7 @@
     "@types/node": "^26.0.0",
     "@types/three": "^0.187.0",
     "electron": "45.3.0",
+    "electron-builder": "26.18.0",
     "typescript": "7.0.2",
     "vite": "8.3.8"
   }

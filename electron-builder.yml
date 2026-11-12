@@ -1,0 +1,29 @@
+appId: com.writerslogic.idlewild
+productName: Idlewild
+copyright: Copyright (c) David Condrey
+asar: false
+npmRebuild: false
+directories:
+  output: release
+  buildResources: build
+files:
+  - package.json
+  - desktop/**
+  - dist/**
+  - "!node_modules/@smartspectra/node-sdk-linux-x64"
+  - "!node_modules/@smartspectra/node-sdk-linux-arm64"
+  - "!node_modules/@smartspectra/node-sdk-win32-x64"
+  - "!node_modules/koffi/build/koffi/{darwin_x64,freebsd_*,linux_*,musl_*,openbsd_*,win32_*}"
+  - "!node_modules/koffi/{src,doc,vendor}"
+  - "!**/*.map"
+mac:
+  category: public.app-category.graphics-design
+  target:
+    - { target: dmg, arch: arm64 }
+    - { target: zip, arch: arm64 }
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  artifactName: ${productName}-${version}-${arch}-${env.IDLEWILD_SIGN_LABEL}.${ext}
+  extendInfo:
+    NSCameraUsageDescription: Idlewild uses the camera only after you consent in the app, to track your face and body on this device. Camera images are not saved or uploaded.
