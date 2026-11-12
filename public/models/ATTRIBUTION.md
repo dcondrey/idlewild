@@ -1,6 +1,6 @@
 # Model provenance
 
-Receipts record source URLs, byte counts, SHA-256 hashes and runtime metadata. RobotExpressive and Dragon retain their downloaded bytes; Snow is an adaptation described below. Local visual and export checks are recorded in `docs/CONTEXT.md`.
+Receipts record source URLs, byte counts, SHA-256 hashes and runtime metadata. RobotExpressive and Dragon retain their downloaded bytes; Snow and the brain are adaptations described below. Local visual and export checks are recorded in `docs/CONTEXT.md`.
 
 ## RobotExpressive
 
@@ -25,10 +25,22 @@ Idlewild evaluates the original facial poses into seven morph targets, reduces t
 The source archive and Blender installation stay in ignored `.local/`; neither is needed to run the app. To reproduce the adaptation with Blender 4.5.9 and the original archive extracted under `.local/assets/snow/`, run:
 
 ```sh
-.local/tools/Blender.app/Contents/MacOS/Blender --background --factory-startup --disable-autoexec --python-exit-code 1 --python scripts/prepare-snow.py
+.local/tools/Blender.app/Contents/MacOS/Blender --background --factory-startup --disable-autoexec --python-exit-code 1 --python scripts/prepare-character.py -- --profile snow --receipt .local/assets/snow/snow.receipt.json
 ```
 
-The converter writes `.local/assets/snow/snow.glb`; qualification precedes copying it into `public/models/` and updating its receipt. Source-embedded scripts are disabled. No cloud processing or paid generation was used.
+The converter writes `.local/assets/snow/snow.glb`; qualification (`python3 -I .local/tools/compare_glb.py public/models/snow.glb .local/assets/snow/snow.glb --receipts public/models/snow.receipt.json .local/assets/snow/snow.receipt.json`) precedes copying it into `public/models/` and updating its receipt. Source-embedded scripts are disabled. No cloud processing or paid generation was used.
+
+## Brain
+
+**Brain for Blender (CC) Anderson Winkler | brainder.org**
+
+`brain.glb` adapts the Desikan-Killiany pial cortical parcels and subcortical surfaces of [Brain for Blender](https://brainder.org/research/brain-for-blender/), a surface reconstruction of a human brain from 12 MRI volumes, under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/). Attribution, the license link and an indication of changes are required, and **adaptations must be shared under CC BY-SA 3.0 or a compatible license**: redistributing `brain.glb`, or a model or export that embeds its geometry, carries that obligation. The credit is embedded in the GLB `asset.copyright`. See [receipt](brain.receipt.json).
+
+Idlewild welds each hemisphere, decimates it to at most 150,000 triangles for the whole model, assigns triangles back to their original parcels, maps FreeSurfer surface RAS (mm) to glTF metres (X = -R, Y = S, Z = A, so the front of the brain faces +Z and patient-left is +X) and uses shared hemisphere materials with hemisphere-smooth normals. Mesh names keep the FreeSurfer labels (`ctx-lh-<label>`, `ctx-rh-<label>`, `Left-Thalamus-Proper`, ...). The geometry is an educational illustration of anatomy, not a measurement of any user. To reproduce with the downloaded archives in `.local/assets/brain/`:
+
+```sh
+.local/tools/Blender.app/Contents/MacOS/Blender --background --factory-startup --disable-autoexec --python-exit-code 1 --python scripts/prepare-brain.py -- --retrieved 2026-11-11
+```
 
 ## Original procedural subjects
 

@@ -9,7 +9,7 @@
   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
   "copyright": "Snow Rig (CC) Blender Foundation | studio.blender.org; https://studio.blender.org/characters/snow/v4/; CC BY 4.0 https://creativecommons.org/licenses/by/4.0/; Modified for Idlewild: evaluated facial morphs, reduced deformation rig, subdivision level 1, relaxed arm pose, authored idle and subtle expression clips, simplified materials, omitted outer corneas and reduced textures.",
   "retrieved": "2026-11-11",
-  "derivation": "scripts/prepare-snow.py, Blender 4.5.9 LTS, scripts disabled",
+  "derivation": "scripts/prepare-character.py --profile snow, Blender 4.5.9 LTS, scripts disabled",
   "sha256": "2e043782837192f991f4854e223f5654b985084ec833277f51af6f38e93e6f61",
   "bytes": 8060880,
   "vertices": 32960,
