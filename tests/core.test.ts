@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { BODY_JOINTS, FACE_SHAPES, TAKE_LIMITS, type ControlFrame } from '../src/contracts.ts';
 import { createRehearsalSource, rehearsalFrame } from '../src/rehearsal.ts';
 import { addTake, frameAt, TakeRecorder, trimTake } from '../src/recording.ts';
-import { validateFrame, validateTake } from '../src/validation.ts';
+import { MAX_TAKE_JSON_BYTES, validateFrame, validateTake } from '../src/validation.ts';
 
 function localFrame(timeMs = 1000): ControlFrame {
   const frame = rehearsalFrame(1, 'local-test', timeMs);
@@ -62,7 +62,7 @@ test('a full local tracking take fits the documented JSON budget', () => {
     frame.tracking!.face!.rotation = [0.12345, -0.23456, 0.34567, 0.89966];
     recorder.append(frame);
   }
-  assert.ok(new TextEncoder().encode(JSON.stringify(recorder.finish())).byteLength < 8 * 1024 * 1024);
+  assert.ok(new TextEncoder().encode(JSON.stringify(recorder.finish())).byteLength < MAX_TAKE_JSON_BYTES);
 });
 
 test('local tracking replay bridges its camera cadence but preserves longer gaps', () => {

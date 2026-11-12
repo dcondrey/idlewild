@@ -1,15 +1,14 @@
 import * as THREE from 'three';
 import { sceneDynamics, signalValue } from './dynamics.ts';
 import { disposeObject, fitModel } from './resources.ts';
-import { createTracking, type CharacterMorph } from './tracking.ts';
+import { createRunnerMotion, createTracking, type CharacterMorph } from './tracking.ts';
 import type { SceneSubject } from './types.ts';
 
-export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[], kind: 'robot' | 'dragon' | 'imported'): SceneSubject {
+export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[], kind: 'robot' | 'dragon' | 'imported' | 'runner'): SceneSubject {
   const root = new THREE.Group();
   root.name = `${kind}_Performance`;
   const framing = new THREE.Group();
   framing.name = `${kind}_Framing`;
-  framing.rotation.y = kind === 'dragon' ? Math.PI / 3 : 0;
   framing.add(model);
   const mixer = new THREE.AnimationMixer(model);
   const clip = clips.find(candidate => candidate.name.toLowerCase() === 'idle') ?? clips[0];
@@ -22,7 +21,7 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
       object.frustumCulled = false;
     }
   });
-  fitModel(framing, kind === 'dragon' ? 2.65 : 2.7, 5.2);
+  fitModel(framing, 2.7, 5.2);
   root.add(framing);
   root.updateMatrixWorld(true);
   const bones: THREE.Bone[] = [];
@@ -42,6 +41,8 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
   const jaw = kind === 'dragon' ? findBone('mouthlower') : findBone('jaw', 'mixamorigjaw');
   const animationPose = bones.map(bone => ({ bone, quaternion: bone.quaternion.clone(), scale: bone.scale.clone() }));
   const applyTracking = createTracking(model, bones, morphs);
+  const run = kind === 'runner' ? createRunnerMotion(model, bones) : null;
+  let runnerVariant: 0 | 1 | 2 = 1;
   let disposed = false;
   function restoreAnimationPose() {
     for (const transform of animationPose) {
@@ -59,6 +60,10 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
   }
   return {
     root,
+    setVariant: run ? variant => {
+      if (variant !== 0 && variant !== 1 && variant !== 2) throw new Error('Unknown runner profile');
+      runnerVariant = variant;
+    } : undefined,
     setClips(nextClips) {
       if (disposed) throw new Error('Character is disposed');
       restoreAnimationPose();
@@ -74,6 +79,11 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
       restoreAnimationPose();
       mixer.setTime(time * motion);
       rememberAnimationPose();
+      root.rotation.z = breath * 0.015;
+      if (run) {
+        root.position.y = 0;
+        root.position.y = run(input, runnerVariant);
+      }
       if (chest) {
         chest.scale.x *= 1 + breath * 0.025;
         chest.scale.z *= 1 + breath * 0.04;
@@ -84,7 +94,6 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
           if (morph.kind && signalValue(input, morph.kind) !== null) morph.mesh.morphTargetInfluences![morph.index] = morph.kind === 'blink' ? blink : talking * 0.65;
         }
       }
-      root.rotation.z = breath * 0.015;
       applyTracking(input);
       root.updateMatrixWorld(true);
     },

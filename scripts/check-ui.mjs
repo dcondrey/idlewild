@@ -73,7 +73,12 @@ try {
     const before = (await downloads()).length;
     await page.locator('#open-export').click();
     await page.locator(button).click();
-    await expect.poll(async () => (await downloads()).length, { timeout: 30_000 }).toBe(before + (credited ? 2 : 1));
+    try {
+      await expect.poll(async () => (await downloads()).length, { timeout: 30_000 }).toBe(before + (credited ? 2 : 1));
+    } catch (error) {
+      await page.screenshot({ path: path.join(output, 'export-failure.png') });
+      throw new Error(`${button} did not download: ${await page.locator('#message').textContent()}`, { cause: error });
+    }
     const files = (await downloads()).slice(before);
     assert.ok(files.every(file => file.state === 'completed'));
     const result = files.find(file => !file.path.endsWith('-credits.txt'));

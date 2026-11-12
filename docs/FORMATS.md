@@ -4,7 +4,7 @@ Exports use the selected take and current scene, Motion, Sensitivity, Sound and 
 
 ## Control JSON, version 1
 
-**Control data** writes UTF-8 JSON with MIME type `application/json`. Import and export are limited to 8 MiB. The document is a single take:
+**Control data** writes UTF-8 JSON with MIME type `application/json`. Import and export are limited to 16 MiB. The document is a single take:
 
 | Field | Meaning |
 | --- | --- |
@@ -43,7 +43,7 @@ Local-camera frames retain all six signal entries with `value: null`; capture su
 
 Recording subtracts its origin from frame, signal and tracking sample times. Trimming subtracts the trim start from all three. A negative `sampledAtMs` is valid: the sample predates the retained take. For example, a frame at `timeMs: 0` with tracking `sampledAtMs: -100` contains a 100 ms-old estimate. Do not clamp negative sample times to zero.
 
-Playback chooses the latest frame at or before the requested time. Legacy rehearsal/SmartSpectra frames are held for less than 50 ms; local-camera frames for less than 300 ms. Tracking also expires when its own `sampledAtMs` is 300 ms old, so processing delay counts toward freshness. At either tracking boundary the estimate is unavailable; gaps do not interpolate invented movement. Loop time is modulo `durationMs`. Legacy signals retain their independent quality and 1,500 ms stale threshold. The recorder stores at most one frame per 50 ms bucket; local capture schedules at most 15 frames/second with one frame in flight, not a guaranteed inference rate.
+Playback chooses the latest frame at or before the requested time. Legacy rehearsal/SmartSpectra frames are held for less than 50 ms; local-camera frames for less than 300 ms. Tracking also expires when its own `sampledAtMs` is 300 ms old, so processing delay counts toward freshness. At either tracking boundary the estimate is unavailable; gaps do not interpolate invented movement. Loop time is modulo `durationMs`. Legacy signals retain their independent quality and 1,500 ms stale threshold. The recorder stores at most one frame per 50 ms bucket; local capture schedules at most 20 frames/second with one frame in flight, not a guaranteed inference rate.
 
 Optional speech continuity applies to rehearsal/SmartSpectra breath signals. It keeps at most eight seconds of quiet input, requires two seconds of contiguous valid samples, and replays breath for at most ten seconds. The final 500 ms fades toward neutral; valid recovery blends for 500 ms. These intervals carry `replayed` provenance and `confidence: null`, including blended recovery. They must not feed physiological analysis. Source/session changes, disabling continuity or resetting capture discard the cache. No breathing rate is synthesized.
 
@@ -54,16 +54,18 @@ The `tracking` object contains the following bounded fields; unavailable face/bo
 | Field | Meaning and limits |
 | --- | --- |
 | `sampledAtMs` | Camera snapshot request time in milliseconds on the frame clock, no later than `timeMs`. Local `timeMs` records result delivery, preserving processing age; neither is a hardware sensor timestamp. |
-| `face.weights` | All 13 named coefficients below, finite numbers in `[0, 1]`. |
+| `face.weights` | The 13 core coefficients below are required; any other MediaPipe blendshape name listed below is optional. All values are finite numbers in `[0, 1]`. |
+| `face.sampledAtMs` | Optional face snapshot time on the frame clock, no later than `timeMs`. It differs from `sampledAtMs` when a separate face camera supplies the face; the face expires independently 300 ms after it. |
 | `face.rotation` | Head orientation as quaternion `[x, y, z, w]`, or `null`; each component in `[-1, 1]`, length within 0.01 of one. |
 | `body` | Up to 12 named joints below. Each value is `[x, y, z, confidence]`: finite coordinates in `[-5, 5]` and confidence in `[0, 1]`. Omit unavailable joints; use `null`, not an empty object, when none are available. |
 | `movement` | Derived body movement amount in `[0, 1]`, or `null`; a number requires a body. Capture derives it from at least three matching joints across consecutive samples at most 300 ms apart. |
+| `framing` | Optional object with booleans `face`, `upperBody`, `fullBody` and `tooClose`, describing what the camera currently frames. `face` requires a tracked face, `upperBody`/`fullBody` require a body, and `fullBody` implies `upperBody`. Recordings may omit it. |
 
-Face names: `eyeBlinkLeft`, `eyeBlinkRight`, `jawOpen`, `mouthSmileLeft`, `mouthSmileRight`, `browDownLeft`, `browDownRight`, `browInnerUp`, `mouthFunnel`, `mouthPucker`, `mouthClose`, `mouthPressLeft`, `mouthPressRight`.
+Core face names: `eyeBlinkLeft`, `eyeBlinkRight`, `jawOpen`, `mouthSmileLeft`, `mouthSmileRight`, `browDownLeft`, `browDownRight`, `browInnerUp`, `mouthFunnel`, `mouthPucker`, `mouthClose`, `mouthPressLeft`, `mouthPressRight`. Optional names are the remaining MediaPipe Face Landmarker blendshapes: `_neutral`, `browOuterUp*`, `cheekPuff`, `cheekSquint*`, `eyeLook{Down,In,Out,Up}*`, `eyeSquint*`, `eyeWide*`, `jawForward`, `jawLeft`, `jawRight`, `mouthDimple*`, `mouthFrown*`, `mouthLeft`, `mouthRight`, `mouthLowerDown*`, `mouthRoll{Lower,Upper}`, `mouthShrug{Lower,Upper}`, `mouthStretch*`, `mouthUpperUp*` and `noseSneer*`, where `*` is `Left` and `Right`; see `FACE_SHAPES` in `src/contracts.ts` for the exact list.
 
 Body names: `leftShoulder`, `rightShoulder`, `leftElbow`, `rightElbow`, `leftWrist`, `rightWrist`, `leftHip`, `rightHip`, `leftKnee`, `rightKnee`, `leftAnkle`, `rightAnkle`.
 
-Body coordinates are estimated meters around the hip midpoint, converted from MediaPipe world coordinates as `(x, -y, -z)` for the studio's Y-up space. Capture retains only in-frame joints meeting its 0.65 confidence threshold. These estimates do not establish calibrated depth, emotions, microexpression accuracy, breathing or pulse. Raw face landmarks and camera pixels are not stored. Both models and their runtime are bundled under `public/tracking/`; see [licenses and receipts](../public/tracking/ATTRIBUTION.md).
+Body coordinates are estimated meters around the hip midpoint, converted from MediaPipe world coordinates as `(x, -y, -z)` for the studio's Y-up space. Capture acquires in-frame joints at confidence 0.6 and retains an already-tracked joint down to 0.45, so a joint near the threshold does not flicker. These estimates do not establish calibrated depth, emotions, microexpression accuracy, breathing or pulse. Raw face landmarks and camera pixels are not stored. Both models and their runtime are bundled under `public/tracking/`; see [licenses and receipts](../public/tracking/ATTRIBUTION.md).
 
 For reuse in this codebase, enforce the file-size limit before parsing, then call `validateTake` from `src/validation.ts`; it returns detached schema fields and drops unknown properties. Use `frameAt` from `src/recording.ts` for gap-aware playback and `trackingAt` from `src/tracking-frame.ts` for tracking freshness. Existing version-1 rehearsal/SmartSpectra takes need no tracking fields. JSON records the take and seed, **not scene selection or creative slider settings**: retain those settings separately when reproducing a scene. Export baked GLB to preserve the resulting animation.
 

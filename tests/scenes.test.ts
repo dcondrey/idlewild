@@ -193,7 +193,7 @@ function trackedInput(timeMs: number, tracking: Partial<TrackingFrame> = {}): Sc
   return result;
 }
 
-function trackingRig() {
+function trackingRig(kind: 'imported' | 'runner' = 'imported') {
   const model = new THREE.Group();
   const geometry = new THREE.BoxGeometry(1, 2, 1);
   const names = ['BlinkLeft', 'BlinkRight', 'JawOpen', 'SmileOpen', 'BrowDown', 'MouthFunnel', 'MouthFf', 'AuthoredDetail'];
@@ -233,7 +233,7 @@ function trackingRig() {
   const morph = new THREE.NumberKeyframeTrack('TrackedFace.morphTargetInfluences', [0, 2], [...weights, ...weights]);
   const authored = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -0.2).toArray();
   const arm = new THREE.QuaternionKeyframeTrack('DEF-UpperArm_1.L.quaternion', [0, 2], [...authored, ...authored]);
-  const subject = createCharacter(model, [new THREE.AnimationClip('Idle', 2, [morph, arm])], 'imported');
+  const subject = createCharacter(model, [new THREE.AnimationClip('Idle', 2, [morph, arm])], kind);
   return { subject, bones, face };
 }
 
@@ -271,16 +271,17 @@ test('partial body occlusion and confidence boundaries recover each authored lim
   const { subject, bones } = trackingRig();
   const neutral = trackedInput(500);
   subject.update(neutral);
-  const left = bones['DEF-UpperArm_1.L'].quaternion.clone();
+  const left = bones['DEF-UpperArm_1.L'].quaternion.clone().normalize();
   const right = bones['DEF-UpperArm_1.R'].quaternion.clone();
-  for (const confidence of [0.599, 0.6, 0.601]) {
+  for (const confidence of [0.449, 0.45, 0.451, 0.6, 0.601]) {
     const frame = trackedInput(500, { body: {
       leftShoulder: [0.25, 1, 0, confidence], leftElbow: [0.25, 0.6, 0, 1],
-      rightShoulder: [-0.25, 1, 0, 1], rightElbow: [-0.25, 0.6, 0, 0.59],
+      rightShoulder: [-0.25, 1, 0, 1], rightElbow: [-0.25, 0.6, 0, 0.44],
     } });
     subject.update(frame);
     assert.ok(bones['DEF-UpperArm_1.R'].quaternion.angleTo(right) < 1e-7);
-    if (confidence < 0.6) assert.ok(bones['DEF-UpperArm_1.L'].quaternion.angleTo(left) < 1e-7);
+    if (confidence <= 0.45) assert.ok(bones['DEF-UpperArm_1.L'].quaternion.angleTo(left) < 1e-7);
+    else if (confidence < 0.6) assert.ok(bones['DEF-UpperArm_1.L'].quaternion.angleTo(left) > 1e-6 && bones['DEF-UpperArm_1.L'].quaternion.angleTo(left) < 0.01);
     else assert.ok(direction(bones['DEF-UpperArm_1.L'], bones['DEF-Forearm_1.L']).y < -0.9999);
   }
   subject.update(trackedInput(500, { body: { leftShoulder: [0.25, 1, 0, 1] } }));
@@ -347,4 +348,137 @@ test('local facial weights map Snow aliases, preserve unmatched animation and re
   subject.update(frame);
   assert.deepEqual(face.morphTargetInfluences, authored);
   subject.dispose();
+});
+
+function expressiveFrame(timeMs: number): SceneFrame {
+  const weights = Object.fromEntries(FACE_SHAPES.map(name => [name, 0])) as Record<FaceShape, number>;
+  return trackedInput(timeMs, { face: { weights, rotation: null }, body: {
+    leftShoulder: [0.25, 0.6, 0, 1], rightShoulder: [-0.25, 0.6, 0, 1],
+    leftHip: [0.15, 0, 0, 1], rightHip: [-0.15, 0, 0, 1],
+    leftWrist: [0.25, -0.1, 0, 1], rightWrist: [-0.25, -0.1, 0, 1],
+  } });
+}
+
+test('creative dynamics separate posture and expression from movement and physiological signals', () => {
+  const frame = expressiveFrame(1000);
+  const rest = sceneDynamics(frame);
+  assert.deepEqual([rest.breath, rest.movement, rest.armSpread, rest.armLift, rest.smile, rest.jaw], [0, 0, 0, 0, 0, 0]);
+  const tracking = frame.frame!.tracking!;
+  tracking.body!.leftWrist = [0.85, 1.1, 0, 1];
+  tracking.body!.rightWrist = [-0.85, 1.1, 0, 1];
+  tracking.body!.leftShoulder![0] += 0.2;
+  tracking.body!.rightShoulder![0] += 0.2;
+  Object.assign(tracking.face!.weights, { mouthSmileLeft: 0.8, mouthSmileRight: 0.6, jawOpen: 0.7, browInnerUp: 0.5, eyeBlinkLeft: 0.9, eyeBlinkRight: 0.9 });
+  const active = sceneDynamics(frame);
+  assert.ok(active.armSpread > 0.9 && active.armLift > 0.9 && active.lean > 0.3);
+  assert.ok(active.smile > 0.69 && active.jaw > 0.69 && active.brow > 0.49 && active.blink > 0.89);
+  assert.deepEqual([active.breath, active.movement], [0, 0]);
+  tracking.face!.sampledAtMs = 700;
+  const olderFace = sceneDynamics(frame);
+  assert.equal(olderFace.smile, 0);
+  assert.ok(olderFace.armLift > 0.9);
+  delete tracking.body!.leftHip;
+  delete tracking.body!.rightHip;
+  assert.ok(sceneDynamics(frame).armLift > 0.9);
+  frame.controls.sensitivity = 0;
+  const disabled = sceneDynamics(frame);
+  assert.deepEqual([disabled.armSpread, disabled.armLift, disabled.lean, disabled.jaw], [0, 0, 0, 0]);
+});
+
+test('bubbles and star react distinctly to facial expressions and posture at the same timestamp', () => {
+  for (const factory of [createBubbles, createStar]) {
+    const subject = factory();
+    const frame = expressiveFrame(1000);
+    subject.update(frame);
+    const rest = transforms(subject.root);
+    const face = structuredClone(frame);
+    Object.assign(face.frame!.tracking!.face!.weights, { jawOpen: 0.9, mouthSmileLeft: 0.8, mouthSmileRight: 0.8, eyeBlinkLeft: 0.7, eyeBlinkRight: 0.7 });
+    subject.update(face);
+    const expressive = transforms(subject.root);
+    assert.notDeepEqual(expressive, rest);
+    const body = structuredClone(frame);
+    body.frame!.tracking!.body!.leftWrist = [0.85, 1.1, 0, 1];
+    body.frame!.tracking!.body!.rightWrist = [-0.85, 1.1, 0, 1];
+    subject.update(body);
+    const pose = transforms(subject.root);
+    assert.notDeepEqual(pose, rest);
+    assert.notDeepEqual(pose, expressive);
+    subject.update(face);
+    assert.deepEqual(transforms(subject.root), expressive);
+    subject.update(frame);
+    assert.deepEqual(transforms(subject.root), rest);
+    body.reducedMotion = true;
+    subject.update(body);
+    const still = transforms(subject.root);
+    face.reducedMotion = true;
+    subject.update(face);
+    assert.deepEqual(transforms(subject.root), still);
+    subject.dispose();
+  }
+});
+
+test('tracked limbs use a stable neutral basis instead of inheriting authored twist', () => {
+  const { subject, bones } = trackingRig();
+  const rest = bones['DEF-UpperArm_1.L'].quaternion.clone();
+  const twisted = rest.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.8));
+  subject.setClips!([new THREE.AnimationClip('Twist', 2, [new THREE.QuaternionKeyframeTrack('DEF-UpperArm_1.L.quaternion', [0, 1, 2], [...rest.toArray(), ...twisted.toArray(), ...rest.toArray()])])]);
+  const body: TrackingFrame['body'] = { leftShoulder: [0.25, 1, 0, 1], leftElbow: [0.25, 0.6, 0, 1] };
+  subject.update(trackedInput(0, { body }));
+  const tracked = bones['DEF-UpperArm_1.L'].quaternion.clone();
+  subject.update(trackedInput(1000, { body }));
+  assert.ok(bones['DEF-UpperArm_1.L'].quaternion.angleTo(tracked) < 1e-6);
+  subject.update(trackedInput(1000));
+  assert.ok(bones['DEF-UpperArm_1.L'].quaternion.angleTo(twisted) < 1e-6);
+  subject.update(trackedInput(1000, { sampledAtMs: 701, body }));
+  assert.ok(bones['DEF-UpperArm_1.L'].quaternion.angleTo(twisted) < 0.001);
+  subject.dispose();
+});
+
+test('detailed runner cycles use anatomical segments, loop, seek and stop under reduced motion', () => {
+  const { subject, bones } = trackingRig('runner');
+  for (const [variant, cadence] of [[0, 5.5], [1, 7], [2, 8.5]] as const) {
+    subject.setVariant!(variant);
+    subject.update(trackedInput(0));
+    const start = transforms(subject.root);
+    const period = 2 * Math.PI / cadence * 1000;
+    subject.update(trackedInput(period / 4));
+    assert.ok(direction(bones['DEF-Thigh_1.L'], bones['DEF-Knee_1.L']).z > 0.25);
+    const stride = transforms(subject.root);
+    assert.notDeepEqual(stride, start);
+    subject.update(trackedInput(period));
+    const end = transforms(subject.root);
+    end.forEach((values, index) => values.forEach((value, part) => assert.ok(Math.abs(value - start[index][part]) < 1e-5)));
+    subject.update(trackedInput(period / 4));
+    assert.deepEqual(transforms(subject.root), stride);
+  }
+  const still = trackedInput(0);
+  still.reducedMotion = true;
+  subject.update(still);
+  const neutral = transforms(subject.root);
+  still.timeMs = 2000;
+  still.frame!.timeMs = 2000;
+  still.frame!.tracking!.sampledAtMs = 2000;
+  subject.update(still);
+  assert.deepEqual(transforms(subject.root), neutral);
+  const face = expressiveFrame(500);
+  face.frame!.tracking!.face!.weights.jawOpen = 0.8;
+  subject.update(face);
+  assert.ok(Math.abs((subject.root.getObjectByName('TrackedFace') as THREE.Mesh).morphTargetInfluences![2] - 0.8) < 1e-6);
+  subject.dispose();
+});
+
+test('dragon framing keeps forward orientation and uniform proportions consistent with other characters', () => {
+  const results = [];
+  for (const kind of ['dragon', 'imported'] as const) {
+    const model = new THREE.Group();
+    model.add(new THREE.Mesh(new THREE.BoxGeometry(1, 2, 3), new THREE.MeshStandardMaterial()));
+    const subject = createCharacter(model, [], kind);
+    subject.update(input(0, true));
+    assert.ok(new THREE.Vector3(0, 0, 1).transformDirection(model.matrixWorld).z > 0.9999);
+    const size = new THREE.Box3().setFromObject(subject.root).getSize(new THREE.Vector3());
+    assert.ok(Math.abs(size.x / size.y - 0.5) < 1e-8 && Math.abs(size.z / size.y - 1.5) < 1e-8);
+    results.push(size.toArray());
+    subject.dispose();
+  }
+  assert.deepEqual(results[0], results[1]);
 });

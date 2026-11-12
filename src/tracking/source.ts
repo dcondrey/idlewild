@@ -2,7 +2,7 @@ import { TRACKING_STALE_MS } from '../contracts.ts';
 import type { CaptureSource, CaptureStatus, ControlFrame } from '../contracts.ts';
 import { validateFrame } from '../validation.ts';
 
-export const TRACKING_INTERVAL_MS = 1000 / 15;
+export const TRACKING_INTERVAL_MS = 1000 / 20;
 export const TRACKING_START_TIMEOUT_MS = 20000;
 export const TRACKING_FRAME_TIMEOUT_MS = 3000;
 export const TRACKING_STOP_TIMEOUT_MS = 1500;
@@ -15,6 +15,7 @@ interface TrackingWorker {
 }
 type Timer = ReturnType<typeof setTimeout> | number;
 interface Dependencies {
+  faceVideo?: HTMLVideoElement;
   createWorker?: () => TrackingWorker;
   createBitmap?: (video: HTMLVideoElement, options: ImageBitmapOptions) => Promise<ImageBitmap>;
   now?: () => number;
@@ -33,10 +34,16 @@ interface Session {
   pending: number;
   lastCapture: number;
   lastVideoTime: number;
+  lastFaceVideoTime: number;
+  lastFaceSampleTime: number | null;
+  faceCopyPending: boolean;
   videoGeneration: number;
   tick: Timer | null;
   deadline: Timer | null;
   videoDeadline: Timer | null;
+  faceDeadline: Timer | null;
+  cancelFace: (() => void) | null;
+  bitmaps: Set<ImageBitmap>;
   shutdown: Promise<void> | null;
   finishShutdown: (() => void) | null;
   resolveStartup: () => void;
@@ -46,6 +53,7 @@ interface Session {
 }
 
 export function createLocalTrackingSource(video: HTMLVideoElement, dependencies: Dependencies = {}): CaptureSource {
+  const faceVideo = dependencies.faceVideo;
   const createWorker = dependencies.createWorker ?? (() => new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' }) as TrackingWorker);
   const createBitmap = dependencies.createBitmap ?? ((video, options) => createImageBitmap(video, options));
   const now = dependencies.now ?? (() => performance.now());
@@ -54,13 +62,62 @@ export function createLocalTrackingSource(video: HTMLVideoElement, dependencies:
   let current: Session | null = null;
   let disposed = false;
 
-  function clear(session: Session, name: 'tick' | 'deadline' | 'videoDeadline') {
+  function clear(session: Session, name: 'tick' | 'deadline' | 'videoDeadline' | 'faceDeadline') {
     if (session[name] !== null) clearTimer(session[name]);
     session[name] = null;
   }
 
   function notify(session: Session, phase: CaptureStatus['phase'], message: string, sessionId: string | null = session.sessionId) {
     session.onStatus({ phase, message, sessionId });
+  }
+
+  function releaseBitmap(session: Session, bitmap: ImageBitmap | null) {
+    if (bitmap && session.bitmaps.delete(bitmap)) bitmap.close();
+  }
+
+  function retainBitmap(session: Session, bitmap: ImageBitmap): ImageBitmap | null {
+    if (!session.active) { bitmap.close(); return null; }
+    session.bitmaps.add(bitmap);
+    return bitmap;
+  }
+
+  async function snapshot(session: Session, video: HTMLVideoElement, options: ImageBitmapOptions): Promise<ImageBitmap | null> {
+    return retainBitmap(session, await createBitmap(video, options));
+  }
+
+  function imageOptions(width: number, height: number): ImageBitmapOptions {
+    const scale = Math.min(1, 960 / width, 720 / height);
+    return { resizeWidth: Math.max(1, Math.floor(width * scale)), resizeHeight: Math.max(1, Math.floor(height * scale)), resizeQuality: 'low' };
+  }
+
+  function faceSnapshot(session: Session, timeMs: number): Promise<{ bitmap: ImageBitmap | null; timeMs: number | null }> {
+    const absent = { bitmap: null, timeMs: null };
+    if (!faceVideo || !session.active || faceVideo.readyState < 2 || !Number.isFinite(faceVideo.currentTime)
+      || !Number.isInteger(faceVideo.videoWidth) || !Number.isInteger(faceVideo.videoHeight)
+      || faceVideo.videoWidth < 1 || faceVideo.videoHeight < 1 || faceVideo.videoWidth > 16384 || faceVideo.videoHeight > 16384) return Promise.resolve(absent);
+    if (faceVideo.currentTime === session.lastFaceVideoTime) return Promise.resolve({ bitmap: null, timeMs: session.lastFaceSampleTime !== null && timeMs - session.lastFaceSampleTime < TRACKING_STALE_MS ? session.lastFaceSampleTime : null });
+    if (session.faceCopyPending) return Promise.resolve(absent);
+    const videoTime = faceVideo.currentTime;
+    session.faceCopyPending = true;
+    return new Promise(resolve => {
+      let finished = false;
+      const finish = (result: { bitmap: ImageBitmap | null; timeMs: number | null }) => {
+        if (finished) { releaseBitmap(session, result.bitmap); return; }
+        finished = true;
+        clear(session, 'faceDeadline');
+        session.cancelFace = null;
+        resolve(result);
+      };
+      session.cancelFace = () => finish(absent);
+      session.faceDeadline = setTimer(() => finish(absent), TRACKING_INTERVAL_MS);
+      void snapshot(session, faceVideo, imageOptions(faceVideo.videoWidth, faceVideo.videoHeight)).then(bitmap => {
+        if (!finished && bitmap) {
+          session.lastFaceVideoTime = videoTime;
+          session.lastFaceSampleTime = timeMs;
+        }
+        finish({ bitmap, timeMs: bitmap ? timeMs : null });
+      }, () => finish(absent)).finally(() => { session.faceCopyPending = false; });
+    });
   }
 
   function stopSession(session: Session, error?: Error): Promise<void> {
@@ -71,6 +128,9 @@ export function createLocalTrackingSource(video: HTMLVideoElement, dependencies:
     clear(session, 'tick');
     clear(session, 'deadline');
     clear(session, 'videoDeadline');
+    session.cancelFace?.();
+    clear(session, 'faceDeadline');
+    for (const bitmap of session.bitmaps) releaseBitmap(session, bitmap);
     session.rejectStartup(error ?? new Error('Local tracking startup was cancelled'));
     let finished = false;
     session.finishShutdown = () => {
@@ -142,16 +202,18 @@ export function createLocalTrackingSource(video: HTMLVideoElement, dependencies:
     const id = ++session.sequence;
     session.pending = id;
     session.deadline = setTimer(() => fail(session, 'Local camera tracking timed out'), TRACKING_FRAME_TIMEOUT_MS);
-    const scale = Math.min(1, 640 / width, 480 / height);
     let bitmap: ImageBitmap | null = null;
+    let secondary: { bitmap: ImageBitmap | null; timeMs: number | null } | null = null;
     try {
-      bitmap = await createBitmap(video, { resizeWidth: Math.max(1, Math.floor(width * scale)), resizeHeight: Math.max(1, Math.floor(height * scale)), resizeQuality: 'low' });
-      if (!session.active) return;
-      session.worker.postMessage({ type: 'frame', id, timeMs, bitmap }, [bitmap]);
-      bitmap = null;
+      if (faceVideo) [bitmap, secondary] = await Promise.all([snapshot(session, video, imageOptions(width, height)), faceSnapshot(session, timeMs)]);
+      else bitmap = retainBitmap(session, await createBitmap(video, imageOptions(width, height)));
+      if (!session.active || !bitmap) return;
+      const transfer = secondary?.bitmap ? [bitmap, secondary.bitmap] : [bitmap];
+      session.worker.postMessage({ type: 'frame', id, timeMs, bitmap, ...(secondary ? { faceBitmap: secondary.bitmap, faceTimeMs: secondary.timeMs } : {}) }, transfer);
+      for (const image of transfer) session.bitmaps.delete(image);
     } catch {
       fail(session, 'Local tracking could not read a camera frame');
-    } finally { bitmap?.close(); }
+    } finally { releaseBitmap(session, bitmap); releaseBitmap(session, secondary?.bitmap ?? null); }
   }
 
   function receive(session: Session, message: unknown) {
@@ -179,7 +241,7 @@ export function createLocalTrackingSource(video: HTMLVideoElement, dependencies:
         session.onFrame(frame);
         if (!session.active) return;
         const lagging = receivedAt - frame.tracking.sampledAtMs >= TRACKING_STALE_MS;
-        const observed = frame.tracking.face !== null || frame.tracking.body !== null;
+        const observed = frame.tracking.body !== null || (frame.tracking.face !== null && receivedAt - (frame.tracking.face.sampledAtMs ?? frame.tracking.sampledAtMs) < TRACKING_STALE_MS);
         notify(session, !lagging && observed ? 'ready' : 'poor-signal', lagging ? 'Local tracking is falling behind the camera' : observed ? 'Face & body estimates stay local' : 'No clear face or body landmarks');
         schedule(session);
       } else if (data.type === 'error') fail(session, session.ready ? 'Local tracking could not process a camera frame' : 'Local tracking could not load its models');
@@ -200,7 +262,8 @@ export function createLocalTrackingSource(video: HTMLVideoElement, dependencies:
       const session: Session = {
         worker: createWorker(), sessionId, epoch: now(), active: true, ready: false,
         sequence: 0, pending: 0, lastCapture: -Infinity, lastVideoTime: -Infinity, videoGeneration: 0,
-        tick: null, deadline: null, videoDeadline: null, shutdown: null, finishShutdown: null,
+        lastFaceVideoTime: -Infinity, lastFaceSampleTime: null, faceCopyPending: false,
+        tick: null, deadline: null, videoDeadline: null, faceDeadline: null, cancelFace: null, bitmaps: new Set(), shutdown: null, finishShutdown: null,
         resolveStartup, rejectStartup, onFrame, onStatus,
       };
       current = session;

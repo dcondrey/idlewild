@@ -14,6 +14,7 @@ import { mountStudio, setupGuide, setupPanels, updateStudioFlow } from './ui';
 import { bakeAnimation, exportControlData, exportPreview } from './exports';
 import { importCharacter, validateClipCompatibility, disposeImported } from './imports';
 import { assetCopyright, getAssetCopyright, setAssetCopyright } from './asset-credits';
+import { SCENE_REGISTRY } from './scenes/registry';
 import type { AnimationClip, Group } from 'three';
 
 mountStudio(document.querySelector<HTMLElement>('#app')!);
@@ -23,16 +24,7 @@ const element = <T extends HTMLElement = HTMLElement>(id: string) => document.ge
 const input = (id: string) => element<HTMLInputElement>(id);
 const button = (id: string) => element<HTMLButtonElement>(id);
 const canvas = element<HTMLCanvasElement>('stage');
-const scenes: { id: SceneId; label: string; title: string; caption: string }[] = [
-  { id: 'robot', label: 'Robot', title: 'The robot', caption: 'A small character with a rhythm of its own.' },
-  { id: 'bubbles', label: 'Bubbles', title: 'In suspension', caption: 'An iridescent interpretation of movement, not measured airflow.' },
-  { id: 'star', label: 'Star', title: 'A little starlight', caption: 'A soft glow shaped by the same performance.' },
-  { id: 'dragon', label: 'Dragon', title: 'The European dragon', caption: 'Ancient wings. A new performance.' },
-  { id: 'baby-dragon', label: 'Baby dragon', title: 'Small but mighty', caption: 'An original little creature finding its wings.' },
-  { id: 'runner', label: 'Runner', title: 'Find your stride', caption: 'A comfortable, bounded creative pace. Faster breathing earns no reward.' },
-  { id: 'brain', label: 'Brain', title: 'Body & brain', caption: 'Illustrative body–brain relationships. No measured neural activity or personal activation map.' },
-  { id: 'imported', label: 'Your character', title: 'Your character', caption: 'A new home for the same performance.' },
-];
+const scenes = SCENE_REGISTRY.filter(entry => !entry.model);
 let stage: Awaited<ReturnType<typeof createStage>> | null = null;
 let scene: SceneId = 'robot';
 let source: CaptureSource | null = null;
@@ -255,7 +247,7 @@ function animate(now: number) {
 }
 
 function chooseScene(id: SceneId) {
-  const item = scenes.find(item => item.id === id);
+  const item = scenes.find(item => item.scene === id);
   if (!item) throw new Error('Unknown scene');
   stage?.setScene(id); scene = id;
   element('scene-title').textContent = item.title; element('scene-caption').textContent = item.caption;
@@ -267,9 +259,9 @@ on('detail-view', () => {
   stage?.setDetailView(enabled); button('detail-view').setAttribute('aria-pressed', String(enabled)); button('detail-view').textContent = enabled ? 'Full view' : 'Close view';
 });
 for (const item of scenes) {
-  const pick = document.createElement('button'); pick.textContent = item.label; pick.dataset.scene = item.id; pick.setAttribute('aria-pressed', String(item.id === scene));
+  const pick = document.createElement('button'); pick.textContent = item.label; pick.dataset.scene = item.scene; pick.setAttribute('aria-pressed', String(item.scene === scene));
   pick.addEventListener('click', () => { void run(() => {
-    chooseScene(item.id);
+    chooseScene(item.scene);
   }); });
   element('scene-picker').append(pick);
 }
@@ -422,7 +414,7 @@ for (const [id, kind] of [['export-data', 'data'], ['export-wav', 'wav'], ['expo
 element('cancel-export').addEventListener('click', () => exporting?.abort());
 input('import-data').addEventListener('change', () => { const file = input('import-data').files?.[0]; input('import-data').value = ''; if (file) void run(async () => {
   element<HTMLDialogElement>('import-dialog').close();
-  if (file.size > MAX_TAKE_JSON_BYTES) throw new Error('Control data exceeds the 8 MiB limit.');
+  if (file.size > MAX_TAKE_JSON_BYTES) throw new Error(`Control data exceeds the ${MAX_TAKE_JSON_BYTES / 1024 / 1024} MiB limit.`);
   const take = validateTake(JSON.parse(await file.text()));
   if (!take.samples.length) throw new Error('The imported take contains no samples.');
   await stopInput(); takes = addTake(takes, take); selectTake(take); message('Control take imported. Its original source and signal quality are preserved.');

@@ -17,18 +17,28 @@ export interface Signal {
   provenance?: Provenance;
 }
 
-export const FACE_SHAPES = ['eyeBlinkLeft', 'eyeBlinkRight', 'jawOpen', 'mouthSmileLeft', 'mouthSmileRight', 'browDownLeft', 'browDownRight', 'browInnerUp', 'mouthFunnel', 'mouthPucker', 'mouthClose', 'mouthPressLeft', 'mouthPressRight'] as const;
+export const CORE_FACE_SHAPES = ['eyeBlinkLeft', 'eyeBlinkRight', 'jawOpen', 'mouthSmileLeft', 'mouthSmileRight', 'browDownLeft', 'browDownRight', 'browInnerUp', 'mouthFunnel', 'mouthPucker', 'mouthClose', 'mouthPressLeft', 'mouthPressRight'] as const;
+export const FACE_SHAPES = [...CORE_FACE_SHAPES, '_neutral', 'browOuterUpLeft', 'browOuterUpRight', 'cheekPuff', 'cheekSquintLeft', 'cheekSquintRight', 'eyeLookDownLeft', 'eyeLookDownRight', 'eyeLookInLeft', 'eyeLookInRight', 'eyeLookOutLeft', 'eyeLookOutRight', 'eyeLookUpLeft', 'eyeLookUpRight', 'eyeSquintLeft', 'eyeSquintRight', 'eyeWideLeft', 'eyeWideRight', 'jawForward', 'jawLeft', 'jawRight', 'mouthDimpleLeft', 'mouthDimpleRight', 'mouthFrownLeft', 'mouthFrownRight', 'mouthLeft', 'mouthLowerDownLeft', 'mouthLowerDownRight', 'mouthRight', 'mouthRollLower', 'mouthRollUpper', 'mouthShrugLower', 'mouthShrugUpper', 'mouthStretchLeft', 'mouthStretchRight', 'mouthUpperUpLeft', 'mouthUpperUpRight', 'noseSneerLeft', 'noseSneerRight'] as const;
 export type FaceShape = typeof FACE_SHAPES[number];
+export type FaceWeights = Record<typeof CORE_FACE_SHAPES[number], number> & Partial<Record<FaceShape, number>>;
 export const BODY_JOINTS = ['leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist', 'leftHip', 'rightHip', 'leftKnee', 'rightKnee', 'leftAnkle', 'rightAnkle'] as const;
 export type BodyJoint = typeof BODY_JOINTS[number];
 export type TrackingPoint = [number, number, number, number];
 export const TRACKING_STALE_MS = 300;
 
+export interface TrackingFraming {
+  face: boolean;
+  upperBody: boolean;
+  fullBody: boolean;
+  tooClose: boolean;
+}
+
 export interface TrackingFrame {
   sampledAtMs: number;
-  face: { weights: Record<FaceShape, number>; rotation: [number, number, number, number] | null } | null;
+  face: { weights: FaceWeights; rotation: [number, number, number, number] | null; sampledAtMs?: number } | null;
   body: Partial<Record<BodyJoint, TrackingPoint>> | null;
   movement: number | null;
+  framing?: TrackingFraming;
 }
 
 export interface ControlFrame {

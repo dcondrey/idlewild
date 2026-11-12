@@ -1,7 +1,7 @@
-import { BODY_JOINTS, FACE_SHAPES, TAKE_LIMITS } from './contracts.ts';
+import { BODY_JOINTS, CORE_FACE_SHAPES, FACE_SHAPES, TAKE_LIMITS } from './contracts.ts';
 import type { Channel, ControlFrame, Signal, Source, Take, TrackingFrame, TrackingPoint, Unit } from './contracts.ts';
 
-export const MAX_TAKE_JSON_BYTES = 8 * 1024 * 1024;
+export const MAX_TAKE_JSON_BYTES = 16 * 1024 * 1024;
 
 const CHANNEL_UNITS: Record<Channel, Unit> = {
   breath: 'relative', breathingRate: 'breaths/min', pulseRate: 'beats/min',
@@ -58,14 +58,14 @@ function tracking(value: unknown, frameTime: number): TrackingFrame {
   if (input.face !== null) {
     const value = record(input.face, 'tracked face');
     const sourceWeights = record(value.weights, 'face weights');
-    const weights = Object.fromEntries(FACE_SHAPES.map(name => [name, number(sourceWeights[name], 0, 1, name)])) as NonNullable<TrackingFrame['face']>['weights'];
+    const weights = Object.fromEntries(FACE_SHAPES.filter(name => (CORE_FACE_SHAPES as readonly string[]).includes(name) || sourceWeights[name] !== undefined).map(name => [name, number(sourceWeights[name], 0, 1, name)])) as NonNullable<TrackingFrame['face']>['weights'];
     let rotation: NonNullable<TrackingFrame['face']>['rotation'] = null;
     if (value.rotation !== null) {
       if (!Array.isArray(value.rotation) || value.rotation.length !== 4) throw new Error('Invalid head rotation');
       rotation = value.rotation.map(value => number(value, -1, 1, 'head rotation')) as [number, number, number, number];
       if (Math.abs(Math.hypot(...rotation) - 1) > 0.01) throw new Error('Head rotation must be normalized');
     }
-    face = { weights, rotation };
+    face = { weights, rotation, ...(value.sampledAtMs !== undefined ? { sampledAtMs: number(value.sampledAtMs, frameTime - Number.MAX_SAFE_INTEGER, frameTime, 'face sample time') } : {}) };
   }
   if (input.body !== null) {
     const points = record(input.body, 'tracked body');
@@ -80,7 +80,13 @@ function tracking(value: unknown, frameTime: number): TrackingFrame {
   }
   const movement = input.movement === null ? null : number(input.movement, 0, 1, 'body movement');
   if (!body && movement !== null) throw new Error('Body movement requires tracked landmarks');
-  return { sampledAtMs, face, body, movement };
+  if (input.framing === undefined) return { sampledAtMs, face, body, movement };
+  const framing = record(input.framing, 'framing');
+  const flags = ['face', 'upperBody', 'fullBody', 'tooClose'] as const;
+  if (Object.keys(framing).length !== flags.length || flags.some(name => typeof framing[name] !== 'boolean')) throw new Error('Invalid framing');
+  const [hasFace, upperBody, fullBody, tooClose] = flags.map(name => framing[name] as boolean);
+  if ((hasFace && !face) || ((upperBody || fullBody) && !body) || (fullBody && !upperBody)) throw new Error('Framing contradicts tracked landmarks');
+  return { sampledAtMs, face, body, movement, framing: { face: hasFace, upperBody, fullBody, tooClose } };
 }
 
 export function validateFrame(value: unknown): ControlFrame {

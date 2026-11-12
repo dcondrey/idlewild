@@ -6,6 +6,7 @@ import { createBabyDragon, createBrain, createBubbles, createRunner, createStar 
 import { disposeObject } from './scenes/resources.ts';
 import type { SceneSubject } from './scenes/types.ts';
 import { setAssetCopyright } from './asset-credits.ts';
+import { SCENE_IDS } from './scenes/registry.ts';
 
 type AssetState = { phase: 'loading' | 'ready' | 'error'; message: string };
 
@@ -174,7 +175,7 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
     },
     setScene(id) {
       if (disposed) throw new Error('Stage is disposed');
-      if (!['robot', 'bubbles', 'star', 'dragon', 'baby-dragon', 'runner', 'brain', 'imported'].includes(id)) throw new Error('Unknown scene');
+      if (!SCENE_IDS.includes(id)) throw new Error('Unknown scene');
       selected = id;
       detailView = false;
       frameCamera();

@@ -8,12 +8,12 @@ import { MAX_TAKE_JSON_BYTES, validateTake } from './validation.ts';
 import { renderWav } from './audio.ts';
 import { getAssetCopyright } from './asset-credits.ts';
 import { trackingAt } from './tracking-frame.ts';
+import { SCENE_IDS } from './scenes/registry.ts';
 
 const MAX_EXPORT_BYTES = 64 * 1024 * 1024;
 const MAX_NODES = 512;
 const MAX_VALUES = 8 * 1024 * 1024;
 const SAMPLE_MS = 1000 / TAKE_LIMITS.samplesPerSecond;
-const SCENES: SceneId[] = ['robot', 'bubbles', 'star', 'dragon', 'baby-dragon', 'runner', 'brain', 'imported'];
 
 interface ExportOptions {
   signal?: AbortSignal;
@@ -275,7 +275,7 @@ export async function exportPreview(options: ExportOptions & {
   const controls = settings(options.controls);
   const mimeType = previewMimeType();
   if (!mimeType || typeof AudioContext === 'undefined') throw new Error('This runtime cannot encode a WebM preview with audio. Use the desktop app.');
-  if (!SCENES.includes(options.scene)) throw new Error('Unknown export scene.');
+  if (!SCENE_IDS.includes(options.scene)) throw new Error('Unknown export scene.');
   const { canvas, signal } = options;
   if (!Number.isInteger(canvas.width) || !Number.isInteger(canvas.height) || canvas.width < 1 || canvas.height < 1 || canvas.width > 4096 || canvas.height > 4096) throw new Error('The stage viewport exceeds the preview export limits.');
   signal?.throwIfAborted();
