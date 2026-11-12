@@ -6,6 +6,7 @@ const { pathToFileURL } = require('node:url');
 const { randomUUID } = require('node:crypto');
 const { ENTRY_URL, trustedURL, assetPath, validKey } = require('./security.cjs');
 const { createCaptureController } = require('./capture.cjs');
+const { createBenchmarkLimit } = require('./benchmark-limit.cjs');
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'idlewild', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 app.setName('Idlewild');
@@ -21,8 +22,17 @@ const send = (channel, payload) => {
 const capture = createCaptureController({
   loadSDK: () => ({ ...require('@smartspectra/node-sdk'), decodeMetrics: require('@smartspectra/node-sdk/messages').decodeMetrics }),
   onFrame: frame => send('studio:metrics', frame),
-  onStatus: status => send('studio:status', status),
+  onStatus: status => {
+    if (status.phase === 'idle') benchmarkLimit?.end();
+    send('studio:status', status);
+  },
 });
+const benchmarkLimit = process.argv.includes('--live-benchmark') ? createBenchmarkLimit({ expire: () => {
+  cameraAllowed = false;
+  apiKey = '';
+  send('studio:status', { phase: 'error', message: 'The authorized live benchmark has ended. Camera and measurement are stopping.', sessionId: null });
+  void capture.dispose().catch(() => send('studio:status', { phase: 'error', message: 'Benchmark cleanup failed. Close Idlewild before another session.', sessionId: null }));
+} }) : null;
 
 function authorize(event) {
   if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || !trustedURL(event.senderFrame.url)) throw new Error('Untrusted request');
@@ -48,6 +58,7 @@ handle('studio:camera', async allowed => {
 });
 handle('studio:start', async consent => {
   if (consent !== true || !cameraAllowed || !apiKey) throw new Error('Consent, preview and key required');
+  benchmarkLimit?.begin();
   await capture.start({ apiKey, consent: true, sessionId: randomUUID() });
 });
 handle('studio:stop', () => capture.stop());

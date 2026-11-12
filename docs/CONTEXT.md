@@ -20,7 +20,7 @@ Robot and dragon downloads and the adapted Snow character have SHA-256 receipts 
 
 | Completion gate | Current evidence and limit |
 | --- | --- |
-| Live capture | Implemented and covered with fake adapters; consented live validation with David remains unmet. No paid-use authorization was received. |
+| Live capture | Implemented and covered with fake adapters; David authorized one bounded live benchmark on November 11. Actual in-app setup and live validation remain pending. |
 | Creative controls | Motion, sensitivity, sound and supported facial mapping verified with synthetic input; live response remains unmeasured. |
 | Reusable takes | Record/replay/scrub/trim/loop/delete, deterministic mapping and limits passed unit and Electron checks. |
 | Exports | Control JSON, decoded WAV/WebM and meaningful baked GLB export/reimport passed; measured timing and format limits are below. |
@@ -28,7 +28,7 @@ Robot and dragon downloads and the adapted Snow character have SHA-256 receipts 
 | Robustness | Local lifecycle, input boundaries, cancellation, keyboard, reduced motion, viewport and resource checks passed; actual camera failure/recovery and other platforms remain unverified. |
 | Reproducible setup | Separate clean-checkout install/build/start passed; manifests are unchanged and the latest committed source/asset build and Electron checks also passed. |
 
-The remaining live gate needs David's time at the camera, session-only key entry, explicit authorization for the proposed 60-second metered validation, and separate in-app camera/measurement consent. Earlier model-selection replies did not authorize that run. Public release also awaits end-user/privacy terms, distribution/signing qualification and explicit publication authorization; no production-ready claim is made.
+David explicitly authorized the proposed single live benchmark, up to 60 seconds and two credits. This supersedes the earlier unanswered request; no further paid run is authorized. It still requires his session-only key entry and separate in-app camera/measurement consent. Public release awaits end-user/privacy terms, distribution/signing qualification and explicit publication authorization; no production-ready claim is made.
 
 ## Signal and privacy constraints
 
@@ -152,3 +152,9 @@ Source-pose compatibility was audited across 5,125 channels. Only absent `STR-TI
 The integration gate passed 67/67 tests, TypeScript/Vite and the actual Electron workflow (`artifacts/final-check.log`). All seven original scene GLBs exported/reimported; independent media decoding passed with exact 1.5-second PCM duration, 0.99780 waveform correlation and 99 ms best-match lag in the latest short synthetic run (`artifacts/media-check.log`, `artifacts/scene-exports.log`). Timing varies between runs; these are media-export observations, not live sensor accuracy.
 
 After the arm correction, TypeScript/Vite and `node scripts/check-character.mjs` passed. Actual Snow checks cover six rendered facial states, all three clips' matching loop endpoints, credited baked GLB export/reimport, export cancellation and mutation guards, 760×620 viewport fit, and resource return to baseline after removal (21 geometries / 8 textures). Full-body, close-face and small-window screenshots were inspected. During these facial checks the renderer reported 40 draw calls and 113,748 triangles; this is a scene workload observation, not a frame-rate guarantee. The 8,060,880-byte runtime model, source/derived hashes and modification notice are tracked under `public/models/`; source archives and tools stay ignored. Logs: `artifacts/snow-conversion.log`, `artifacts/character-build.log`, `artifacts/character-check.log`; detailed results and screenshots: `artifacts/character/`.
+
+### Authorized live benchmark preparation
+
+`scripts/live-benchmark.mjs --authorized` opens the real application with `--live-benchmark`, leaving key entry and both consent controls to David. The main process permits one start attempt, initiates shutdown at 55 seconds and prevents restarting that process's allowance. A separate harness watchdog terminates its own Electron child at 58 seconds if shutdown has not been confirmed. These bounds include SDK startup; they leave time inside the authorized 60-second maximum. Credit cost remains based on David's stated 30-seconds-per-credit rate, not a locally measured account debit. An interrupted or failed paid attempt must not be restarted automatically.
+
+Preparation used no SDK instance or camera. Twenty focused guard/capture tests, TypeScript/Vite and the non-metered `node --experimental-strip-types scripts/live-benchmark.mjs --check` passed (`artifacts/benchmark-tests.log`, `benchmark-build.log`, `benchmark-prepare.log`). The live harness retains bounded control data and a stage-only image under ignored `.local/live-benchmarks/`, with no key or camera image logging. Preparation is not live-validation evidence.
