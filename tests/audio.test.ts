@@ -84,7 +84,7 @@ test('local movement controls sound without inventing breath and expires at the 
 
 test('WAV decodes to bounded deterministic PCM with the shared pitch and amplitude model', async () => {
   const source = take();
-  const result = await renderWav(source, 'robot', controls);
+  const result = await renderWav(source, 'rex', controls);
   assert.equal(result.type, 'audio/wav');
   const { bytes, samples } = await decode(result);
   assert.equal(samples.length, 24_000);
@@ -97,13 +97,13 @@ test('WAV decodes to bounded deterministic PCM with the shared pitch and amplitu
   assert.ok(Math.abs(crossings - 55) <= 1);
   const index = 6240;
   const level = audioLevel({ timeMs: 130, seed: 4, frame: source.samples[2], controls, reducedMotion: false });
-  assert.ok(Math.abs(samples[index] - sampleSound(index / 48_000, 'robot', level)) <= 1 / 32767);
-  assert.deepEqual(await (await renderWav(source, 'robot', controls)).arrayBuffer(), bytes);
+  assert.ok(Math.abs(samples[index] - sampleSound(index / 48_000, 'rex', level)) <= 1 / 32767);
+  assert.deepEqual(await (await renderWav(source, 'rex', controls)).arrayBuffer(), bytes);
   const other = await decode(await renderWav(source, 'bubbles', controls));
   assert.notDeepEqual(other.bytes, bytes);
-  const quieter = await decode(await renderWav(source, 'robot', { ...controls, sound: controls.sound / 2 }));
+  const quieter = await decode(await renderWav(source, 'rex', { ...controls, sound: controls.sound / 2 }));
   assert.ok(Math.abs(rms(quieter.samples) / rms(samples) - 0.5) < 0.02);
-  const insensitive = await decode(await renderWav(source, 'robot', { ...controls, sensitivity: 0 }));
+  const insensitive = await decode(await renderWav(source, 'rex', { ...controls, sensitivity: 0 }));
   assert.ok(rms(insensitive.samples) < rms(samples));
 });
 
@@ -124,15 +124,15 @@ test('WAV preserves gaps with a bounded release and does not turn absent channel
 });
 
 test('WAV rejects invalid allocation inputs and cancels before or during rendering', async () => {
-  await assert.rejects(renderWav(take(0, []), 'robot', controls), /nonempty/);
-  await assert.rejects(renderWav({ ...take(), durationMs: NaN }, 'robot', controls), /duration/);
-  await assert.rejects(renderWav(take(), 'robot', { ...controls, sound: Infinity }), /controls/);
+  await assert.rejects(renderWav(take(0, []), 'rex', controls), /nonempty/);
+  await assert.rejects(renderWav({ ...take(), durationMs: NaN }, 'rex', controls), /duration/);
+  await assert.rejects(renderWav(take(), 'rex', { ...controls, sound: Infinity }), /controls/);
   await assert.rejects(renderWav(take(), 'not-a-scene' as never, controls), /scene/);
   const cancelled = AbortSignal.abort(new Error('cancelled'));
-  for (const duration of [179_999, 180_000]) await assert.rejects(renderWav(take(duration, [0]), 'robot', controls, cancelled), /cancelled/);
-  await assert.rejects(renderWav(take(180_001, [0]), 'robot', controls, cancelled), /duration/);
+  for (const duration of [179_999, 180_000]) await assert.rejects(renderWav(take(duration, [0]), 'rex', controls, cancelled), /cancelled/);
+  await assert.rejects(renderWav(take(180_001, [0]), 'rex', controls, cancelled), /duration/);
   const controller = new AbortController();
-  const rendering = renderWav(take(5000), 'robot', controls, controller.signal);
+  const rendering = renderWav(take(5000), 'rex', controls, controller.signal);
   controller.abort(new Error('cancelled while rendering'));
   await assert.rejects(rendering, /cancelled while rendering/);
 });

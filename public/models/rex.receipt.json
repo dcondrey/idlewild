@@ -1,0 +1,70 @@
+{
+  "title": "Rex for Idlewild",
+  "author": "Blender Foundation / Blender Studio",
+  "source": "https://studio.blender.org/characters/rex/v1/",
+  "sourceDownload": "https://studio.blender.org/download-source/files/cb/cb8d453b64a548d03bcee7671f83e599/cb8d453b64a548d03bcee7671f83e599.blend",
+  "sourceSha256": "7e0a774da5f309cde4eb9ba313890b554b9fd8d284d2b668a28f72b1380e5335",
+  "sourceBytes": 88742805,
+  "license": "CC BY 4.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+  "licenseEvidence": "The Blender Studio character page (https://studio.blender.org/characters/rex/v1/, 'License CC-BY' linking CC BY 4.0, free public download) and the ReadMe.txt text block embedded in the .blend ('provided under the CC-BY license by the Blender Studio', https://creativecommons.org/licenses/by/4.0/).",
+  "copyright": "Rex Rig (CC) Blender Foundation | studio.blender.org; https://studio.blender.org/characters/rex/v1/; CC BY 4.0 https://creativecommons.org/licenses/by/4.0/; Modified for Idlewild: evaluated facial morphs, reduced deformation rig, relaxed arm pose, mesh hair in place of particle hair, watch removed, authored idle and subtle expression clips, simplified flat materials.",
+  "retrieved": "2026-11-12",
+  "derivation": "scripts/prepare-character.py --profile rex, Blender 4.5.9 LTS, scripts disabled",
+  "sha256": "35d4e1e58d1d3703676f1c92c248bb95c152d97287b1c5cdffd547e9269cd61d",
+  "bytes": 5350104,
+  "vertices": 44093,
+  "triangles": 73874,
+  "joints": 71,
+  "morphs": [
+    "browDownLeft",
+    "browDownRight",
+    "browInnerUp",
+    "eyeBlinkLeft",
+    "eyeBlinkRight",
+    "jawOpen",
+    "mouthClose",
+    "mouthFunnel",
+    "mouthPressLeft",
+    "mouthPressRight",
+    "mouthPucker",
+    "mouthSmileLeft",
+    "mouthSmileRight",
+    "mouthStretchLeft",
+    "mouthStretchRight"
+  ],
+  "clips": [
+    "Idle",
+    "Soft smile",
+    "Brow motion"
+  ],
+  "texturePixels": 0,
+  "textureImages": 0,
+  "skippedPoseBones": [],
+  "skippedPoseProperties": [
+    "Chin_Main.Chin Resists Jaw"
+  ],
+  "maxDiscardedSkinWeight": 0.09957644340220417,
+  "skippedMorphs": [
+    {
+      "morph": "eyeWideLeft",
+      "optional": true,
+      "reason": "no candidate moves as expected: {\"candidates\": [{\"meanShift\": [0.0, 0.0, 0.0], \"movedVertices\": 0, \"scoredShift\": 0.0, \"value\": 0.012}, {\"meanShift\": [0.0, 0.0, 0.0], \"movedVertices\": 0, \"scoredShift\": 0.0, \"value\": -0.012}], \"expect\": {\"axis\": 2, \"mesh\": \"GEO-rex_head\", \"sign\": 1}, \"leftX\": 1.0, \"part\": \"ACT-Eyelid_Upper.L\", \"subset\": \"left\"}"
+    },
+    {
+      "morph": "eyeSquintLeft",
+      "optional": true,
+      "reason": "no candidate moves as expected: {\"candidates\": [{\"meanShift\": [0.0, 0.0, 0.0], \"movedVertices\": 0, \"scoredShift\": 0.0, \"value\": 0.008}, {\"meanShift\": [0.0, 0.0, 0.0], \"movedVertices\": 0, \"scoredShift\": 0.0, \"value\": -0.008}], \"expect\": {\"axis\": 2, \"mesh\": \"GEO-rex_head\", \"sign\": 1}, \"leftX\": 1.0, \"part\": \"ACT-Eyelid_Lower.L\", \"subset\": \"left\"}"
+    },
+    {
+      "morph": "eyeWideRight",
+      "optional": true,
+      "reason": "no candidate moves as expected: {\"candidates\": [{\"meanShift\": [0.0, 0.0, 0.0], \"movedVertices\": 0, \"scoredShift\": 0.0, \"value\": 0.012}, {\"meanShift\": [0.0, 0.0, 0.0], \"movedVertices\": 0, \"scoredShift\": 0.0, \"value\": -0.012}], \"expect\": {\"axis\": 2, \"mesh\": \"GEO-rex_head\", \"sign\": 1}, \"leftX\": 1.0, \"part\": \"ACT-Eyelid_Upper.R\", \"subset\": \"right\"}"
+    },
+    {
+      "morph": "eyeSquintRight",
+      "optional": true,
+      "reason": "no candidate moves as expected: {\"candidates\": [{\"meanShift\": [0.0, 0.0, 0.0], \"movedVertices\": 0, \"scoredShift\": 0.0, \"value\": 0.008}, {\"meanShift\": [0.0, 0.0, 0.0], \"movedVertices\": 0, \"scoredShift\": 0.0, \"value\": -0.008}], \"expect\": {\"axis\": 2, \"mesh\": \"GEO-rex_head\", \"sign\": 1}, \"leftX\": 1.0, \"part\": \"ACT-Eyelid_Lower.R\", \"subset\": \"right\"}"
+    }
+  ]
+}

@@ -5,7 +5,7 @@ export type Source = 'live' | 'rehearsal' | 'local-camera';
 export type Quality = 'valid' | 'unstable' | 'missing' | 'stale';
 export type Channel = 'breath' | 'breathingRate' | 'pulseRate' | 'arterialTrace' | 'blink' | 'talking';
 export type Unit = 'relative' | 'breaths/min' | 'beats/min' | 'boolean';
-export type SceneId = 'robot' | 'bubbles' | 'star' | 'dragon' | 'runner' | 'brain' | 'imported';
+export type SceneId = 'rex' | 'bubbles' | 'star' | 'dragon' | 'runner' | 'brain' | 'imported';
 export type Provenance = 'measured' | 'synthetic' | 'replayed';
 
 export interface Signal {

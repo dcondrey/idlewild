@@ -10,13 +10,20 @@ BUNDLED ASSETS
 
 # Model provenance
 
-Receipts record source URLs, byte counts, SHA-256 hashes and runtime metadata. RobotExpressive and Dragon retain their downloaded bytes; Snow and the brain are adaptations described below. Local visual and export checks are recorded in `docs/CONTEXT.md`.
+Receipts record source URLs, byte counts, SHA-256 hashes and runtime metadata. Dragon retains its downloaded bytes; Rex, Snow, Sprite, the Rain runner and the brain are adaptations described below. Local visual and export checks are recorded in `docs/CONTEXT.md`.
 
-## RobotExpressive
+## Rex
 
-`robot.glb` is by Tomás Laulhé (Quaternius), with modifications by Don McCurdy: three expression morph targets, FBX2glTF conversion, duplicate-material removal, and reduced metalness. The [pinned upstream README](https://github.com/mrdoob/three.js/blob/eba30de865cfbf31ac736f792defd9a60ff28d57/examples/models/gltf/RobotExpressive/README.md) identifies the license as [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+**Rex Rig (CC) Blender Foundation | studio.blender.org**
 
-The downloaded GLB contains 14 clips and expression targets named Angry, Surprised, and Sad. See [receipt](robot.receipt.json).
+`rex.glb` adapts [Rex](https://studio.blender.org/characters/rex/v1/) from the open movie Sprite Fright under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); see [rex.receipt.json](rex.receipt.json) for source and runtime SHA-256, sizes and conversion measurements. The public download (`rex.blend`, SHA-256 `7e0a774da5f309cde4eb9ba313890b554b9fd8d284d2b668a28f72b1380e5335`) embeds a ReadMe.txt text block stating the rig is provided under CC BY by Blender Studio, matching the character page.
+
+Modifications: 15 evaluated ARKit-named facial morphs from the rig's own pose assets and face controls, a reduced 71-joint deformation skeleton with four weights per vertex, a relaxed arm pose, the mesh hairstyle in place of particle hair, the wristwatch removed, authored Idle and two subtle expression clips, and flat materials with colors matched to the source shading. Attribution, the license link and an indication of changes are required; preserve the embedded credit (`asset.copyright`) when sharing the model or exports derived from it. Regenerate with:
+
+```sh
+.local/tools/Blender.app/Contents/MacOS/Blender --background --factory-startup --disable-autoexec --python-exit-code 1 --python scripts/prepare-character.py -- --profile rex --receipt .local/assets/blender-studio/rex.receipt.json
+cp .local/assets/blender-studio/rex.glb public/models/rex.glb && cp .local/assets/blender-studio/rex.receipt.json public/models/rex.receipt.json
+```
 
 ## Dragon
 

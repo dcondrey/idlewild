@@ -2,7 +2,7 @@ import './style.css';
 import type { BrainExampleId, CaptureSource, ControlFrame, SceneControls, SceneFrame, SceneId, Source, Take } from './contracts';
 import { BRAIN_EXAMPLE_IDS, TAKE_LIMITS, SIGNAL_STALE_MS } from './contracts';
 import { BRAIN_CAPTION, BRAIN_EXAMPLES } from './scenes/brain';
-import { createStage } from './stage';
+import { createStage, DETAIL_SCENES } from './stage';
 import { createRehearsalSource } from './rehearsal';
 import { createLocalTrackingSource } from './tracking/source';
 import { trackingAt } from './tracking-frame';
@@ -26,7 +26,7 @@ const element = <T extends HTMLElement = HTMLElement>(id: string) => document.ge
 const input = (id: string) => element<HTMLInputElement>(id);
 const button = (id: string) => element<HTMLButtonElement>(id);
 const canvas = element<HTMLCanvasElement>('stage');
-const FULL_BODY_SCENES: ReadonlySet<SceneId> = new Set(['robot', 'dragon', 'runner', 'imported']);
+const FULL_BODY_SCENES: ReadonlySet<SceneId> = new Set(['rex', 'dragon', 'runner', 'imported']);
 const userEntry = SCENE_REGISTRY.find(item => item.group === 'yours')!;
 let stage: Awaited<ReturnType<typeof createStage>> | null = null;
 let entry: SceneEntry = SCENE_REGISTRY[0];
@@ -277,7 +277,7 @@ function animate(now: number) {
 function chooseEntry(next: SceneEntry) {
   stage?.setScene(next.scene); entry = next;
   element('scene-title').textContent = next.title; element('scene-caption').textContent = next.caption;
-  button('detail-view').hidden = next.scene !== 'imported'; button('detail-view').textContent = 'Close view'; button('detail-view').setAttribute('aria-pressed', 'false');
+  button('detail-view').hidden = !DETAIL_SCENES.has(next.scene); button('detail-view').textContent = 'Close view'; button('detail-view').setAttribute('aria-pressed', 'false');
   element('brain-legend').hidden = next.scene !== 'brain';
   element('runner-choice').hidden = next.scene !== 'runner';
   element('brain-choice').hidden = next.scene !== 'brain';

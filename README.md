@@ -2,7 +2,7 @@
 
 A desktop creative studio built with Electron, TypeScript and Three.js: record a control performance, replay it across characters and procedural scenes, then export animation and sound.
 
-Use consented, on-device face and body tracking without an API key, account or credits, or try visibly synthetic rehearsal without a camera. Scenes include a robot, Snow, Sprite and the Rain runner (detailed Blender Studio characters), bubbles, star, European dragon and an anatomical brain whose highlighted regions are an educational simulation based on published studies, not measured brain activity. Optional SmartSpectra signals require separate credentials and consent; that desktop integration still requires live validation. See [verification evidence and remaining limits](docs/CONTEXT.md).
+Use consented, on-device face and body tracking without an API key, account or credits, or try visibly synthetic rehearsal without a camera. Scenes include Rex, Snow, Sprite and the Rain runner (detailed Blender Studio characters), bubbles, star, European dragon and an anatomical brain whose highlighted regions are an educational simulation based on published studies, not measured brain activity. Optional SmartSpectra signals require separate credentials and consent; that desktop integration still requires live validation. See [verification evidence and remaining limits](docs/CONTEXT.md).
 
 ## Run locally
 
@@ -65,7 +65,7 @@ Source and input availability remain visible. For SmartSpectra/rehearsal signals
 
 | Symptom | Action |
 | --- | --- |
-| Desktop cannot start or an asset is missing | Run `npm ci --ignore-scripts`, then `npm run build`, and launch from the repository root. Confirm `public/models/robot.glb`, `dragon.glb` and `snow.glb` are present; model receipts and provenance are below. |
+| Desktop cannot start or an asset is missing | Run `npm ci --ignore-scripts`, then `npm run build`, and launch from the repository root. Confirm `public/models/rex.glb`, `dragon.glb` and `runner.glb` are present; model receipts and provenance are below. |
 | Blank stage or graphics lost | Use a WebGL-capable desktop session, close other GPU-heavy applications, then reopen Idlewild. Export takes before restarting when possible. |
 | Camera denied or disconnected | Stop input, allow camera access in system privacy settings, reconnect the intended device, select Refresh, and explicitly reopen preview. Close another application if it owns the camera. |
 | Local models fail to load or tracking falls behind | Confirm both `.task` models and the `wasm/` files in `public/tracking/` are present, rebuild, then reopen preview and start tracking. Improve lighting, keep the intended joints visible and close other CPU-heavy applications. Signals shows face/body availability; inference speed depends on the device. |

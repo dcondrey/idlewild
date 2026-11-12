@@ -118,10 +118,10 @@ try {
   await expect(page.locator('#character-menu')).toBeHidden();
   await page.locator('#character-button').focus(); await page.keyboard.press('Enter');
   await expect(page.locator('#character-button')).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.locator('[data-scene="robot"]')).toBeFocused();
+  await expect(page.locator('[data-scene="rex"]')).toBeFocused();
   const menu = await page.evaluate(() => [...document.querySelectorAll('#character-menu button')].filter(item => item.checkVisibility()).map(item => item.id || item.dataset.scene));
-  assert.deepEqual(menu, ['menu-own-character', 'robot', 'snow', 'bubbles', 'star', 'dragon', 'sprite', 'runner', 'brain'], 'Menu lists the own-character entry first, then registry defaults; no import before one is loaded');
-  const [own, item] = await Promise.all([page.locator('#menu-own-character').boundingBox(), page.locator('[data-scene="robot"]').boundingBox()]);
+  assert.deepEqual(menu, ['menu-own-character', 'rex', 'snow', 'bubbles', 'star', 'dragon', 'sprite', 'runner', 'brain'], 'Menu lists the own-character entry first, then registry defaults; no import before one is loaded');
+  const [own, item] = await Promise.all([page.locator('#menu-own-character').boundingBox(), page.locator('[data-scene="rex"]').boundingBox()]);
   assert.ok(own.width > item.width && own.height >= item.height, 'Use your own character is the most prominent menu entry');
   for (const viewport of sizes) { await page.setViewportSize(viewport); assert.equal(await fits(), true, `Open menu fits ${viewport.width}×${viewport.height}`); }
   await page.screenshot({ path: path.join(output, 'menu-760x620.png') });
@@ -239,7 +239,7 @@ try {
   await pickScene('bubbles');
   await page.waitForTimeout(1500);
   await expect(page.locator('#framing-prompt')).toBeHidden();
-  await pickScene('robot');
+  await pickScene('rex');
   await expect(page.locator('#framing-prompt')).toBeVisible({ timeout: 5000 });
   await page.evaluate(() => { window.__fixtureTooClose = false; });
   await expect(page.locator('#framing-prompt')).toBeHidden({ timeout: 5000 });
@@ -286,7 +286,7 @@ try {
     const result = files.find(file => !file.path.endsWith('-credits.txt'));
     if (credited) {
       const credits = files.find(file => file.path.endsWith('-credits.txt'));
-      assert.match(await readFile(credits.path, 'utf8'), /CC0 1.0/);
+      assert.match(await readFile(credits.path, 'utf8'), /Rex Rig .*CC BY 4\.0/);
       report.exports.credits = credits.path;
     }
     return result.path;
@@ -316,7 +316,7 @@ try {
   await page.locator('#play').click();
   report.checks.push('record, trim, replay and loop');
   await page.locator('#timeline').fill('500');
-  const sceneIds = ['robot', 'bubbles', 'star', 'dragon', 'runner', 'brain'];
+  const sceneIds = ['rex', 'bubbles', 'star', 'dragon', 'runner', 'brain'];
   for (const scene of sceneIds) {
     await pickScene(scene);
     await expect(page.locator('#brain-legend')).toBeVisible({ visible: scene === 'brain' });
@@ -339,7 +339,7 @@ try {
   report.exports.wav = await download('#export-wav');
   report.exports.glb = await download('#export-glb');
   report.exports.video = await download('#export-video');
-  await pickScene('robot');
+  await pickScene('rex');
   await download('#export-video', true);
   await pickScene('star');
   await page.locator('#open-export').click();

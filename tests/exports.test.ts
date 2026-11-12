@@ -192,5 +192,5 @@ test('cancellation stops baking before scene sampling and at cooperative yield b
 });
 
 test('preview reports unavailable encoders without claiming an output', async () => {
-  await assert.rejects(exportPreview({ take: take(), scene: 'robot', controls, canvas: {} as HTMLCanvasElement, update() {} }), /cannot encode/);
+  await assert.rejects(exportPreview({ take: take(), scene: 'rex', controls, canvas: {} as HTMLCanvasElement, update() {} }), /cannot encode/);
 });

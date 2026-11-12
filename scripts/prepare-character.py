@@ -414,6 +414,136 @@ PROFILES["sprite"] = {
     "derivation": "scripts/prepare-character.py --profile sprite, Blender 4.5.9 LTS, scripts disabled",
     "arm_note": "relaxed upper-arm rotations measured from the source pose",
 }
+REX_CREDIT = (
+    "Rex Rig (CC) Blender Foundation | studio.blender.org; "
+    "https://studio.blender.org/characters/rex/v1/; "
+    "CC BY 4.0 https://creativecommons.org/licenses/by/4.0/; "
+    "Modified for Idlewild: evaluated facial morphs, reduced deformation rig, relaxed arm pose, "
+    "mesh hair in place of particle hair, watch removed, authored idle and subtle expression clips, simplified flat materials."
+)
+
+
+def rex_parent_overrides():
+    result = {"DEF-Belly": "DEF-Spine", "DEF-Chest": "DEF-Belly", "DEF-Neck": "DEF-Chest", "DEF-Head": "DEF-Neck", "DEF-Jaw": "DEF-Head", "DEF-Hips": "DEF-Spine"}
+    for side in ("L", "R"):
+        result.update({
+            f"DEF-Shoulder.{side}": "DEF-Chest", f"DEF-UpperArm1.{side}": f"DEF-Shoulder.{side}", f"DEF-UpperArm2.{side}": f"DEF-UpperArm1.{side}",
+            f"DEF-Forearm1.{side}": f"DEF-UpperArm2.{side}", f"DEF-Forearm2.{side}": f"DEF-Forearm1.{side}", f"DEF-Wrist.{side}": f"DEF-Forearm2.{side}",
+            f"DEF-Thigh1.{side}": "DEF-Spine", f"DEF-Thigh2.{side}": f"DEF-Thigh1.{side}", f"DEF-Knee1.{side}": f"DEF-Thigh2.{side}",
+            f"DEF-Knee2.{side}": f"DEF-Knee1.{side}", f"DEF-Foot.{side}": f"DEF-Knee2.{side}", f"DEF-Toes.{side}": f"DEF-Foot.{side}",
+            f"DEF-Eye.{side}": "DEF-Head",
+        })
+        for finger in ("Index", "Middle", "Ring", "Pinky"):
+            result[f"DEF-Finger_{finger}_Carpal.{side}"] = f"DEF-Wrist.{side}"
+            result[f"DEF-Finger_{finger}1.{side}"] = f"DEF-Finger_{finger}_Carpal.{side}"
+        result[f"DEF-Finger_Thumb1.{side}"] = f"DEF-Wrist.{side}"
+        for finger in ("Index", "Middle", "Ring", "Pinky", "Thumb"):
+            result[f"DEF-Finger_{finger}2.{side}"] = f"DEF-Finger_{finger}1.{side}"
+            result[f"DEF-Finger_{finger}3.{side}"] = f"DEF-Finger_{finger}2.{side}"
+    return result
+
+
+def rex_morphs():
+    head, brows = "GEO-rex_head", "GEO-rex_eyebrows"
+    morphs = []
+    for side, suffix, s in (("left", "Left", "L"), ("right", "Right", "R")):
+        def control(bone, values, mesh, axis, sign, **extra):
+            part = {"bone": f"{bone}.{s}", "prop": "location", "index": 0, "values": values, "subset": side, "expect": {"mesh": mesh, "axis": axis, "sign": sign}}
+            if extra.pop("lateral", False):
+                part["expect"]["lateral"] = True
+            part.update(extra)
+            return part
+        morphs += [
+            {"name": f"eyeBlink{suffix}", "parts": [sprite_morph("", "fm_closed_eyes", [4], 4, side, head, 2, -1)]},
+            {"name": f"mouthSmile{suffix}", "parts": [sprite_morph("", "mouth_smile", [15], 15, side, head, 2, 1)]},
+            {"name": f"browDown{suffix}", "parts": [control("MSTR-Eyebrow", [0.015, -0.015], brows, 2, -1)]},
+            {"name": f"mouthPress{suffix}", "parts": [control("ACT-MouthCorner", [0.03, -0.03], head, 0, -1, lateral=True)]},
+            {"name": f"mouthStretch{suffix}", "parts": [control("ACT-MouthCorner", [0.04, -0.04], head, 0, 1, lateral=True)], "optional": True},
+            {"name": f"eyeWide{suffix}", "parts": [control("ACT-Eyelid_Upper", [0.012, -0.012], head, 2, 1)], "optional": True},
+            {"name": f"eyeSquint{suffix}", "parts": [control("ACT-Eyelid_Lower", [0.008, -0.008], head, 2, 1)], "optional": True},
+        ]
+    morphs += [
+        {"name": "jawOpen", "parts": [{"bone": "Jaw", "prop": "rotation_euler", "index": 0, "values": [0.3, -0.3], "expect": {"mesh": head, "axis": 2, "sign": -1}}]},
+        {"name": "browInnerUp", "parts": [sprite_morph("", "fm_scared", [10], 10, "all", brows, 2, 1, blend=0.6)]},
+        {"name": "mouthFunnel", "parts": [sprite_morph("", "phon_OO", [23], 23, "all", head, 1, -1)]},
+        {"name": "mouthPucker", "parts": [sprite_morph("", "phon_UU", [25], 25, "all", head, 1, -1)]},
+        {"name": "mouthClose", "parts": [sprite_morph("", "phon_MM", [27], 27, "all", head, 1, 1, optional=True),
+                                         sprite_morph("", "phon_MM", [27], 27, "all", head, 2, 1, optional=True)]},
+    ]
+    for morph in morphs:
+        for part in morph["parts"]:
+            part.pop("", None)
+    return morphs
+
+
+REX_FACE = r"Eyelid|Eye_Ring|BrowRing|Eyebrow|ForeheadRing|Line[0-9]|Nose|Nostril|OuterLip|Cheek|Gum|Teeth|HeadSide|Tongue|Bridge|JawLine|Chin|Lip|Ear|Eye_Highlight|Head_Top"
+PROFILES["rex"] = {
+    "ready": True,
+    "id": "rex", "prefix": "Rex", "rig": "RIG-rex", "credit": REX_CREDIT,
+    "input": ".local/assets/blender-studio/rex.blend", "output": ".local/assets/blender-studio/rex.glb",
+    "archive": ".local/assets/blender-studio/rex.blend",
+    "receipt": {
+        "title": "Rex for Idlewild", "author": "Blender Foundation / Blender Studio",
+        "source": "https://studio.blender.org/characters/rex/v1/",
+        "sourceDownload": "https://studio.blender.org/download-source/files/cb/cb8d453b64a548d03bcee7671f83e599/cb8d453b64a548d03bcee7671f83e599.blend",
+        "sourceSha256": "7e0a774da5f309cde4eb9ba313890b554b9fd8d284d2b668a28f72b1380e5335", "sourceBytes": 88742805,
+        "license": "CC BY 4.0", "licenseUrl": "https://creativecommons.org/licenses/by/4.0/", "retrieved": "2026-11-12",
+        "licenseEvidence": "The Blender Studio character page (https://studio.blender.org/characters/rex/v1/, 'License CC-BY' linking CC BY 4.0, free public download) and the ReadMe.txt text block embedded in the .blend ('provided under the CC-BY license by the Blender Studio', https://creativecommons.org/licenses/by/4.0/).",
+    },
+    "meshes": (
+        "GEO-rex_belt", "GEO-rex_belt_buckle", "GEO-rex_body", "GEO-rex_eye.L", "GEO-rex_eye.R", "GEO-rex_eyebrows",
+        "GEO-rex_eyedot.L", "GEO-rex_eyedot.R", "GEO-rex_hair", "GEO-rex_head", "GEO-rex_polo_shirt", "GEO-rex_polo_shirt_buttons",
+        "GEO-rex_polo_shirt_collar", "GEO-rex_shoes", "GEO-rex_shoes_laces", "GEO-rex_shoes_tab", "GEO-rex_shorts", "GEO-rex_socks",
+        "GEO-rex_sweater_vest", "GEO-rex_teeth_btm", "GEO-rex_teeth_top", "GEO-rex_tongue",
+    ),
+    "mesh_rename": ("GEO-rex", "Rex"),
+    "skeleton": {
+        "mode": "auto", "max_joints": 128, "root": "DEF-Spine", "default": "DEF-Head", "parent_overrides": rex_parent_overrides(),
+        "fallback_rules": [
+            (r"^DEF-(Bridge_Lower_Chin|Bridge_Chin|Chin|JawLine|OuterLip_Lower|Lip_Bottom|Teeth_Lower|Gum_Lower|Tongue|HeadSide1|Cheek3_1|Cheek3_2)", "DEF-Jaw"),
+            (r"^DEF-Eye_Highlight\.L", "DEF-Eye.L"), (r"^DEF-Eye_Highlight\.R", "DEF-Eye.R"),
+            (r"^DEF-Collar", "DEF-Chest"), (r"^DEF-Shorts\.L", "DEF-Thigh1.L"), (r"^DEF-Shorts\.R", "DEF-Thigh1.R"),
+            (r"^DEF-Watch", "DEF-Forearm2.L"),
+            (r"^DEF-", "DEF-Head"),
+        ],
+        "exclude": [r"^DEF-(" + REX_FACE + r"|Hair|Collar|Shorts|Watch)"],
+        "rename": {},
+    },
+    "renames": {"DEF-Chest": "Chest"},
+    "rigid_meshes": {"GEO-rex_teeth_top": "DEF-Head", "GEO-rex_teeth_btm": "DEF-Jaw", "GEO-rex_eyedot.L": "DEF-Eye.L", "GEO-rex_eyedot.R": "DEF-Eye.R"},
+    "max_discarded": 0.14,
+    "left_reference": "DEF-Eye.L",
+    "subdiv": 0,
+    "neutral_actions": ("fm_default", "mouth_default"),
+    "allowed_invalid_drivers": {"cycles.displacement_method"},
+    "stale_bones": set(),
+    "stale_bone_patterns": [],
+    "stale_properties": {("Chin_Main", "Chin Resists Jaw")},
+    "morphs": rex_morphs(),
+    "min_morphs": 13,
+    "max_triangles": 90_000,
+    "textures": {
+        "mode": "auto", "material_prefix": "rex.", "roughness": {"rex.eyes": 0.2, "rex.pupils": 0.2, "rex.teeth": 0.35, "rex.belt_buckle": 0.35},
+        "colors": {"rex.skin": (0.6, 0.22, 0.1, 1), "rex.head": (0.6, 0.22, 0.1, 1), "rex.head_lips": (0.5, 0.15, 0.08, 1), "rex.mouth_inner": (0.3, 0.05, 0.04, 1),
+                   "rex.hair_mesh": (0.72, 0.42, 0.1, 1), "rex.eyebrows": (0.4, 0.22, 0.05, 1), "rex.eyes": (0.92, 0.92, 0.9, 1), "rex.pupils": (0.03, 0.025, 0.02, 1),
+                   "rex.sweater_vest": (0.82, 0.78, 0.68, 1), "rex.sweater_vest_collar": (0.04, 0.1, 0.55, 1), "rex.shirt": (0.04, 0.32, 0.75, 1),
+                   "rex.shorts": (0.78, 0.76, 0.72, 1), "rex.socks": (0.88, 0.88, 0.86, 1), "rex.shoes": (0.82, 0.8, 0.75, 1),
+                   "rex.shoes_rubber": (0.75, 0.74, 0.7, 1), "rex.shoes_sole": (0.62, 0.6, 0.57, 1), "rex.shoes_laces": (0.9, 0.9, 0.88, 1),
+                   "rex.highlights": (1, 1, 1, 1)},
+    },
+    "roles": {
+        "hips": "DEF-Spine", "chest": "Chest", "head": "DEF-Head",
+        "upperarm.L": "DEF-UpperArm1.L", "upperarm.R": "DEF-UpperArm1.R", "forearm.L": "DEF-Forearm1.L", "forearm.R": "DEF-Forearm1.R",
+        "wrist.L": "DEF-Wrist.L", "wrist.R": "DEF-Wrist.R", "thigh.L": "DEF-Thigh1.L", "thigh.R": "DEF-Thigh1.R",
+        "knee.L": "DEF-Knee1.L", "knee.R": "DEF-Knee1.R",
+    },
+    "forward": (0, -1, 0),
+    "arm_angle": None,
+    "clips": ("Idle",),
+    "expressions": (("Soft smile", ("mouthSmileLeft", "mouthSmileRight"), 0.18), ("Brow motion", ("browInnerUp",), 0.15)),
+    "derivation": "scripts/prepare-character.py --profile rex, Blender 4.5.9 LTS, scripts disabled",
+    "arm_note": "relaxed upper-arm rotations measured from the source pose",
+}
 PROFILE = PROFILES["snow"]
 CREDIT = PROFILE["credit"]
 STALE_POSE_BONES = PROFILE["stale_bones"]
@@ -468,7 +598,7 @@ def preflight_pose_channels(rig, channels):
     for name, prop in STALE_POSE_PROPERTIES:
         bone = rig.pose.bones.get(name)
         require(bone is not None and prop not in bone and prop not in bone.bl_rna.properties, f"Source rig changed: {name}.{prop} is now defined")
-    stale_names = STALE_POSE_BONES | {prop for _, prop in STALE_POSE_PROPERTIES}
+    stale_names = STALE_POSE_BONES | {f'pose.bones["{bone}"]["{prop}"]' for bone, prop in STALE_POSE_PROPERTIES}
     owners = [*bpy.data.objects, *bpy.data.shape_keys, *bpy.data.armatures, *bpy.data.meshes, *bpy.data.lattices, *bpy.data.materials, *bpy.data.node_groups, *bpy.data.scenes, *bpy.data.worlds]
     owners += [owner.node_tree for owner in owners if getattr(owner, "node_tree", None)]
     for owner in {owner.as_pointer(): owner for owner in owners}.values():
@@ -507,7 +637,7 @@ def preflight_pose_channels(rig, channels):
                 errors.append(f"missing bone {label}")
                 continue
             if custom and (name, prop) in STALE_POSE_PROPERTIES:
-                require(index == 0 and value == 1, f"Stale pose property changed: {label}")
+                require(index == 0, f"Stale pose property changed: {label}")
                 skipped_properties.add(f"{name}.{prop}")
                 continue
             if custom:
@@ -916,9 +1046,8 @@ def prepare_uv(mesh, source, textures):
         return
     require(len(render_uvs) == 1, f"Expected one render UV map: {source.name}")
     selected_name = render_uvs[0].name
-    for layer in list(mesh.uv_layers):
-        if layer.name != selected_name:
-            mesh.uv_layers.remove(layer)
+    for name in [layer.name for layer in mesh.uv_layers if layer.name != selected_name]:
+        mesh.uv_layers.remove(mesh.uv_layers[name])
     selected = mesh.uv_layers[selected_name]
     mesh.uv_layers.active = selected
     selected.active_render = True

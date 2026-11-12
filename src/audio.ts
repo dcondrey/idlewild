@@ -3,7 +3,7 @@ import { SIGNAL_STALE_MS, TAKE_LIMITS } from './contracts.ts';
 import { validateTake } from './validation.ts';
 import { trackingAt } from './tracking-frame.ts';
 
-const pitches: Record<SceneId, number> = { robot: 110, bubbles: 220, star: 261.6256, dragon: 73.4162, runner: 146.8324, brain: 130.8128, imported: 164.8138 };
+const pitches: Record<SceneId, number> = { rex: 110, bubbles: 220, star: 261.6256, dragon: 73.4162, runner: 146.8324, brain: 130.8128, imported: 164.8138 };
 const FADE_SECONDS = 0.01;
 const MAX_LEVEL = 0.37;
 const clamp = (value: number) => Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;

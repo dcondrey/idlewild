@@ -12,13 +12,14 @@ import { SCENE_IDS } from './scenes/registry.ts';
 type AssetState = { phase: 'loading' | 'ready' | 'error'; message: string };
 
 const CHARACTER_ASSETS = Object.freeze({
-  robot: { label: 'robot', credit: 'RobotExpressive by Tomas Laulhe (Quaternius), adapted by Don McCurdy. CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/ . Source: https://github.com/mrdoob/three.js/tree/eba30de865cfbf31ac736f792defd9a60ff28d57/examples/models/gltf/RobotExpressive' },
+  rex: { label: 'Rex', credit: 'Rex Rig (CC) Blender Foundation | studio.blender.org. CC BY 4.0: https://creativecommons.org/licenses/by/4.0/ . Source: https://studio.blender.org/characters/rex/v1/ . Modified for Idlewild.' },
   dragon: { label: 'European dragon', credit: 'Dragon sample by afk.ai. CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/ . Source: https://afk.ai/auto-rig/dragon' },
   runner: { label: 'runner', credit: 'Rain Rig (CC) Blender Foundation | studio.blender.org. CC BY 4.0: https://creativecommons.org/licenses/by/4.0/ . Source: https://studio.blender.org/characters/rain/v3/ . Modified for Idlewild.' },
 } satisfies Partial<Record<Parameters<typeof createCharacter>[2], { label: string; credit: string }>>);
 type CharacterAsset = keyof typeof CHARACTER_ASSETS;
 type StageAsset = CharacterAsset | 'brain';
 const ASSET_IDS: readonly StageAsset[] = [...Object.keys(CHARACTER_ASSETS) as CharacterAsset[], 'brain'];
+export const DETAIL_SCENES: ReadonlySet<SceneId> = new Set(['rex', 'imported']);
 const ASSET_MAX_BYTES: Partial<Record<StageAsset, number>> = { runner: 12 * 1024 * 1024 };
 const assetLabel = (id: StageAsset) => id === 'brain' ? 'anatomical brain' : CHARACTER_ASSETS[id].label;
 
@@ -80,7 +81,7 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
   world.add(platform);
 
   const subjects = new Map<SceneId, SceneSubject>();
-  let selected: SceneId = 'robot';
+  let selected: SceneId = 'rex';
   let detailView = false;
   let disposed = false;
   let contextLost = false;
@@ -89,8 +90,8 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
   for (const id of ASSET_IDS) assets[id] = { phase: 'loading', message: `Loading ${assetLabel(id)}…` };
   const pending = new Set<AbortController>();
   function frameCamera() {
-    const subject = subjects.get('imported');
-    if (detailView && selected === 'imported' && subject) {
+    const subject = subjects.get(selected);
+    if (detailView && DETAIL_SCENES.has(selected) && subject) {
       const bounds = new THREE.Box3().setFromObject(subject.root, true);
       const height = bounds.getSize(new THREE.Vector3()).y;
       const target = bounds.getCenter(new THREE.Vector3());

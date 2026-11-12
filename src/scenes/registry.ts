@@ -12,7 +12,7 @@ export interface SceneEntry {
 }
 
 export const SCENE_REGISTRY: readonly SceneEntry[] = Object.freeze(([
-  { id: 'robot', scene: 'robot', label: 'Robot', title: 'The robot', caption: 'A small character with a rhythm of its own.', group: 'default', credit: 'RobotExpressive by Tomás Laulhé (Quaternius), CC0' },
+  { id: 'rex', scene: 'rex', label: 'Rex', title: 'Rex', caption: 'A sporty showman with a long chin and big expressions.', group: 'default', credit: 'Rex Rig (CC) Blender Foundation | studio.blender.org, CC BY 4.0, modified' },
   { id: 'snow', scene: 'imported', label: 'Snow', title: 'Snow', caption: 'An expressive face and body rig for close facial detail.', group: 'default', model: './models/snow.glb', credit: 'Snow Rig (CC) Blender Foundation | studio.blender.org' },
   { id: 'bubbles', scene: 'bubbles', label: 'Bubbles', title: 'In suspension', caption: 'An iridescent interpretation of movement, not measured airflow.', group: 'default' },
   { id: 'star', scene: 'star', label: 'Star', title: 'A little starlight', caption: 'A soft glow shaped by the same performance.', group: 'default' },

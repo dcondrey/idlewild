@@ -32,7 +32,7 @@ function difference(a: number[][], b: number[][]) {
   return largest;
 }
 
-function loadModel(name: 'robot' | 'dragon' | 'snow') {
+function loadModel(name: 'rex' | 'dragon' | 'snow') {
   const bytes = readFileSync(new URL(`../public/models/${name}.glb`, import.meta.url));
   const loader = new GLTFLoader().register(() => ({ name: 'idlewild_test_untextured', loadTexture: () => Promise.resolve(new THREE.Texture()) }));
   return loader.parseAsync(new Uint8Array(bytes).buffer, '');
@@ -542,9 +542,9 @@ test('dragon framing keeps forward orientation and uniform proportions consisten
 });
 
 test('every scene responds to each SDK signal only while it is valid and fresh', async () => {
-  const [robot, dragon, snow] = await Promise.all((['robot', 'dragon', 'snow'] as const).map(loadModel));
+  const [rex, dragon, snow] = await Promise.all((['rex', 'dragon', 'snow'] as const).map(loadModel));
   const subjects: [string, SceneSubject][] = [
-    ['robot', createCharacter(robot.scene, robot.animations, 'robot')],
+    ['rex', createCharacter(rex.scene, rex.animations, 'rex')],
     ['dragon', createCharacter(dragon.scene, dragon.animations, 'dragon')],
     ['snow', createCharacter(snow.scene, snow.animations, 'imported')],
     ['runner character', trackingRig('runner').subject],
@@ -671,9 +671,9 @@ test('elbow aim clamps to an anatomical range without snapping near a folded pos
   subject.dispose();
 });
 
-test('dragon, robot and Snow face forward and share the same uniform fitting rule', async t => {
+test('dragon, Rex and Snow face forward and share the same uniform fitting rule', async t => {
   const forward = new Map<string, THREE.Vector3>();
-  for (const [name, kind, back, front] of [['robot', 'robot', null, null], ['dragon', 'dragon', 'hips', 'mouth_upper_tip'], ['snow', 'imported', 'DEF-FootL', 'DEF-ToesL']] as const) {
+  for (const [name, kind, back, front] of [['rex', 'rex', 'DEF-FootL', 'DEF-ToesL'], ['dragon', 'dragon', 'hips', 'mouth_upper_tip'], ['snow', 'imported', 'DEF-FootL', 'DEF-ToesL']] as const) {
     const gltf = await loadModel(name);
     const subject = createCharacter(gltf.scene, gltf.animations, kind);
     subject.update(input(0, true));
@@ -695,7 +695,7 @@ test('dragon, robot and Snow face forward and share the same uniform fitting rul
     }
     expectDisposed(subject);
   }
-  assert.ok(forward.get('dragon')!.z > 0.95 && forward.get('snow')!.z > 0.95);
+  assert.ok(forward.get('dragon')!.z > 0.95 && forward.get('snow')!.z > 0.95 && forward.get('rex')!.z > 0.95);
   assert.ok(forward.get('dragon')!.dot(forward.get('snow')!) > 0.95);
 });
 

@@ -29,13 +29,13 @@ try {
       item.once('done', (_event, state) => globalThis.__exports.push({ path: destination, state }));
     });
   }, output);
-  await page.waitForFunction(() => { const stats = JSON.parse(document.querySelector('#stage')?.dataset.diagnostics || '{}'); return stats.assets?.robot.phase === 'ready' && stats.assets?.dragon.phase === 'ready' && stats.assets?.runner.phase === 'ready' && stats.assets?.brain.phase === 'ready'; });
+  await page.waitForFunction(() => { const stats = JSON.parse(document.querySelector('#stage')?.dataset.diagnostics || '{}'); return stats.assets?.rex.phase === 'ready' && stats.assets?.dragon.phase === 'ready' && stats.assets?.runner.phase === 'ready' && stats.assets?.brain.phase === 'ready'; });
   await page.locator('#open-import').click();
   await page.locator('#import-data').setInputFiles(fixture);
   await expect(page.locator('#take-count')).toHaveText('1 / 6');
   await page.locator('#reduced-motion').uncheck();
   let extraDownloads = 0;
-  for (const scene of ['robot', 'bubbles', 'star', 'dragon', 'sprite', 'runner', 'brain']) {
+  for (const scene of ['rex', 'bubbles', 'star', 'dragon', 'sprite', 'runner', 'brain']) {
     await page.locator('#character-button').click();
     await page.locator(`[data-scene="${scene}"]`).click();
     if (scene === 'brain') await expect(page.locator('#brain-caption')).toContainText('not your measured brain activity');
@@ -48,9 +48,9 @@ try {
     const bytes = await readFile(saved.path);
     const json = JSON.parse(bytes.subarray(20, 20 + bytes.readUInt32LE(12)).toString('utf8'));
     assert.ok(json.animations?.[0].channels.length > 0);
-    if (scene === 'robot' || scene === 'dragon') assert.match(json.asset.copyright, /CC0 1.0/);
+    if (scene === 'dragon') assert.match(json.asset.copyright, /CC0 1.0/);
     if (scene === 'brain') assert.match(json.asset.copyright, /CC BY-SA 3\.0/);
-    if (scene === 'runner' || scene === 'sprite') assert.match(json.asset.copyright, /CC BY 4\.0/);
+    if (scene === 'runner' || scene === 'sprite' || scene === 'rex') assert.match(json.asset.copyright, /CC BY 4\.0/);
     if (scene === 'brain') {
       await page.locator('#brain-example').selectOption('lyrical-improvisation');
       await expect(page.locator('#brain-caption')).toContainText('Educational example: Liu et al. 2012');
