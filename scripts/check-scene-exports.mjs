@@ -50,6 +50,13 @@ try {
     if (scene === 'robot' || scene === 'dragon') assert.match(json.asset.copyright, /CC0 1.0/);
     if (scene === 'brain') assert.match(json.asset.copyright, /CC BY-SA 3\.0/);
     if (scene === 'runner') assert.match(json.asset.copyright, /CC BY 4\.0/);
+    if (scene === 'brain') {
+      await page.locator('#brain-example').selectOption('lyrical-improvisation');
+      await expect(page.locator('#brain-caption')).toContainText('Educational example: Liu et al. 2012');
+      await expect(page.locator('#brain-regions')).toHaveClass(/example/);
+      await expect(page.locator('#brain-regions li:not([hidden])').first()).toHaveText('Left superior frontal');
+      await page.locator('#stage').screenshot({ path: path.join(output, 'brain-example.png') });
+    }
     if (scene === 'brain' || scene === 'runner') {
       const before = (await app.evaluate(() => globalThis.__exports)).length;
       await page.locator('#open-export').click();
@@ -59,7 +66,13 @@ try {
       assert.ok(files.every(file => file.state === 'completed'));
       const credits = files.find(file => file.path.endsWith('-credits.txt'));
       assert.ok(credits && files.some(file => file.path.endsWith('.webm')), `${scene} video export saves a WebM and a credits file`);
-      assert.match(await readFile(credits.path, 'utf8'), scene === 'brain' ? /CC BY-SA 3\.0/ : /CC BY 4\.0/);
+      const creditText = await readFile(credits.path, 'utf8');
+      assert.match(creditText, scene === 'brain' ? /CC BY-SA 3\.0/ : /CC BY 4\.0/);
+      if (scene === 'brain') {
+        assert.match(creditText, /educational example from Liu et al\. 2012.*not the performer's brain activity/);
+        await page.locator('#brain-example').selectOption('');
+        await expect(page.locator('#brain-caption')).toContainText('not your measured brain activity');
+      }
       extraDownloads += 2;
     }
     await page.locator('#open-import').click();

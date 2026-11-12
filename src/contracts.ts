@@ -41,12 +41,21 @@ export interface TrackingFrame {
   framing?: TrackingFraming;
 }
 
+export type TrendDirection = 'rising' | 'falling' | 'steady';
+export interface SignalTrend {
+  direction: TrendDirection;
+  changePerMinute: number;
+  windowMs: number;
+  samples: number;
+}
+
 export interface ControlFrame {
   sessionId: string;
   source: Source;
   timeMs: number;
   signals: Record<Channel, Signal>;
   tracking?: TrackingFrame;
+  trends?: { pulseRate?: SignalTrend };
 }
 
 export type CapturePhase = 'idle' | 'starting' | 'warming' | 'ready' | 'poor-signal' | 'stopping' | 'error';
@@ -62,10 +71,14 @@ export interface CaptureSource {
   dispose(): Promise<void>;
 }
 
+export const BRAIN_EXAMPLE_IDS = ['lyrical-improvisation', 'new-ideas', 'autonomic-core'] as const;
+export type BrainExampleId = typeof BRAIN_EXAMPLE_IDS[number];
+
 export interface SceneControls {
   motion: number;
   sensitivity: number;
   sound: number;
+  brainExample?: BrainExampleId;
 }
 
 export interface SceneFrame {

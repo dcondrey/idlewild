@@ -1,12 +1,12 @@
 import * as THREE from 'three';
-import type { BodyJoint, Channel, SceneFrame, TrackingFrame, TrackingPoint } from '../contracts.ts';
+import type { BodyJoint, BrainExampleId, Channel, SceneFrame, TrackingFrame, TrackingPoint } from '../contracts.ts';
 import { trackingAt } from '../tracking-frame.ts';
 import { clamp, confidenceWeight, sceneDynamics, signalValue, trackedPoint, trackingStrength } from './dynamics.ts';
 import { disposeObject, fitModel } from './resources.ts';
 import type { SceneSubject } from './types.ts';
 
 export const BRAIN_CAPTION = 'Educational simulation based on published studies; not your measured brain activity.';
-export const BRAIN_RULE_IDS = ['M1', 'M2', 'M3', 'M4', 'M5', 'F1', 'F2', 'F3', 'S1', 'S2', 'S3', 'S5', 'S6'] as const;
+export const BRAIN_RULE_IDS = ['M1', 'M2', 'M3', 'M4', 'M5', 'F1', 'F2', 'F3', 'S1', 'S2', 'S3', 'S5', 'S6', 'E1', 'E2', 'E3'] as const;
 export type BrainRuleId = typeof BRAIN_RULE_IDS[number];
 export interface BrainRegion { region: string; label: string; intensity: number; rule: BrainRuleId }
 export interface BrainSubject extends SceneSubject { topRegions(count?: number): BrainRegion[] }
@@ -48,13 +48,47 @@ const WEIGHTS = {
   brow: [...bilateral('precentral', 0.4), ...bilateral('superiorfrontal', 0.3)],
 } as const;
 
+const left = (parcel: string) => ctx('left', parcel);
+export interface BrainExample { id: BrainExampleId; rule: 'E1' | 'E2' | 'E3'; label: string; citation: string; regions: Weights }
+export const BRAIN_EXAMPLES: Readonly<Record<BrainExampleId, BrainExample>> = Object.freeze({
+  'lyrical-improvisation': {
+    id: 'lyrical-improvisation', rule: 'E1', label: 'Improvising',
+    citation: 'Liu et al. 2012, Scientific Reports 2:834 (fMRI, 12 freestyle rappers, improvised > memorized lyrics)',
+    regions: [[left('superiorfrontal'), 1], [left('caudalmiddlefrontal'), 0.73], [left('caudalanteriorcingulate'), 0.51],
+      [left('parsorbitalis'), 0.68], [left('parstriangularis'), 0.76], [left('parsopercularis'), 0.69],
+      [left('middletemporal'), 0.68], [left('superiortemporal'), 0.53], [left('fusiform'), 0.55],
+      ['Left-Caudate', 0.54], ['Left-Pallidum', 0.45], [left('lingual'), 0.44], [ctx('right', 'lingual'), 0.51],
+      [left('lateraloccipital'), 0.49], [ctx('right', 'lateraloccipital'), 0.43], [cerebellum('right'), 0.76]],
+  },
+  'new-ideas': {
+    id: 'new-ideas', rule: 'E2', label: 'New ideas',
+    citation: 'Benedek et al. 2014, NeuroImage 88:125–133 (fMRI, 35 adults, new > recalled uses in the Alternate Uses Task)',
+    regions: [[left('supramarginal'), 1], [left('inferiorparietal'), 0.5]],
+  },
+  'autonomic-core': {
+    id: 'autonomic-core', rule: 'E3', label: 'Body regulation',
+    citation: 'Beissner et al. 2013, Journal of Neuroscience 33:10503 (meta-analysis of 43 studies, core autonomic network)',
+    regions: [['Left-Amygdala', 1], [ctx('right', 'insula'), 1], [left('insula'), 0.9],
+      [left('caudalanteriorcingulate'), 0.8], [ctx('right', 'caudalanteriorcingulate'), 0.8]],
+  },
+});
+
 export const BRAIN_MAPPED_REGIONS: readonly string[] = Object.freeze([...new Set([
   ...SIDES.flatMap(side => [...WEIGHTS.arm[side], ...WEIGHTS.leg[side]]),
   ...WEIGHTS.movement, ...WEIGHTS.head, ...WEIGHTS.trunk, ...WEIGHTS.mouth, ...WEIGHTS.eyelid, ...WEIGHTS.brow,
+  ...Object.values(BRAIN_EXAMPLES).flatMap(example => example.regions),
 ].map(([region]) => region))].sort());
 
+export function brainExample(input: SceneFrame): BrainExample | null {
+  const id = input.controls.brainExample;
+  return id && Object.hasOwn(BRAIN_EXAMPLES, id) ? BRAIN_EXAMPLES[id] : null;
+}
+
 const PARCELS: Readonly<Record<string, string>> = {
-  superiorfrontal: 'superior frontal', caudalmiddlefrontal: 'caudal middle frontal',
+  superiorfrontal: 'superior frontal', caudalmiddlefrontal: 'caudal middle frontal', caudalanteriorcingulate: 'caudal anterior cingulate',
+  parsorbitalis: 'pars orbitalis', parstriangularis: 'pars triangularis', parsopercularis: 'pars opercularis',
+  middletemporal: 'middle temporal', superiortemporal: 'superior temporal', lateraloccipital: 'lateral occipital',
+  inferiorparietal: 'inferior parietal',
 };
 
 function regionLabel(region: string): string {
@@ -137,6 +171,8 @@ function emit(visit: Visit, rule: BrainRuleId, weights: Weights, drive: number) 
 }
 
 function evaluate(input: SceneFrame, visit: Visit): void {
+  const example = brainExample(input);
+  if (example) { emit(visit, example.rule, example.regions, 1); return; }
   const dynamics = sceneDynamics(input);
   if (dynamics.motion === 0) return;
   const local = input.frame?.source === 'local-camera';
@@ -190,7 +226,10 @@ const BASE_GLOW = 0.04;
 const HIGHLIGHT_GLOW = 1.4;
 const TISSUE_SHADE = 0.72;
 const HIGHLIGHT_TINT = new THREE.Color(0xff6a1f);
+const EXAMPLE_GLOW = 0x1d6dff;
+const EXAMPLE_TINT = new THREE.Color(0x2f7dff);
 const TILT = 0.45;
+const PULSE_RING = { steady: 0xffb0c8, rising: 0xff6f7d, falling: 0x8fc4ff } as const;
 
 export function createAnatomicalBrain(model: THREE.Group): BrainSubject {
   const originals = new Set<THREE.Material>();
@@ -237,7 +276,8 @@ export function createAnatomicalBrain(model: THREE.Group): BrainSubject {
   const gauge = (mesh: THREE.Mesh, radius: number, value: number) => mesh.scale.set(radius * (1 + value), radius * (1 + value), 1);
   const breathRing = ring('BreathPhaseRing', 0x7fd8e8);
   const breathingRateRing = ring('BreathingRateRing', 0x9fb6ff);
-  const pulseRateRing = ring('PulseRateRing', 0xffb0c8);
+  const pulseRateRing = ring('PulseRateRing', PULSE_RING.steady);
+  const pulseMaterial = pulseRateRing.material as THREE.MeshStandardMaterial;
   const activity = new Map<string, number>(regions.map(region => [region.name, 0] as const));
   const raise = strongest(activity);
   let last: SceneFrame | null = null;
@@ -251,12 +291,18 @@ export function createAnatomicalBrain(model: THREE.Group): BrainSubject {
       gauge(breathRing, 1, breath * 0.12);
       gauge(breathingRateRing, 1.1, breathingPace * 0.2);
       gauge(pulseRateRing, 1.2, pulsePace * 0.2);
+      const trend = signalValue(input, 'pulseRate') === null ? undefined : input.frame?.trends?.pulseRate;
+      const tone = PULSE_RING[trend?.direction ?? 'steady'];
+      pulseMaterial.color.setHex(tone);
+      pulseMaterial.emissive.setHex(tone);
       for (const region of activity.keys()) activity.set(region, 0);
       evaluate(input, raise);
+      const example = brainExample(input) !== null;
       for (const region of regions) {
         const visible = ramp(activity.get(region.name) ?? 0, 0.05, 0.6) ** 0.7;
+        region.material.emissive.setHex(example ? EXAMPLE_GLOW : GLOW);
         region.material.emissiveIntensity = BASE_GLOW + HIGHLIGHT_GLOW * visible;
-        region.material.color.copy(region.base).lerp(HIGHLIGHT_TINT, visible * 0.85);
+        region.material.color.copy(region.base).lerp(example ? EXAMPLE_TINT : HIGHLIGHT_TINT, visible * 0.85);
       }
     },
     topRegions: (count = 3) => last ? topBrainRegions(last, count) : [],

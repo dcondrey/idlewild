@@ -1,5 +1,6 @@
 import type { SceneEntry } from './scenes/registry';
-import { BRAIN_CAPTION, type BrainRegion } from './scenes/brain';
+import { BRAIN_EXAMPLE_IDS, type BrainExampleId } from './contracts';
+import { BRAIN_CAPTION, BRAIN_EXAMPLES, type BrainRegion } from './scenes/brain';
 
 const FRAMING_DELAY_MS = 1000;
 const NOTICE_MAX_CHARS = 512 * 1024;
@@ -80,6 +81,7 @@ export function mountStudio(root: HTMLElement) {
         <div id="creative-controls"><label for="motion">Motion <output id="motion-value">70%</output></label><input id="motion" type="range" min="0" max="100" value="70"><label for="sensitivity">Sensitivity <output id="sensitivity-value">65%</output></label><input id="sensitivity" type="range" min="0" max="100" value="65"><label for="sound">Sound <output id="sound-value">45%</output></label><input id="sound" type="range" min="0" max="100" value="45"><button id="enable-sound" class="wide">Enable sound</button></div>
         <label class="check reduce-motion"><input id="reduced-motion" type="checkbox"> Reduce motion</label>
         <div id="runner-choice" class="runner-choice" hidden><label for="runner-variant">Runner pace</label><select id="runner-variant"><option value="0">Easy</option><option value="1">Steady</option><option value="2">Brisk</option></select></div>
+        <div id="brain-choice" class="runner-choice" hidden><label for="brain-example">Brain view</label><select id="brain-example" aria-describedby="brain-example-note"><option value="">Live input</option><optgroup label="Study examples">${BRAIN_EXAMPLE_IDS.map(id => `<option value="${id}">${BRAIN_EXAMPLES[id].label}</option>`).join('')}</optgroup></select><p id="brain-example-note" class="fine">Examples show regions one published group study reported. They never use your camera or body signals.</p></div>
       </aside>
     </main>
     <footer><span>Local workspace · export to keep your takes</span><button id="open-credits" class="footer-link">Credits &amp; licenses</button><span>Creative animation, not medical measurement</span></footer>
@@ -342,6 +344,7 @@ export function createFramingPrompt() {
 
 export function createBrainLegend() {
   const list = byId('brain-regions');
+  const caption = byId('brain-caption');
   const rows = Array.from({ length: 3 }, () => {
     const row = document.createElement('li');
     const label = document.createElement('span');
@@ -350,7 +353,10 @@ export function createBrainLegend() {
     list.append(row);
     return { row, label };
   });
-  return (regions: readonly BrainRegion[]) => {
+  return (regions: readonly BrainRegion[], example?: BrainExampleId) => {
+    const text = example ? `Educational example: ${BRAIN_EXAMPLES[example].citation}. A published group result, not your brain activity.` : BRAIN_CAPTION;
+    if (caption.textContent !== text) caption.textContent = text;
+    list.classList.toggle('example', Boolean(example));
     rows.forEach(({ row, label }, index) => {
       const region = regions[index];
       const baseline = !regions.length && index === 0;

@@ -176,6 +176,7 @@ button.dismiss { min-width: 28px; min-height: 28px; padding: 0 6px; border: 0; b
 .brain-regions li { position: relative; padding: 3px 0 3px 12px; color: #eef5e8; }
 .brain-regions li::before { content: ""; position: absolute; left: 0; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--accent); opacity: calc(.35 + var(--level, 0) * .65); }
 .brain-regions li.baseline { color: var(--muted); }
+.brain-regions.example li::before { background: #4fa8ff; }
 .brain-regions li.baseline::before { background: var(--muted); }
 .pip { display: grid; justify-items: end; gap: 6px; width: clamp(112px, 22%, 232px); }
 .pip video { width: 100%; max-height: none; margin: 0; aspect-ratio: 4 / 3; object-fit: cover; border: 1px solid #5b7170; border-radius: 10px; background: #0b1216; box-shadow: 0 8px 30px #0008; }

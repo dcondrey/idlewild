@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import type { SceneControls, SceneFrame, SceneId, Take } from './contracts.ts';
-import { TAKE_LIMITS } from './contracts.ts';
+import { BRAIN_EXAMPLE_IDS, TAKE_LIMITS } from './contracts.ts';
 import { frameAt } from './recording.ts';
 import { MAX_TAKE_JSON_BYTES, validateTake } from './validation.ts';
 import { renderWav } from './audio.ts';
@@ -37,6 +37,10 @@ function settings(input: SceneControls): SceneControls {
   for (const key of ['motion', 'sensitivity', 'sound'] as const) {
     if (!Number.isFinite(input[key]) || input[key] < 0 || input[key] > 1) throw new Error('Export controls must be between zero and one.');
     result[key] = input[key];
+  }
+  if (input.brainExample !== undefined) {
+    if (!BRAIN_EXAMPLE_IDS.includes(input.brainExample)) throw new Error('Unknown brain example.');
+    result.brainExample = input.brainExample;
   }
   return result;
 }

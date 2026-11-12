@@ -710,7 +710,7 @@ test('Snow arms follow tracked directions overhead without a clamp or axis snap'
   subject.dispose();
 });
 
-import { BRAIN_MAPPED_REGIONS, BRAIN_RULE_IDS, brainRegionActivity, createAnatomicalBrain, topBrainRegions } from '../src/scenes/brain.ts';
+import { BRAIN_EXAMPLES, BRAIN_MAPPED_REGIONS, BRAIN_RULE_IDS, brainRegionActivity, createAnatomicalBrain, topBrainRegions } from '../src/scenes/brain.ts';
 
 type Pose = NonNullable<TrackingFrame['body']>;
 const BRAIN_REST: Pose = {
@@ -871,4 +871,25 @@ test('brain asset keeps anatomical axes, mapped DK regions and its CC BY-SA cred
 test('every brain mapping rule cites a row in BRAIN-EVIDENCE.md', () => {
   const evidence = readFileSync(new URL('../docs/BRAIN-EVIDENCE.md', import.meta.url), 'utf8');
   for (const id of BRAIN_RULE_IDS) assert.match(evidence, new RegExp(`^\\| ${id} \\|`, 'm'), id);
+});
+
+test('a selected brain example lights only its study regions and ignores every live input', () => {
+  for (const example of Object.values(BRAIN_EXAMPLES)) {
+    const select = (frame: SceneFrame): SceneFrame => ({ ...frame, controls: { ...frame.controls, brainExample: example.id } });
+    const expected = new Map(example.regions.map(([region, weight]) => [region, weight]));
+    const idle = lit(brainRegionActivity(select(input(1000))));
+    assert.deepEqual(idle, expected, example.id);
+    assert.deepEqual(lit(brainRegionActivity(select(brainPose(RAISED_LEFT_ARM, 1)))), expected, `${example.id} ignores tracking`);
+    assert.deepEqual(lit(brainRegionActivity(select(signalFrame(1000, SIGNAL_SAMPLES)))), expected, `${example.id} ignores body signals`);
+    assert.ok(topBrainRegions(select(input(1000)), 8).every(region => region.rule === example.rule));
+    assert.ok(example.regions.every(([, weight]) => weight > 0 && weight <= 1));
+  }
+  const unknown = { ...input(1000), controls: { ...input(1000).controls, brainExample: 'constructor' as never } };
+  assert.equal(lit(brainRegionActivity(unknown)).size, 0);
+});
+
+test('a pulse trend never changes brain regions', () => {
+  const frame = signalFrame(1000, SIGNAL_SAMPLES);
+  const trended: SceneFrame = { ...frame, frame: { ...frame.frame!, trends: { pulseRate: { direction: 'rising', changePerMinute: 30, windowMs: 20_000, samples: 20 } } } };
+  assert.deepEqual(brainRegionActivity(trended), brainRegionActivity(frame));
 });

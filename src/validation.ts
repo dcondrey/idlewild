@@ -1,5 +1,5 @@
 import { BODY_JOINTS, CORE_FACE_SHAPES, FACE_SHAPES, TAKE_LIMITS } from './contracts.ts';
-import type { Channel, ControlFrame, Signal, Source, Take, TrackingFrame, TrackingPoint, Unit } from './contracts.ts';
+import type { Channel, ControlFrame, Signal, SignalTrend, Source, Take, TrackingFrame, TrackingPoint, Unit } from './contracts.ts';
 
 export const MAX_TAKE_JSON_BYTES = 16 * 1024 * 1024;
 
@@ -89,6 +89,15 @@ function tracking(value: unknown, frameTime: number): TrackingFrame {
   return { sampledAtMs, face, body, movement, framing: { face: hasFace, upperBody, fullBody, tooClose } };
 }
 
+function trend(value: unknown): SignalTrend {
+  const input = record(value, 'pulse trend');
+  const direction = input.direction;
+  if (direction !== 'rising' && direction !== 'falling' && direction !== 'steady') throw new Error('Invalid pulse trend direction');
+  const samples = number(input.samples, 2, 100_000, 'pulse trend samples');
+  if (!Number.isInteger(samples)) throw new Error('Invalid pulse trend samples');
+  return { direction, changePerMinute: number(input.changePerMinute, -1000, 1000, 'pulse trend change'), windowMs: number(input.windowMs, 0, 600_000, 'pulse trend window'), samples };
+}
+
 export function validateFrame(value: unknown): ControlFrame {
   const input = record(value, 'control frame');
   const sessionId = identity(input.sessionId, 'session ID');
@@ -98,7 +107,14 @@ export function validateFrame(value: unknown): ControlFrame {
   const signals = {} as Record<Channel, Signal>;
   for (const channel of Object.keys(CHANNEL_UNITS) as Channel[]) signals[channel] = signal(inputs[channel], channel, timeMs, frameSource);
   if (input.tracking !== undefined && frameSource !== 'local-camera') throw new Error('Tracking must retain its local-camera source');
-  return { sessionId, source: frameSource, timeMs, signals, ...(frameSource === 'local-camera' ? { tracking: tracking(input.tracking, timeMs) } : {}) };
+  let trends: ControlFrame['trends'];
+  if (input.trends !== undefined) {
+    const value = record(input.trends, 'trends');
+    if (Object.keys(value).some(key => key !== 'pulseRate')) throw new Error('Unsupported signal trend');
+    if (value.pulseRate !== undefined && signals.pulseRate.value === null) throw new Error('A pulse trend requires a pulse value');
+    trends = value.pulseRate === undefined ? {} : { pulseRate: trend(value.pulseRate) };
+  }
+  return { sessionId, source: frameSource, timeMs, signals, ...(frameSource === 'local-camera' ? { tracking: tracking(input.tracking, timeMs) } : {}), ...(trends ? { trends } : {}) };
 }
 
 export function validateTake(value: unknown): Take {

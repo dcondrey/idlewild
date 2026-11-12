@@ -94,3 +94,66 @@ test('the quiet cache retains only the most recent eight seconds', () => {
   }
   assert.equal(continuity.update(frame(12050, true), true).signals.breath.value, 4000 / 12000);
 });
+
+import { createPulseTrend, PULSE_TREND } from '../src/pulse-trend.ts';
+import { validateFrame, validateTake } from '../src/validation.ts';
+
+function pulseFrame(time: number, bpm: number, session = 's') {
+  const input = rehearsalFrame(1, session, time);
+  input.signals.pulseRate.value = bpm;
+  return input;
+}
+
+function feed(trend: ReturnType<typeof createPulseTrend>, from: number, to: number, bpm: (time: number) => number, step = 1000, session = 's') {
+  let last = pulseFrame(from, bpm(from), session);
+  for (let time = from; time <= to; time += step) last = trend.update(pulseFrame(time, bpm(time), session));
+  return last;
+}
+
+test('pulse trend needs enough distinct fresh samples over ten seconds before reporting a direction', () => {
+  const trend = createPulseTrend();
+  assert.equal(feed(trend, 0, PULSE_TREND.minimumSpanMs - 1000, time => 60 + time / 1000).trends, undefined);
+  const rising = feed(trend, PULSE_TREND.minimumSpanMs, PULSE_TREND.minimumSpanMs, time => 60 + time / 1000);
+  assert.equal(rising.trends?.pulseRate?.direction, 'rising');
+  assert.ok(Math.abs(rising.trends!.pulseRate!.changePerMinute - 60) < 1e-6);
+  assert.equal(feed(createPulseTrend(), 0, 20_000, time => 90 - time / 2000).trends?.pulseRate?.direction, 'falling');
+  assert.equal(feed(createPulseTrend(), 0, 20_000, () => 70).trends?.pulseRate?.direction, 'steady');
+  const repeated = createPulseTrend();
+  for (let time = 0; time <= 20_000; time += 50) {
+    const frame = pulseFrame(time, 70);
+    frame.signals.pulseRate.sampledAtMs = 0;
+    if (time < 1500) assert.equal(repeated.update(frame).trends, undefined, 'one repeated sample is not a trend');
+  }
+});
+
+test('pulse trend history resets on gaps, invalid samples, replayed values and new sessions', () => {
+  const rising = (time: number) => 60 + time / 1000;
+  const gap = createPulseTrend();
+  feed(gap, 0, 12_000, rising);
+  assert.equal(gap.update(pulseFrame(14_000, 74)).trends, undefined);
+  const invalid = createPulseTrend();
+  feed(invalid, 0, 12_000, rising);
+  const missing = pulseFrame(13_000, 0);
+  missing.signals.pulseRate = { ...missing.signals.pulseRate, value: null, quality: 'missing' };
+  assert.equal(invalid.update(missing).trends, undefined);
+  assert.equal(invalid.update(pulseFrame(14_000, 74)).trends, undefined);
+  const replayed = createPulseTrend();
+  feed(replayed, 0, 12_000, rising);
+  const cached = pulseFrame(13_000, 73);
+  cached.signals.pulseRate.provenance = 'replayed';
+  assert.equal(replayed.update(cached).trends, undefined);
+  const session = createPulseTrend();
+  feed(session, 0, 12_000, rising);
+  assert.equal(session.update(pulseFrame(13_000, 73, 'next')).trends, undefined);
+});
+
+test('recorded pulse trends survive take validation and older takes without them still load', () => {
+  const trended = feed(createPulseTrend(), 0, 12_000, time => 60 + time / 1000);
+  assert.deepEqual(validateFrame(JSON.parse(JSON.stringify(trended))).trends, trended.trends);
+  const old = pulseFrame(0, 70);
+  assert.equal(validateTake({ version: 1, id: 't', source: 'rehearsal', sessionId: 's', seed: 1, durationMs: 100, samples: [old] }).samples[0].trends, undefined);
+  assert.throws(() => validateFrame({ ...trended, trends: { pulseRate: { ...trended.trends!.pulseRate, direction: 'up' } } }), /direction/);
+  assert.throws(() => validateFrame({ ...trended, trends: { breathingRate: trended.trends!.pulseRate } }), /Unsupported/);
+  const missing = { ...trended, signals: { ...trended.signals, pulseRate: { ...trended.signals.pulseRate, value: null, quality: 'missing' } } };
+  assert.throws(() => validateFrame(missing), /requires a pulse value/);
+});

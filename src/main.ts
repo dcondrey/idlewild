@@ -1,6 +1,7 @@
 import './style.css';
-import type { CaptureSource, ControlFrame, SceneControls, SceneFrame, SceneId, Source, Take } from './contracts';
-import { TAKE_LIMITS, SIGNAL_STALE_MS } from './contracts';
+import type { BrainExampleId, CaptureSource, ControlFrame, SceneControls, SceneFrame, SceneId, Source, Take } from './contracts';
+import { BRAIN_EXAMPLE_IDS, TAKE_LIMITS, SIGNAL_STALE_MS } from './contracts';
+import { BRAIN_CAPTION, BRAIN_EXAMPLES } from './scenes/brain';
 import { createStage } from './stage';
 import { createRehearsalSource } from './rehearsal';
 import { createLocalTrackingSource } from './tracking/source';
@@ -8,6 +9,7 @@ import { trackingAt } from './tracking-frame';
 import { addTake, frameAt, TakeRecorder, trimTake } from './recording';
 import { validateFrame, validateTake, MAX_TAKE_JSON_BYTES } from './validation';
 import { createBreathContinuity } from './continuity';
+import { createPulseTrend } from './pulse-trend';
 import { createCamera } from './camera';
 import { createSound, renderWav } from './audio';
 import { cameraErrorMessage, createBrainLegend, createCameraFeed, createFramingPrompt, mountStudio, setupCharacterMenu, setupGuide, setupPanels, updateStudioFlow } from './ui';
@@ -53,6 +55,7 @@ let cleanupFailed = false;
 const seed = 20261111;
 const sound = createSound();
 const continuity = createBreathContinuity();
+const pulseTrend = createPulseTrend();
 const reducedPreference = matchMedia('(prefers-reduced-motion: reduce)');
 input('reduced-motion').checked = reducedPreference.matches;
 const applyMotionPreference = () => document.documentElement.classList.toggle('motion-reduced', input('reduced-motion').checked);
@@ -74,8 +77,11 @@ function message(text: string, error = false) {
   for (const status of document.querySelectorAll('dialog[open] .dialog-message')) { status.textContent = text; status.classList.toggle('error', error); }
 }
 
+const isBrainExample = (value: string): value is BrainExampleId => (BRAIN_EXAMPLE_IDS as readonly string[]).includes(value);
+
 function controls(): SceneControls {
-  return { motion: Number(input('motion').value) / 100, sensitivity: Number(input('sensitivity').value) / 100, sound: Number(input('sound').value) / 100 };
+  const example = element<HTMLSelectElement>('brain-example').value;
+  return { motion: Number(input('motion').value) / 100, sensitivity: Number(input('sensitivity').value) / 100, sound: Number(input('sound').value) / 100, ...(entry.scene === 'brain' && isBrainExample(example) ? { brainExample: example } : {}) };
 }
 
 function clockLabel(ms: number) {
@@ -105,7 +111,7 @@ function refreshActions() {
   button('open-face-camera').textContent = faceDevice ? 'Close face camera' : 'Open face camera';
   element('face-preview').hidden = !faceDevice;
   syncCameraFeed(camera.active);
-  for (const id of ['motion', 'sensitivity', 'sound', 'runner-variant', 'import-data', 'import-model', 'reduced-motion']) input(id).disabled = exporting !== null || busy;
+  for (const id of ['motion', 'sensitivity', 'sound', 'runner-variant', 'brain-example', 'import-data', 'import-model', 'reduced-motion']) input(id).disabled = exporting !== null || busy;
   for (const id of ['detail-view', 'use-own-character', 'menu-own-character']) button(id).disabled = exporting !== null || busy;
   input('imported-clip').disabled = exporting !== null || busy || !importedClips.length;
   button('remove-model').disabled = exporting !== null || busy || !importedRoot;
@@ -172,7 +178,7 @@ function finishRecording() {
 
 function receiveFrame(raw: ControlFrame) {
   if (raw.source !== sourceKind) return;
-  const frame = continuity.update(validateFrame(raw), input('continuity').checked);
+  const frame = pulseTrend.update(continuity.update(validateFrame(raw), input('continuity').checked));
   latest = frame;
   latestArrival = performance.now();
   if (recorder) { recorder.append(frame); if (recorder.full) { finishRecording(); void stopInput().catch(() => message('Take saved; input cleanup failed. Stop again.', true)); } }
@@ -187,7 +193,7 @@ async function stopInput() {
   source = null;
   sourceKind = null;
   latest = null;
-  continuity.reset();
+  continuity.reset(); pulseTrend.reset();
   framing.reset();
   stopping = (async () => {
     const results = await Promise.allSettled([old?.dispose(), camera.stop(), sound.disable()]);
@@ -254,12 +260,13 @@ function animate(now: number) {
       const tracking = trackingAt(data);
       if (sourceKind === 'local-camera' && FULL_BODY_SCENES.has(entry.scene)) framing.update(now, Boolean(tracking?.face && tracking.framing?.face && tracking.framing.tooClose));
       else framing.reset();
-      if (entry.scene === 'brain' && now - lastLegendPaint >= 250) { lastLegendPaint = now; renderBrainLegend(stage.brainRegions(3)); }
+      if (entry.scene === 'brain' && now - lastLegendPaint >= 250) { lastLegendPaint = now; renderBrainLegend(stage.brainRegions(3), controls().brainExample); }
       if (origin === 'local-camera') element('tracking-summary').textContent = `${tracking?.face ? 'Face tracked' : 'Face unavailable'} · ${tracking?.body ? `${Object.keys(tracking.body).length} body joints tracked` : 'Body unavailable'}`;
       for (const channel of Object.keys(signalNames) as (keyof typeof signalNames)[]) {
         const signal = data.frame?.signals[channel];
         const quality = signal && data.timeMs - signal.sampledAtMs >= SIGNAL_STALE_MS ? 'stale' : signal?.quality ?? 'missing';
-        element(`signal-${channel}`).textContent = !signal || signal.value === null || quality === 'stale' ? '—' : signal.unit === 'boolean' ? signal.value === 1 ? 'Yes' : 'No' : `${signal.value.toFixed(1)}${signal.unit === 'breaths/min' ? ' /min' : signal.unit === 'beats/min' ? ' bpm' : ''}`;
+        const trend = channel === 'pulseRate' ? data.frame?.trends?.pulseRate : undefined;
+        element(`signal-${channel}`).textContent = !signal || signal.value === null || quality === 'stale' ? '—' : signal.unit === 'boolean' ? signal.value === 1 ? 'Yes' : 'No' : `${signal.value.toFixed(1)}${signal.unit === 'breaths/min' ? ' /min' : signal.unit === 'beats/min' ? ' bpm' : ''}${trend ? ` · ${trend.direction}` : ''}`;
         element(`quality-${channel}`).textContent = `${quality}${signal?.provenance === 'replayed' ? ' · cached animation' : ''}`;
       }
     }
@@ -273,6 +280,7 @@ function chooseEntry(next: SceneEntry) {
   button('detail-view').hidden = next.scene !== 'imported'; button('detail-view').textContent = 'Close view'; button('detail-view').setAttribute('aria-pressed', 'false');
   element('brain-legend').hidden = next.scene !== 'brain';
   element('runner-choice').hidden = next.scene !== 'runner';
+  element('brain-choice').hidden = next.scene !== 'brain';
   framing.reset();
   menu.setCurrent(next);
 }
@@ -394,7 +402,7 @@ input('face-consent').addEventListener('change', () => { if (input('face-consent
 input('face-camera').addEventListener('change', () => { if (camera.faceDeviceId) void run(async () => { await camera.closeFace(); message('Face camera changed. Open it again explicitly.'); }); else refreshActions(); });
 on('local-tracking', async () => {
   if (!input('camera-consent').checked || !camera.active || sourceKind !== null) throw new Error('Open a consented camera preview before starting local tracking.');
-  sourceKind = 'local-camera'; latest = null; continuity.reset(); playing = false;
+  sourceKind = 'local-camera'; latest = null; continuity.reset(); pulseTrend.reset(); playing = false;
   source = createLocalTrackingSource(element<HTMLVideoElement>('camera-preview'), { faceVideo: element<HTMLVideoElement>('face-preview') });
   try {
     await source.start(receiveFrame, status => {
@@ -409,7 +417,7 @@ on('local-tracking', async () => {
 });
 on('live', async () => {
   if (!input('camera-consent').checked || !input('live-consent').checked || !keySet) throw new Error('Preview consent, vendor-processing consent and a key are required.');
-  sourceKind = 'live'; latest = null; continuity.reset(); playing = false;
+  sourceKind = 'live'; latest = null; continuity.reset(); pulseTrend.reset(); playing = false;
   try { await camera.startLive(); if (camera.active && sourceKind === 'live') element<HTMLDialogElement>('camera-dialog').close(); } catch (error) { await stopInput(); throw error; }
 });
 const offFrame = window.idlewild?.onFrame(frame => {
@@ -441,7 +449,9 @@ async function exportTake(kind: 'data' | 'wav' | 'video' | 'glb') {
     const blob = kind === 'data' ? exportControlData(take) : kind === 'wav' ? await renderWav(take, entry.scene, controls(), options.signal) : kind === 'glb' ?
       await bakeAnimation(take, stage, controls(), options) : await exportPreview({ take, scene: entry.scene, controls: controls(), canvas, update: data => stage!.update(data), ...options, onProgress: progress => message(`Rendering video · ${Math.round(progress * 100)}%`) });
     options.signal.throwIfAborted();
-    if (copyright) save(new Blob([`${copyright}\n\nAdapted in Idlewild: rendered with performance animation, lighting and procedural sound.\n`], { type: 'text/plain;charset=utf-8' }), `idlewild-${entry.id}-${take.source}-credits.txt`);
+    const example = controls().brainExample;
+    const note = entry.scene === 'brain' ? `${example ? `Brain view: educational example from ${BRAIN_EXAMPLES[example].citation}. A published group result, not the performer's brain activity.` : BRAIN_CAPTION}\n\n` : '';
+    if (copyright) save(new Blob([`${copyright}\n\n${note}Adapted in Idlewild: rendered with performance animation, lighting and procedural sound.\n`], { type: 'text/plain;charset=utf-8' }), `idlewild-${entry.id}-${take.source}-credits.txt`);
     save(blob, `idlewild-${entry.id}-${take.source}.${kind === 'data' ? 'json' : kind === 'video' ? 'webm' : kind}`);
     message(copyright ? 'Video and model credits are ready. Keep the credits with shared copies.' : 'Export prepared. Save the downloaded file to keep it.');
   } catch (error) {
