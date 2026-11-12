@@ -1,6 +1,7 @@
 import { _electron as electron, expect } from '@playwright/test';
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +17,10 @@ for (const file of ['dist/index.html', 'dist/models/runner.glb', 'dist/models/br
 }
 assert.ok(!existsSync(path.join(resources, 'node_modules/@smartspectra/node-sdk-linux-x64')), 'Bundle excludes other-platform SDK binaries');
 for (const file of ['LICENSE.electron.txt', 'LICENSES.chromium.html']) assert.ok(existsSync(path.join(app, 'Contents/Resources', file)), `Bundle ships ${file}`);
+const info = JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', path.join(app, 'Contents/Info.plist')], { encoding: 'utf8' }));
+const iconFile = info.CFBundleIconFile?.endsWith('.icns') ? info.CFBundleIconFile : `${info.CFBundleIconFile}.icns`;
+assert.ok(info.CFBundleIconFile, 'Info.plist names an app icon');
+assert.deepEqual(readFileSync(path.join(app, 'Contents/Resources', iconFile)), readFileSync(path.join(root, 'build/icon.icns')), 'Bundle ships the project icon');
 const fixtures = await loadFixtures(process.env.IDLEWILD_FIXTURE_ROOT ?? root);
 const output = path.join(root, 'artifacts/packaged');
 await mkdir(output, { recursive: true });

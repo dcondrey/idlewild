@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22343d"/>
+      <stop offset="1" stop-color="#0f171c"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.42" r="0.5">
+      <stop offset="0" stop-color="#d3ee9f" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#d3ee9f" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <g clip-path="url(#tile)">
+    <circle cx="512" cy="440" r="400" fill="url(#glow)"/>
+    <path d="M100 800 C 300 730, 420 770, 512 760 S 760 720, 924 790 L 924 924 L 100 924 Z" fill="#19232a"/>
+  </g>
+  <g fill="none" stroke="#d3ee9f" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M512 400 L 512 590"/>
+    <path d="M442 412 L 582 412"/>
+    <path d="M442 412 L 360 330 L 320 240"/>
+    <path d="M582 412 L 664 330 L 704 240"/>
+    <path d="M466 590 L 558 590"/>
+    <path d="M466 590 L 430 690 L 400 770"/>
+    <path d="M558 590 L 594 690 L 624 770"/>
+  </g>
+  <circle cx="512" cy="322" r="58" fill="#d3ee9f"/>
+  <g fill="#9bdddf" stroke="#0f171c" stroke-width="10">
+    <circle cx="442" cy="412" r="24"/><circle cx="582" cy="412" r="24"/>
+    <circle cx="360" cy="330" r="24"/><circle cx="664" cy="330" r="24"/>
+    <circle cx="320" cy="240" r="24"/><circle cx="704" cy="240" r="24"/>
+    <circle cx="466" cy="590" r="24"/><circle cx="558" cy="590" r="24"/>
+    <circle cx="430" cy="690" r="24"/><circle cx="594" cy="690" r="24"/>
+    <circle cx="400" cy="770" r="24"/><circle cx="624" cy="770" r="24"/>
+  </g>
+</svg>
