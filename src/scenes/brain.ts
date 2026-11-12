@@ -264,7 +264,7 @@ export function createAnatomicalBrain(model: THREE.Group): BrainSubject {
   }
   model.position.y -= new THREE.Box3().setFromObject(model).max.y / 2;
   pivot.add(model);
-  const ringGeometry = new THREE.TorusGeometry(1.35, 0.016, 6, 96);
+  const ringGeometry = new THREE.TorusGeometry(1.35, 0.03, 8, 96);
   const ring = (name: string, color: number) => {
     const mesh = new THREE.Mesh(ringGeometry, new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.5, roughness: 0.4 }));
     mesh.name = name;
@@ -288,9 +288,9 @@ export function createAnatomicalBrain(model: THREE.Group): BrainSubject {
       const { time, motion, breath, breathingPace, pulsePace } = sceneDynamics(input);
       pivot.rotation.set(TILT, Math.sin(time * 0.2) * 0.35 * motion, 0);
       // S1-S3 drive body-signal gauges only; BRAIN-EVIDENCE.md forbids mapping these channels to regions.
-      gauge(breathRing, 1, breath * 0.12);
-      gauge(breathingRateRing, 1.1, breathingPace * 0.2);
-      gauge(pulseRateRing, 1.2, pulsePace * 0.2);
+      gauge(breathRing, 1, breath * 0.3);
+      gauge(breathingRateRing, 1.1, breathingPace * 0.4);
+      gauge(pulseRateRing, 1.2, pulsePace * 0.4);
       const trend = signalValue(input, 'pulseRate') === null ? undefined : input.frame?.trends?.pulseRate;
       const tone = PULSE_RING[trend?.direction ?? 'steady'];
       pulseMaterial.color.setHex(tone);

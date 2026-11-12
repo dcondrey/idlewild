@@ -45,19 +45,19 @@ export function createBubbles(): SceneSubject {
       root.position.x = lean * 0.7;
       root.rotation.set(0, turn * 0.3, -lean * 0.12);
       for (const surface of surfaces) {
-        surface.emissiveIntensity = 0.045 + smile * 0.22 + jaw * 0.12 + pulsePace * 0.08;
+        surface.emissiveIntensity = 0.045 + smile * 0.22 + jaw * 0.12 + pulsePace * 0.3;
         surface.opacity = 0.52 + brow * 0.16;
       }
-      const sway = 0.17 * motion + movement * 0.24 + pulsePace * 0.12;
-      const drift = 0.18 * motion + breathingPace * 0.14;
+      const sway = 0.17 * motion + movement * 0.24 + pulsePace * 0.35;
+      const drift = 0.18 * motion + breathingPace * 0.4;
       for (let i = 0; i < bubbles.length; i++) {
         const phase = randomFor(input.seed, i + 200) * Math.PI * 2;
         bubbles[i].position.set(
           (randomFor(input.seed, i * 4) * 5.2 - 2.6) * (1 + armSpread * 0.35 + smile * 0.12) + Math.sin(time * 0.33 + phase) * sway,
-          randomFor(input.seed, i * 4 + 1) * 2.9 + 0.65 + Math.sin(time * 0.48 + phase) * drift + breath * 0.22 + armLift * 0.7 + movement * 0.25 + brow * 0.12,
+          randomFor(input.seed, i * 4 + 1) * 2.9 + 0.65 + Math.sin(time * 0.48 + phase) * drift + breath * 0.6 + armLift * 0.7 + movement * 0.25 + brow * 0.12,
           (randomFor(input.seed, i * 4 + 2) * 2.2 - 1.1) * (1 + armSpread * 0.35),
         );
-        bubbles[i].scale.setScalar((0.16 + randomFor(input.seed, i * 4 + 3) * 0.38) * (1 + breath * 0.18 + jaw * 0.4 + smile * 0.2 - blink * 0.07));
+        bubbles[i].scale.setScalar((0.16 + randomFor(input.seed, i * 4 + 3) * 0.38) * (1 + breath * 0.4 + jaw * 0.4 + smile * 0.2 - blink * 0.2));
       }
     },
     dispose: () => disposeObject(root),
@@ -92,21 +92,24 @@ export function createStar(): SceneSubject {
     root,
     update(input) {
       const { time, motion, breath, breathingPace, pulsePace, jaw, smile, brow, blink, movement, armSpread, armLift, lean, turn } = sceneDynamics(input);
-      const expansion = (1 + breath * 0.12 + smile * 0.2 + jaw * 0.22) * (1 - blink * 0.06);
-      core.scale.set(expansion * (1 + armSpread * 0.12), expansion * (1 + brow * 0.15), expansion);
-      core.rotation.y = Math.sin(time * 0.3) * (0.22 * motion + pulsePace * 0.12) + turn * 0.65;
-      core.rotation.z = Math.sin(time * 0.22) * 0.08 * motion - lean * 0.3;
-      core.position.set(lean * 0.7, 1.9 + Math.sin(time * 0.6) * (0.08 * motion + breathingPace * 0.08) + armLift * 0.55 + movement * 0.2, 0);
+      const expansion = (1 + breath * 0.3 + smile * 0.2 + jaw * 0.3 + movement * 0.3 + pulsePace * 0.12) * (1 - blink * 0.15);
+      const shake = Math.sin(time * 2.4) * movement;
+      core.scale.set(expansion * (1 + armSpread * 0.45), expansion * (1 + brow * 0.15 + armLift * 0.2), expansion);
+      core.rotation.y = Math.sin(time * 0.3) * (0.22 * motion + pulsePace * 0.35) + turn * 1.1 + shake * 0.6;
+      core.rotation.z = Math.sin(time * 0.22) * 0.08 * motion - lean * 0.6 + Math.cos(time * 1.9) * movement * 0.25;
+      core.position.set(lean * 1.4, 1.9 + Math.sin(time * 0.6) * (0.08 * motion + breathingPace * 0.25) + armLift * 0.8 + movement * 0.35, 0);
       rings[0].rotation.z = time * 0.12 * motion;
       rings[1].rotation.z = 1.2 - time * 0.09 * motion;
-      rings[0].scale.setScalar(1 + armSpread * 0.18 + brow * 0.12);
-      rings[1].scale.setScalar(1 + movement * 0.2 + smile * 0.12);
-      starMaterial.emissiveIntensity = 0.45 + Math.max(0, breath) * 0.5 + smile * 0.55 + jaw * 0.25 + pulsePace * 0.2;
+      rings[0].rotation.x = 0.55 + armLift * 0.7 + shake * 0.4;
+      rings[1].rotation.x = 1.1 - armSpread * 0.7 - shake * 0.4;
+      rings[0].scale.setScalar(1 + armSpread * 0.5 + brow * 0.12);
+      rings[1].scale.setScalar(1 + movement * 0.5 + smile * 0.12);
+      starMaterial.emissiveIntensity = 0.45 + Math.max(0, breath) * 0.8 + smile * 0.55 + jaw * 0.4 + pulsePace * 0.7 + movement * 0.8 + armLift * 0.4;
       for (let i = 0; i < dust.length; i++) {
-        const angle = randomFor(input.seed, i * 2) * Math.PI * 2 + time * 0.05 * motion;
-        const radius = (1.9 + randomFor(input.seed, i * 2 + 1) * 0.6) * (1 + armSpread * 0.2 + movement * 0.15 + pulsePace * 0.08);
-        dust[i].position.set(Math.cos(angle) * radius + lean * 0.7, 1.9 + Math.sin(angle) * radius * 0.7 + armLift * 0.55, Math.sin(angle * 3) * 0.6);
-        dust[i].scale.setScalar(1 + jaw * 1.2 + brow * 0.5 + blink * 0.6);
+        const angle = randomFor(input.seed, i * 2) * Math.PI * 2 + time * 0.05 * motion + shake * 0.5;
+        const radius = (1.9 + randomFor(input.seed, i * 2 + 1) * 0.6) * (1 + armSpread * 0.5 + movement * 0.6 + pulsePace * 0.08);
+        dust[i].position.set(Math.cos(angle) * radius + lean * 1.4, 1.9 + Math.sin(angle) * radius * 0.7 + armLift * 0.8, Math.sin(angle * 3) * 0.6);
+        dust[i].scale.setScalar(1 + jaw * 1.2 + brow * 0.5 + blink * 0.6 + movement * 1.5);
       }
     },
     dispose: () => disposeObject(root),

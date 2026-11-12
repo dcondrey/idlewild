@@ -5,6 +5,8 @@ import { disposeObject, fitModel } from './resources.ts';
 import { BONE_ALIASES, boneFinder, createRunnerMotion, createTracking, type CharacterMorph } from './tracking.ts';
 import type { SceneSubject } from './types.ts';
 
+const PULSE_GLOW = new THREE.Color(0xff7a3d);
+
 export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[], kind: 'rex' | 'imported' | 'runner'): SceneSubject {
   const root = new THREE.Group();
   root.name = `${kind}_Performance`;
@@ -28,8 +30,14 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
   root.updateMatrixWorld(true);
   const bones: THREE.Bone[] = [];
   const morphs: (CharacterMorph & { kind: 'blink' | 'talking' | null; initial: number })[] = [];
+  const glowMaterials = new Map<THREE.MeshStandardMaterial, THREE.Color>();
   model.traverse(object => {
     if (object instanceof THREE.Bone) bones.push(object);
+    if (object instanceof THREE.Mesh) {
+      for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+        if (material instanceof THREE.MeshStandardMaterial && !glowMaterials.has(material)) glowMaterials.set(material, material.emissive.clone());
+      }
+    }
     if (object instanceof THREE.Mesh && object.morphTargetDictionary && object.morphTargetInfluences) {
       for (const [name, index] of Object.entries(object.morphTargetDictionary)) {
         const normalized = name.toLowerCase().replace(/[^a-z]/g, '');
@@ -87,27 +95,28 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
       restoreAnimationPose();
       mixer.setTime(time * motion * (runClip ? RUNNER_PACE[runnerVariant] : 1));
       rememberAnimationPose();
-      const headPitch = -pulsePace * 0.05 + (signals && !blinkMorphs ? blink * 0.06 : 0);
-      const headRoll = signals && !jaw && !jawMorphs ? talking * 0.05 : 0;
-      root.rotation.set((chest ? 0 : -breathingPace * 0.03) + (head ? 0 : headPitch * 0.4), 0, breath * 0.015 + (head ? 0 : headRoll * 0.4));
-      if (!chest) root.scale.set(1 + breath * 0.012, 1, 1 + breath * 0.025);
+      const headPitch = -pulsePace * 0.3 + (signals && !blinkMorphs ? blink * 0.1 : 0);
+      const headRoll = signals && !jaw && !jawMorphs ? talking * 0.1 : 0;
+      root.rotation.set((chest ? 0 : -breathingPace * 0.08) + (head ? 0 : headPitch * 0.4), 0, breath * 0.03 + (head ? 0 : headRoll * 0.4));
+      if (!chest) root.scale.set(1 + breath * 0.04, 1, 1 + breath * 0.08);
       if (run) {
         root.position.y = 0;
         root.position.y = run(input, runnerVariant);
       }
+      for (const [material, base] of glowMaterials) material.emissive.copy(base).lerp(PULSE_GLOW, pulsePace * 0.5);
       if (chest) {
-        chest.scale.x *= 1 + breath * 0.025;
-        chest.scale.z *= 1 + breath * 0.04;
-        tilt(chest, pitch, -breathingPace * 0.05);
+        chest.scale.x *= 1 + breath * 0.08;
+        chest.scale.z *= 1 + breath * 0.12;
+        tilt(chest, pitch, -breathingPace * 0.25 - breath * 0.08);
       }
       if (head) {
         tilt(head, pitch, headPitch);
         tilt(head, roll, headRoll);
       }
       if (signals) {
-        if (jaw) tilt(jaw, pitch, talking * 0.08);
+        if (jaw) tilt(jaw, pitch, talking * 0.15);
         for (const morph of morphs) {
-          if (morph.kind && signalValue(input, morph.kind) !== null) morph.mesh.morphTargetInfluences![morph.index] = morph.kind === 'blink' ? blink : talking * 0.65;
+          if (morph.kind && signalValue(input, morph.kind) !== null) morph.mesh.morphTargetInfluences![morph.index] = morph.kind === 'blink' ? blink : talking * 0.9;
         }
       }
       applyTracking(input);

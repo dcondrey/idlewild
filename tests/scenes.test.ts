@@ -168,7 +168,7 @@ test('missing facial input preserves authored animation while valid zero overrid
     frame.frame!.signals.blink.value = value;
     frame.frame!.signals.talking.value = value;
     subject.update(frame);
-    expectWeights(value, value * 0.65);
+    expectWeights(value, value * 0.9);
   }
   frame.frame!.signals.blink.value = null;
   frame.frame!.signals.talking.quality = 'unstable';
@@ -538,7 +538,8 @@ test('every scene responds to each SDK signal only while it is valid and fresh',
     const absent = capture(signalFrame(1000));
     assert.deepEqual(capture({ ...signalFrame(1000), frame: null }), absent, name);
     for (const [channel, value] of Object.entries(SIGNAL_SAMPLES)) {
-      assert.ok(difference(capture(signalFrame(1000, { [channel]: value })), absent) > 1e-3, `${name} ignores ${channel}`);
+      const change = difference(capture(signalFrame(1000, { [channel]: value })), absent);
+      assert.ok(change > (name === 'runner' ? 1e-3 : 0.04), `${name} reacts too subtly to ${channel}: ${change}`);
       assert.deepEqual(capture(signalFrame(1000, { [channel]: value }, SIGNAL_STALE_MS)), absent, `${name} uses stale ${channel}`);
     }
     const all = capture(signalFrame(1000, SIGNAL_SAMPLES));
@@ -556,7 +557,7 @@ test('every scene responds to each SDK signal only while it is valid and fresh',
   }
 });
 
-test('blink is a subtle uniform response that keeps bubbles round', () => {
+test('blink is a visible uniform response that keeps bubbles round', () => {
   const bubbles = createBubbles();
   bubbles.update(signalFrame(1000, { blink: 0 }));
   const open = bubbles.root.children.map(child => child.scale.clone());
@@ -564,7 +565,7 @@ test('blink is a subtle uniform response that keeps bubbles round', () => {
   bubbles.root.children.forEach((child, index) => {
     assert.ok(Math.abs(child.scale.x - child.scale.y) < 1e-12 && Math.abs(child.scale.z - child.scale.y) < 1e-12);
     const ratio = child.scale.y / open[index].y;
-    assert.ok(ratio > 0.9 && ratio < 0.97);
+    assert.ok(ratio > 0.75 && ratio < 0.9, String(ratio));
   });
   bubbles.dispose();
   const star = createStar();
