@@ -35,10 +35,11 @@ try {
   await expect(page.locator('#take-count')).toHaveText('1 / 6');
   await page.locator('#reduced-motion').uncheck();
   let extraDownloads = 0;
-  for (const scene of ['robot', 'bubbles', 'star', 'dragon', 'baby-dragon', 'runner', 'brain']) {
+  for (const scene of ['robot', 'bubbles', 'star', 'dragon', 'sprite', 'runner', 'brain']) {
     await page.locator('#character-button').click();
     await page.locator(`[data-scene="${scene}"]`).click();
     if (scene === 'brain') await expect(page.locator('#brain-caption')).toContainText('not your measured brain activity');
+    if (scene === 'sprite') await expect(page.locator('#message')).toContainText('ready', { timeout: 20_000 });
     await page.locator('#open-export').click();
     await page.locator('#export-glb').click();
     await expect.poll(async () => (await app.evaluate(() => globalThis.__exports)).length, { timeout: 30_000 }).toBe(results.length + extraDownloads + 1);
@@ -49,7 +50,7 @@ try {
     assert.ok(json.animations?.[0].channels.length > 0);
     if (scene === 'robot' || scene === 'dragon') assert.match(json.asset.copyright, /CC0 1.0/);
     if (scene === 'brain') assert.match(json.asset.copyright, /CC BY-SA 3\.0/);
-    if (scene === 'runner') assert.match(json.asset.copyright, /CC BY 4\.0/);
+    if (scene === 'runner' || scene === 'sprite') assert.match(json.asset.copyright, /CC BY 4\.0/);
     if (scene === 'brain') {
       await page.locator('#brain-example').selectOption('lyrical-improvisation');
       await expect(page.locator('#brain-caption')).toContainText('Educational example: Liu et al. 2012');

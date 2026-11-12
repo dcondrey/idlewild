@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import type { SceneFrame, SceneId } from './contracts.ts';
 import { createCharacter } from './scenes/character.ts';
 import { createAnatomicalBrain, type BrainRegion, type BrainSubject } from './scenes/brain.ts';
-import { createBabyDragon, createBubbles, createRunner, createStar } from './scenes/procedural.ts';
+import { createBubbles, createRunner, createStar } from './scenes/procedural.ts';
 import { disposeObject } from './scenes/resources.ts';
 import type { SceneSubject } from './scenes/types.ts';
 import { getAssetCopyright, setAssetCopyright } from './asset-credits.ts';
@@ -98,8 +98,13 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
       subject.root.traverse(node => {
         if (node instanceof THREE.Bone && ['head', 'defhead', 'mixamorighead'].includes(node.name.toLowerCase().replace(/[^a-z]/g, ''))) head = node;
       });
-      if (head) { (head as THREE.Object3D).getWorldPosition(target); target.y += height * 0.07; }
-      const radius = Math.max(0.15, height * (head ? 0.15 : 0.3));
+      let crown = 0;
+      if (head) {
+        (head as THREE.Object3D).getWorldPosition(target);
+        crown = Math.max(0, bounds.max.y - target.y);
+        target.y += crown / 2;
+      }
+      const radius = Math.max(0.15, head ? Math.max(height * 0.15, crown * 0.75) : height * 0.3);
       const distance = radius / (Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * Math.min(1, camera.aspect)) + radius;
       camera.position.set(target.x, target.y + radius * 0.06, target.z + distance);
       camera.lookAt(target);
@@ -126,7 +131,6 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
   try {
     attach('bubbles', createBubbles());
     attach('star', createStar());
-    attach('baby-dragon', createBabyDragon());
     attach('runner', createRunner());
   } catch (error) {
     for (const subject of subjects.values()) subject.dispose();

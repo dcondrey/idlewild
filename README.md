@@ -2,7 +2,7 @@
 
 A desktop creative studio built with Electron, TypeScript and Three.js: record a control performance, replay it across characters and procedural scenes, then export animation and sound.
 
-Use consented, on-device face and body tracking without an API key, account or credits, or try visibly synthetic rehearsal without a camera. Scenes include a robot, Snow and the Rain runner (detailed Blender Studio characters), bubbles, star, European dragon, original baby dragon and an anatomical brain whose highlighted regions are an educational simulation based on published studies, not measured brain activity. Optional SmartSpectra signals require separate credentials and consent; that desktop integration still requires live validation. See [verification evidence and remaining limits](docs/CONTEXT.md).
+Use consented, on-device face and body tracking without an API key, account or credits, or try visibly synthetic rehearsal without a camera. Scenes include a robot, Snow, Sprite and the Rain runner (detailed Blender Studio characters), bubbles, star, European dragon and an anatomical brain whose highlighted regions are an educational simulation based on published studies, not measured brain activity. Optional SmartSpectra signals require separate credentials and consent; that desktop integration still requires live validation. See [verification evidence and remaining limits](docs/CONTEXT.md).
 
 ## Run locally
 

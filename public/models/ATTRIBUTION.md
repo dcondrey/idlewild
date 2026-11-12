@@ -55,6 +55,19 @@ Modifications: 27 evaluated ARKit-named facial morphs, a reduced deformation ske
 cp .local/assets/rain/rain.glb public/models/runner.glb && cp .local/assets/rain/rain.receipt.json public/models/runner.receipt.json
 ```
 
+## Sprite
+
+**Sprite Rig (CC) Blender Foundation | studio.blender.org**
+
+`sprite.glb` adapts [Sprite](https://studio.blender.org/characters/sprite/v1/) from the open movie Sprite Fright under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); see [sprite.receipt.json](sprite.receipt.json) for source and runtime SHA-256, sizes and conversion measurements. The public download (`sprite.blend`, SHA-256 `f0dfeae2b529a712f0c7fdf0d5870627067e996f5e5a0af66bc8b5c8e22c7d5e`) embeds a ReadMe.txt text block stating the rig is provided under CC BY by Blender Studio, matching the character page.
+
+Modifications: 21 evaluated ARKit-named facial morphs from the rig's own pose assets and lip/eyelid actions, a reduced deformation skeleton with four weights per vertex, a relaxed arm pose, authored Idle and two subtle expression clips, and flat materials with colors matched to the source shading. Attribution, the license link and an indication of changes are required; preserve the embedded credit (`asset.copyright`) when sharing the model or exports derived from it. Regenerate with:
+
+```sh
+.local/tools/Blender.app/Contents/MacOS/Blender --background --factory-startup --disable-autoexec --python-exit-code 1 --python scripts/prepare-character.py -- --profile sprite --receipt .local/assets/blender-studio/sprite.receipt.json
+cp .local/assets/blender-studio/sprite.glb public/models/sprite.glb && cp .local/assets/blender-studio/sprite.receipt.json public/models/sprite.receipt.json
+```
+
 ## Original procedural subjects
 
-`src/scenes/procedural.ts` constructs Idlewild's bubbles, star, baby dragon and the fallback runner (used only if `runner.glb` cannot load) from mathematical geometry. These contain no downloaded third-party artwork. The baby dragon has its own juvenile proportions, articulated wings/limbs, eyes and jaw; it is not a scaled European-dragon asset. Generated geometry and baked animation may be reused in the creator's projects. User-imported assets retain their own rights and licenses.
+`src/scenes/procedural.ts` constructs Idlewild's bubbles, star and the fallback runner (used only if `runner.glb` cannot load) from mathematical geometry. These contain no downloaded third-party artwork. Generated geometry and baked animation may be reused in the creator's projects. User-imported assets retain their own rights and licenses.

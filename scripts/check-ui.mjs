@@ -120,7 +120,7 @@ try {
   await expect(page.locator('#character-button')).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('[data-scene="robot"]')).toBeFocused();
   const menu = await page.evaluate(() => [...document.querySelectorAll('#character-menu button')].filter(item => item.checkVisibility()).map(item => item.id || item.dataset.scene));
-  assert.deepEqual(menu, ['menu-own-character', 'robot', 'snow', 'bubbles', 'star', 'dragon', 'baby-dragon', 'runner', 'brain'], 'Menu lists the own-character entry first, then registry defaults; no import before one is loaded');
+  assert.deepEqual(menu, ['menu-own-character', 'robot', 'snow', 'bubbles', 'star', 'dragon', 'sprite', 'runner', 'brain'], 'Menu lists the own-character entry first, then registry defaults; no import before one is loaded');
   const [own, item] = await Promise.all([page.locator('#menu-own-character').boundingBox(), page.locator('[data-scene="robot"]').boundingBox()]);
   assert.ok(own.width > item.width && own.height >= item.height, 'Use your own character is the most prominent menu entry');
   for (const viewport of sizes) { await page.setViewportSize(viewport); assert.equal(await fits(), true, `Open menu fits ${viewport.width}×${viewport.height}`); }
@@ -316,7 +316,7 @@ try {
   await page.locator('#play').click();
   report.checks.push('record, trim, replay and loop');
   await page.locator('#timeline').fill('500');
-  const sceneIds = ['robot', 'bubbles', 'star', 'dragon', 'baby-dragon', 'runner', 'brain'];
+  const sceneIds = ['robot', 'bubbles', 'star', 'dragon', 'runner', 'brain'];
   for (const scene of sceneIds) {
     await pickScene(scene);
     await expect(page.locator('#brain-legend')).toBeVisible({ visible: scene === 'brain' });
@@ -335,13 +335,13 @@ try {
       return { ...JSON.parse(document.querySelector('#stage').dataset.diagnostics), frameMedianMs: sorted[Math.floor(sorted.length / 2)], frameP95Ms: sorted[Math.floor(sorted.length * 0.95)], heapBytes: performance.memory?.usedJSHeapSize ?? null };
     });
   }
-  await pickScene('baby-dragon');
+  await pickScene('star');
   report.exports.wav = await download('#export-wav');
   report.exports.glb = await download('#export-glb');
   report.exports.video = await download('#export-video');
   await pickScene('robot');
   await download('#export-video', true);
-  await pickScene('baby-dragon');
+  await pickScene('star');
   await page.locator('#open-export').click();
   await page.locator('#export-video').click();
   await expect(page.locator('#cancel-export')).toBeVisible();

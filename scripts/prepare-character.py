@@ -88,6 +88,71 @@ RAIN_CREDIT = (
 )
 
 
+SPRITE_CREDIT = (
+    "Sprite Rig (CC) Blender Foundation | studio.blender.org; "
+    "https://studio.blender.org/characters/sprite/v1/; "
+    "CC BY 4.0 https://creativecommons.org/licenses/by/4.0/; "
+    "Modified for Idlewild: evaluated facial morphs, reduced deformation rig, relaxed arm pose, "
+    "authored idle and subtle expression clips, simplified flat materials."
+)
+
+
+def sprite_parent_overrides():
+    result = {"DEF-RibCage": "DEF-Spine", "DEF-Chest": "DEF-RibCage", "DEF-Head": "DEF-Chest", "DEF-Jaw": "DEF-Head"}
+    for side in ("L", "R"):
+        result.update({
+            f"DEF-UpperArm1.{side}": "DEF-Chest", f"DEF-UpperArm2.{side}": f"DEF-UpperArm1.{side}",
+            f"DEF-Forearm1.{side}": f"DEF-UpperArm2.{side}", f"DEF-Forearm2.{side}": f"DEF-Forearm1.{side}",
+            f"DEF-Wrist.{side}": f"DEF-Forearm2.{side}",
+            f"DEF-Thigh1.{side}": "DEF-Spine", f"DEF-Thigh2.{side}": f"DEF-Thigh1.{side}", f"DEF-Knee1.{side}": f"DEF-Thigh2.{side}",
+            f"DEF-Knee2.{side}": f"DEF-Knee1.{side}", f"DEF-Foot.{side}": f"DEF-Knee2.{side}", f"DEF-Toes.{side}": f"DEF-Foot.{side}",
+            f"DEF-Eye.{side}": "DEF-Head",
+        })
+        for finger in ("Index", "Ring", "Pinky", "Thumb"):
+            result[f"DEF-Finger_{finger}2.{side}"] = f"DEF-Wrist.{side}"
+            result[f"DEF-Finger_{finger}3.{side}"] = f"DEF-Finger_{finger}2.{side}"
+    return result
+
+
+def sprite_morph(name, action, frames, neutral, subset, mesh, axis, sign, **extra):
+    part = {"action": action, "frames": frames, "neutral": neutral, "subset": subset, "expect": {"mesh": mesh, "axis": axis, "sign": sign}}
+    if extra.pop("lateral", False):
+        part["expect"]["lateral"] = True
+    part.update(extra)
+    return part
+
+
+def sprite_morphs():
+    head, brows = "GEO-sprite_body_head", "GEO-sprite_eyebrows"
+    morphs = []
+    for side, suffix in (("left", "Left"), ("right", "Right")):
+        morphs += [
+            {"name": f"eyeBlink{suffix}", "parts": [sprite_morph("", "Sprite_eyes_closed", [2], 20, side, head, 2, -1)]},
+            {"name": f"mouthSmile{suffix}", "parts": [sprite_morph("", "Sprite_mouth_smileclosed", [14], 20, side, head, 2, 1)]},
+            {"name": f"browDown{suffix}", "parts": [sprite_morph("", "Sprite_eyemask_focus", [1], 1, side, brows, 2, -1, blend=0.45)]},
+            {"name": f"mouthPress{suffix}", "parts": [sprite_morph("", "RIG.Sprite_LipsThin", [0, 20], 10, side, head, 0, -1, lateral=True, amount=0.5)]},
+            {"name": f"mouthFrown{suffix}", "parts": [sprite_morph("", "Sprite_mouth_frownclosed", [45], 20, side, head, 2, -1)], "optional": True},
+            {"name": f"mouthStretch{suffix}", "parts": [sprite_morph("", "RIG.Sprite_LipsWide", [0, 20], 10, side, head, 0, 1, lateral=True)], "optional": True},
+            {"name": f"eyeWide{suffix}", "parts": [sprite_morph("", "RIG.Sprite_UpperLidUpDown", [0, 40], 20, side, head, 2, 1)], "optional": True},
+            {"name": f"eyeSquint{suffix}", "parts": [sprite_morph("", "RIG.Sprite_LowerLidUpDown", [0, 40], 20, side, head, 2, 1)], "optional": True},
+        ]
+    morphs += [
+        {"name": "jawOpen", "parts": [{"bone": "Jaw", "prop": "rotation_euler", "index": 0, "values": [0.35, -0.35], "expect": {"mesh": head, "axis": 2, "sign": -1}}]},
+        {"name": "browInnerUp", "parts": [sprite_morph("", "Sprite_eyemask_scared", [25], 20, "all", brows, 2, 1, amount=0.7)]},
+        {"name": "mouthFunnel", "parts": [sprite_morph("", "RIG.Sprite_LipsThin", [0, 20], 10, "left", head, 1, -1, amount=0.8),
+                                          sprite_morph("", "RIG.Sprite_LipsThin", [0, 20], 10, "right", head, 1, -1, amount=0.8),
+                                          sprite_morph("", "RIG.Sprite_Lips_Upper_Roll", [0, 20], 10, "all", head, 1, -1, amount=0.6, optional=True)]},
+        {"name": "mouthPucker", "parts": [sprite_morph("", "RIG.Sprite_LipsThin", [0, 20], 10, "left", head, 0, -1, lateral=True),
+                                          sprite_morph("", "RIG.Sprite_LipsThin", [0, 20], 10, "right", head, 0, -1, lateral=True)]},
+        {"name": "mouthClose", "parts": [sprite_morph("", "RIG.Sprite_Lips_Upper_Roll", [0, 20], 10, "all", head, 1, 1, optional=True),
+                                         sprite_morph("", "RIG.Sprite_Lips_Lower_Roll", [0, 20], 10, "all", head, 1, 1, optional=True)]},
+    ]
+    for morph in morphs:
+        for part in morph["parts"]:
+            part.pop("", None)
+    return morphs
+
+
 def rain_parent_overrides():
     result = {"DEF-Spine1": "DEF-Pelvis", "DEF-Head": "DEF-Neck", "DEF-Jaw": "DEF-Head", "DEF-Head_Top": "DEF-Head",
               "DEF-Hair_Ponytail1": "DEF-Head", "DEF-Hair_Ponytail2": "DEF-Hair_Ponytail1", "DEF-Hair_Ponytail3": "DEF-Hair_Ponytail2", "DEF-Hair_Ponytail4": "DEF-Hair_Ponytail3",
@@ -285,6 +350,70 @@ PROFILES = {
         "arm_note": "relaxed upper-arm rotations measured from the source pose",
     },
 }
+PROFILES["sprite"] = {
+    "ready": True,
+    "id": "sprite", "prefix": "Sprite", "rig": "RIG-Sprite", "credit": SPRITE_CREDIT,
+    "input": ".local/assets/blender-studio/sprite.blend", "output": ".local/assets/blender-studio/sprite.glb",
+    "archive": ".local/assets/blender-studio/sprite.blend",
+    "receipt": {
+        "title": "Sprite for Idlewild", "author": "Blender Foundation / Blender Studio",
+        "source": "https://studio.blender.org/characters/sprite/v1/",
+        "sourceDownload": "https://studio.blender.org/download-source/files/d9/d985a2f5f303ad2f1abe49c316b566b1/d985a2f5f303ad2f1abe49c316b566b1.blend",
+        "sourceSha256": "f0dfeae2b529a712f0c7fdf0d5870627067e996f5e5a0af66bc8b5c8e22c7d5e", "sourceBytes": 7201290,
+        "license": "CC BY 4.0", "licenseUrl": "https://creativecommons.org/licenses/by/4.0/", "retrieved": "2026-11-12",
+        "licenseEvidence": "The Blender Studio character page (https://studio.blender.org/characters/sprite/v1/, 'License: CC-BY', free public download) and the ReadMe.txt text block embedded in the .blend ('provided under the CC-BY license by the Blender Studio', https://creativecommons.org/licenses/by/4.0/).",
+    },
+    "meshes": (
+        "GEO-sprite_body_arms", "GEO-sprite_body_head", "GEO-sprite_body_legs", "GEO-sprite_body_torso", "GEO-sprite_cap",
+        "GEO-sprite_diaper", "GEO-sprite_eye.L", "GEO-sprite_eye.R", "GEO-sprite_eyebrows", "GEO-sprite_eyedot.L", "GEO-sprite_eyedot.R",
+        "GEO-sprite_teeth_btm", "GEO-sprite_teeth_top", "GEO-sprite_tongue",
+    ),
+    "mesh_rename": ("GEO-sprite", "Sprite"),
+    "skeleton": {
+        "mode": "auto", "max_joints": 128, "root": "DEF-Spine", "default": "DEF-Head", "parent_overrides": sprite_parent_overrides(),
+        "fallback_rules": [
+            (r"^DEF-(Bridge_Lower_Chin|Chin|Lip_Bottom|OuterLip_Lower|Teeth_Lower|Gum_Lower|Tongue|JawLine)", "DEF-Jaw"),
+            (r"^DEF-Eye_Highlight\.L", "DEF-Eye.L"), (r"^DEF-Eye_Highlight\.R", "DEF-Eye.R"),
+            (r"^DEF-(UpperArm_Bridge)\.L", "DEF-UpperArm1.L"), (r"^DEF-(UpperArm_Bridge)\.R", "DEF-UpperArm1.R"),
+            (r"^DEF-Toe[0-9]\.L", "DEF-Toes.L"), (r"^DEF-Toe[0-9]\.R", "DEF-Toes.R"),
+            (r"^DEF-", "DEF-Head"),
+        ],
+        "exclude": [r"^DEF-(Bridge|BrowRing|Cap|Cheek|Chin|Ear|Evil_Eyebrow|Eye_Highlight|Eyebrow|Eyelid|ForeheadRing|Gum|HeadSide|Head_Top|JawLine|Lip|Nose|OuterLip|Teeth|Tongue|UpperArm_Bridge|Toe[0-9])"],
+        "rename": {},
+    },
+    "renames": {"DEF-Chest": "Chest"},
+    "rigid_meshes": {"GEO-sprite_teeth_top": "DEF-Head", "GEO-sprite_teeth_btm": "DEF-Jaw", "GEO-sprite_tongue": "DEF-Jaw", "GEO-sprite_eyedot.L": "DEF-Eye.L", "GEO-sprite_eyedot.R": "DEF-Eye.R"},
+    "max_discarded": 0.14,
+    "left_reference": "DEF-Eye.L",
+    "subdiv": 1,
+    "neutral_actions": ("Sprite_face_default", "Sprite_mouth_default"),
+    "allowed_invalid_drivers": {'key_blocks["WristUp80.L"].value', 'key_blocks["WristUp80.R"].value'},
+    "stale_bones": set(),
+    "stale_bone_patterns": [],
+    "stale_properties": set(),
+    "morphs": sprite_morphs(),
+    "min_morphs": 13,
+    "max_triangles": 90_000,
+    "min_hip_height": 0.02,
+    "textures": {
+        "mode": "auto", "material_prefix": "sprite.", "roughness": {"sprite.eyes": 0.2, "sprite.pupils": 0.2, "sprite.teeth": 0.35},
+        "colors": {"sprite.skin.001": (0.24, 0.5, 0.12, 1), "sprite.head": (0.24, 0.5, 0.12, 1), "sprite.cap": (0.62, 0.07, 0.05, 1), "sprite.cap_inside": (0.86, 0.79, 0.7, 1), "sprite.diaper": (0.55, 0.05, 0.08, 1),
+                   "sprite.eyes": (0.92, 0.92, 0.9, 1), "sprite.pupils": (0.05, 0.035, 0.02, 1), "sprite.highlights": (1, 1, 1, 1),
+                   "sprite.teeth": (0.9, 0.88, 0.8, 1)},
+    },
+    "roles": {
+        "hips": "DEF-Spine", "chest": "Chest", "head": "DEF-Head",
+        "upperarm.L": "DEF-UpperArm1.L", "upperarm.R": "DEF-UpperArm1.R", "forearm.L": "DEF-Forearm1.L", "forearm.R": "DEF-Forearm1.R",
+        "wrist.L": "DEF-Wrist.L", "wrist.R": "DEF-Wrist.R", "thigh.L": "DEF-Thigh1.L", "thigh.R": "DEF-Thigh1.R",
+        "knee.L": "DEF-Knee1.L", "knee.R": "DEF-Knee1.R",
+    },
+    "forward": (0, -1, 0),
+    "arm_angle": None,
+    "clips": ("Idle",),
+    "expressions": (("Soft smile", ("mouthSmileLeft", "mouthSmileRight"), 0.18), ("Brow motion", ("browInnerUp",), 0.15)),
+    "derivation": "scripts/prepare-character.py --profile sprite, Blender 4.5.9 LTS, scripts disabled",
+    "arm_note": "relaxed upper-arm rotations measured from the source pose",
+}
 PROFILE = PROFILES["snow"]
 CREDIT = PROFILE["credit"]
 STALE_POSE_BONES = PROFILE["stale_bones"]
@@ -396,7 +525,7 @@ def preflight_pose_channels(rig, channels):
     return filtered, sorted(skipped_bones), sorted(skipped_properties)
 
 
-def apply_pose(rig, channels, subset="all"):
+def apply_pose(rig, channels, subset="all", blend=1.0):
     count = 0
     for name, prop, index, value, custom in channels:
         selected = subset == "all" or (subset == "left" and name.endswith(".L")) or (subset == "right" and name.endswith(".R"))
@@ -408,15 +537,15 @@ def apply_pose(rig, channels, subset="all"):
         require(bone is not None, f"Pose references missing bone: {name}")
         if custom:
             require(prop in bone and isinstance(bone[prop], (int, float)), f"Unsupported pose property: {name}.{prop}")
-            bone[prop] = value
+            bone[prop] = bone[prop] + (value - bone[prop]) * blend
         else:
             values = getattr(bone, prop)
             if isinstance(values, (int, float)):
                 require(index == 0, f"Invalid pose component: {name}.{prop}")
-                setattr(bone, prop, value)
+                setattr(bone, prop, values + (value - values) * blend)
             else:
                 require(0 <= index < len(values), f"Invalid pose component: {name}.{prop}")
-                values[index] = value
+                values[index] = values[index] + (value - values[index]) * blend
         count += 1
     require(count > 0, f"Pose has no {subset} controls")
 
@@ -1086,7 +1215,7 @@ def author_run(rig, idle):
     hips = rig.pose.bones[roles["hips"]]
     hips_rest = (rig.matrix_world @ rig.data.bones[roles["hips"]].matrix_local).to_quaternion()
     height = (rig.matrix_world @ rig.data.bones[roles["hips"]].head_local).z
-    require(height > 0.2, "Hips rest height is implausible")
+    require(height > PROFILE.get("min_hip_height", 0.2), "Hips rest height is implausible")
     for name in [*names.values(), roles["hips"]]:
         rig.pose.bones[name].rotation_mode = "QUATERNION"
     rig.animation_data.action = None
@@ -1241,7 +1370,9 @@ class PartResolver:
                         self.muted.append(constraint)
         if part.get("bones_match"):
             channels = [item for item in channels if re.search(part["bones_match"], item[0])]
-        apply_pose(self.rig, channels, part.get("subset", "all"))
+        blend = part.get("blend", 1.0)
+        require(0 < blend <= 1, "Part blend must be in (0, 1]")
+        apply_pose(self.rig, channels, part.get("subset", "all"), blend)
 
     def mean_vector(self, expect):
         record = self.records[expect["mesh"]]

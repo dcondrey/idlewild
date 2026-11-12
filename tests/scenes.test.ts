@@ -7,7 +7,7 @@ import { rehearsalFrame } from '../src/rehearsal.ts';
 import { FACE_SHAPES, SIGNAL_STALE_MS, type Channel, type FaceShape, type SceneFrame, type Signal, type TrackingFrame } from '../src/contracts.ts';
 import type { SceneSubject } from '../src/scenes/types.ts';
 import { createCharacter } from '../src/scenes/character.ts';
-import { createBabyDragon, createBubbles, createRunner, createStar } from '../src/scenes/procedural.ts';
+import { createBubbles, createRunner, createStar } from '../src/scenes/procedural.ts';
 import { sceneDynamics, signalValue } from '../src/scenes/dynamics.ts';
 import { disposeObject, fitModel } from '../src/scenes/resources.ts';
 
@@ -101,7 +101,7 @@ test('scene signals become neutral for invalid, future and stale input', () => {
 });
 
 test('procedural subjects seek deterministically and reduced motion removes time-dependent transforms', () => {
-  for (const factory of [createBabyDragon, createBubbles, createRunner, createStar]) {
+  for (const factory of [createBubbles, createRunner, createStar]) {
     const subject = factory();
     subject.update(input(1000));
     const before = transforms(subject.root);
@@ -548,7 +548,7 @@ test('every scene responds to each SDK signal only while it is valid and fresh',
     ['dragon', createCharacter(dragon.scene, dragon.animations, 'dragon')],
     ['snow', createCharacter(snow.scene, snow.animations, 'imported')],
     ['runner character', trackingRig('runner').subject],
-    ['bubbles', createBubbles()], ['star', createStar()], ['baby dragon', createBabyDragon()], ['runner', createRunner()],
+    ['bubbles', createBubbles()], ['star', createStar()], ['runner', createRunner()],
   ];
   for (const [name, subject] of subjects) {
     const capture = (frame: SceneFrame) => { subject.update(frame); return transforms(subject.root); };
