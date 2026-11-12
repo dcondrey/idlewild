@@ -12,6 +12,7 @@
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "test:ui": "node scripts/check-ui.mjs",
     "check": "npm test && npm run build && npm run test:ui",
+    "check:packaged": "node scripts/check-packaged.mjs",
     "notices": "node scripts/third-party-notices.mjs",
     "notices:check": "node scripts/third-party-notices.mjs --check",
     "dist": "npm run notices:check && npm run build && IDLEWILD_SIGN_LABEL=unsigned electron-builder --mac --arm64 -c.mac.identity=- -c.mac.notarize=false",

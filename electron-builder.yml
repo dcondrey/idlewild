@@ -3,6 +3,7 @@ productName: Idlewild
 copyright: Copyright (c) David Condrey
 asar: false
 npmRebuild: false
+publish: null
 directories:
   output: release
   buildResources: build
