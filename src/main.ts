@@ -10,11 +10,11 @@ import { validateFrame, validateTake, MAX_TAKE_JSON_BYTES } from './validation';
 import { createBreathContinuity } from './continuity';
 import { createCamera } from './camera';
 import { createSound, renderWav } from './audio';
-import { mountStudio, setupGuide, setupPanels, updateStudioFlow } from './ui';
+import { cameraErrorMessage, createBrainLegend, createCameraFeed, createFramingPrompt, mountStudio, setupCharacterMenu, setupGuide, setupPanels, updateStudioFlow } from './ui';
 import { bakeAnimation, exportControlData, exportPreview } from './exports';
 import { importCharacter, validateClipCompatibility, disposeImported } from './imports';
 import { assetCopyright, getAssetCopyright, setAssetCopyright } from './asset-credits';
-import { SCENE_REGISTRY } from './scenes/registry';
+import { SCENE_REGISTRY, type SceneEntry } from './scenes/registry';
 import type { AnimationClip, Group } from 'three';
 
 mountStudio(document.querySelector<HTMLElement>('#app')!);
@@ -24,9 +24,12 @@ const element = <T extends HTMLElement = HTMLElement>(id: string) => document.ge
 const input = (id: string) => element<HTMLInputElement>(id);
 const button = (id: string) => element<HTMLButtonElement>(id);
 const canvas = element<HTMLCanvasElement>('stage');
-const scenes = SCENE_REGISTRY.filter(entry => !entry.model);
+const FULL_BODY_SCENES: ReadonlySet<SceneId> = new Set(['robot', 'dragon', 'baby-dragon', 'runner', 'imported']);
+const userEntry = SCENE_REGISTRY.find(item => item.group === 'yours')!;
 let stage: Awaited<ReturnType<typeof createStage>> | null = null;
-let scene: SceneId = 'robot';
+let entry: SceneEntry = SCENE_REGISTRY[0];
+let importedEntry: SceneEntry | null = null;
+let loadingCharacter = false;
 let source: CaptureSource | null = null;
 let sourceKind: Source | null = null;
 let latest: ControlFrame | null = null;
@@ -52,11 +55,18 @@ const sound = createSound();
 const continuity = createBreathContinuity();
 const reducedPreference = matchMedia('(prefers-reduced-motion: reduce)');
 input('reduced-motion').checked = reducedPreference.matches;
+const applyMotionPreference = () => document.documentElement.classList.toggle('motion-reduced', input('reduced-motion').checked);
+applyMotionPreference();
+input('reduced-motion').addEventListener('change', applyMotionPreference);
 const camera = createCamera(element<HTMLVideoElement>('camera-preview'), () => {
   inputIntent++;
   void stopInput().then(() => message('The selected camera disconnected or frame submission failed. Reconnect it, refresh, then open a new preview.', true))
     .catch(() => message('Camera capture failed and cleanup could not finish. Stop again before retrying.', true));
 });
+const syncCameraFeed = createCameraFeed(element<HTMLVideoElement>('camera-preview'));
+const framing = createFramingPrompt();
+const renderBrainLegend = createBrainLegend();
+const menu = setupCharacterMenu(SCENE_REGISTRY, next => { void run(() => pickEntry(next)); });
 
 function message(text: string, error = false) {
   element('message').textContent = text;
@@ -88,12 +98,18 @@ function refreshActions() {
   button('save-key').disabled = !window.idlewild || busy || sourceKind === 'live';
   button('clear-key').disabled = !window.idlewild || !keySet;
   button('enable-sound').disabled = busy || exporting !== null;
-  input('camera').disabled = busy || exporting !== null;
+  for (const id of ['camera', 'face-camera']) input(id).disabled = busy || exporting !== null;
+  const faceDevice = camera.faceDeviceId;
+  const faceChoice = input('face-camera').value;
+  button('open-face-camera').disabled = busy || exporting !== null || (!faceDevice && (!camera.active || !input('face-consent').checked || !faceChoice || faceChoice === camera.deviceId));
+  button('open-face-camera').textContent = faceDevice ? 'Close face camera' : 'Open face camera';
+  element('face-preview').hidden = !faceDevice;
+  syncCameraFeed(camera.active);
   for (const id of ['motion', 'sensitivity', 'sound', 'runner-variant', 'import-data', 'import-model', 'reduced-motion']) input(id).disabled = exporting !== null || busy;
-  for (const id of ['try-snow', 'detail-view']) button(id).disabled = exporting !== null || busy;
+  for (const id of ['detail-view', 'use-own-character', 'menu-own-character']) button(id).disabled = exporting !== null || busy;
   input('imported-clip').disabled = exporting !== null || busy || !importedClips.length;
   button('remove-model').disabled = exporting !== null || busy || !importedRoot;
-  for (const picker of element('scene-picker').querySelectorAll('button')) picker.disabled = busy || exporting !== null || (picker.dataset.scene === 'imported' && !importedRoot);
+  menu.setDisabled(busy || exporting !== null);
   button('cancel-export').hidden = !exporting;
   for (const id of ['open-export', 'open-edit']) button(id).disabled = !selected || busy || recorder !== null || exporting !== null;
   button('open-takes').disabled = !takes.length || busy || recorder !== null || exporting !== null;
@@ -172,6 +188,7 @@ async function stopInput() {
   sourceKind = null;
   latest = null;
   continuity.reset();
+  framing.reset();
   stopping = (async () => {
     const results = await Promise.allSettled([old?.dispose(), camera.stop(), sound.disable()]);
     button('enable-sound').textContent = 'Enable sound';
@@ -209,12 +226,13 @@ for (const [channel, name] of Object.entries(signalNames)) {
   card.append(label, value, quality); element('signals').append(card);
 }
 let lastSignalPaint = 0;
+let lastLegendPaint = 0;
 function animate(now: number) {
   if (disposed) return;
   if (!exporting && stage) {
     const data = currentInput(now);
     stage.update(data);
-    if (playing || sourceKind) sound.update(data, scene);
+    if (playing || sourceKind) sound.update(data, entry.scene);
     const duration = recorder?.durationMs ?? selected?.durationMs ?? 0;
     const displayTime = recorder ? Math.max(0, (latest?.timeMs ?? recordingOrigin) - recordingOrigin) : position;
     element('time').textContent = `${clockLabel(displayTime)} / ${clockLabel(duration)}`;
@@ -228,12 +246,15 @@ function animate(now: number) {
       lastSignalPaint = now;
       const diagnostics = stage.diagnostics();
       canvas.dataset.diagnostics = JSON.stringify(diagnostics);
-      const asset = scene === 'robot' || scene === 'dragon' ? diagnostics.assets[scene] : null;
-      element('stage-state').textContent = diagnostics.contextLost ? 'GRAPHICS LOST' : asset?.phase === 'loading' ? 'LOADING' : asset?.phase === 'error' ? 'ASSET UNAVAILABLE' : 'READY';
+      const asset = entry.scene in diagnostics.assets ? diagnostics.assets[entry.scene as keyof typeof diagnostics.assets] : null;
+      element('stage-state').textContent = diagnostics.contextLost ? 'GRAPHICS LOST' : loadingCharacter || asset?.phase === 'loading' ? 'LOADING' : asset?.phase === 'error' ? 'ASSET UNAVAILABLE' : 'READY';
       if (asset?.phase === 'error') message(asset.message, true);
       element('tracking-details').hidden = origin !== 'local-camera';
       element('physiology-details').hidden = origin === 'local-camera';
       const tracking = trackingAt(data);
+      if (sourceKind === 'local-camera' && FULL_BODY_SCENES.has(entry.scene)) framing.update(now, Boolean(tracking?.face && tracking.framing?.face && tracking.framing.tooClose));
+      else framing.reset();
+      if (entry.scene === 'brain' && now - lastLegendPaint >= 250) { lastLegendPaint = now; renderBrainLegend(stage.brainRegions(3)); }
       if (origin === 'local-camera') element('tracking-summary').textContent = `${tracking?.face ? 'Face tracked' : 'Face unavailable'} · ${tracking?.body ? `${Object.keys(tracking.body).length} body joints tracked` : 'Body unavailable'}`;
       for (const channel of Object.keys(signalNames) as (keyof typeof signalNames)[]) {
         const signal = data.frame?.signals[channel];
@@ -246,25 +267,25 @@ function animate(now: number) {
   raf = requestAnimationFrame(animate);
 }
 
-function chooseScene(id: SceneId) {
-  const item = scenes.find(item => item.scene === id);
-  if (!item) throw new Error('Unknown scene');
-  stage?.setScene(id); scene = id;
-  element('scene-title').textContent = item.title; element('scene-caption').textContent = item.caption;
-  button('detail-view').hidden = id !== 'imported'; button('detail-view').textContent = 'Close view'; button('detail-view').setAttribute('aria-pressed', 'false');
-  for (const other of element('scene-picker').querySelectorAll('button')) other.setAttribute('aria-pressed', String(other.dataset.scene === scene));
+function chooseEntry(next: SceneEntry) {
+  stage?.setScene(next.scene); entry = next;
+  element('scene-title').textContent = next.title; element('scene-caption').textContent = next.caption;
+  button('detail-view').hidden = next.scene !== 'imported'; button('detail-view').textContent = 'Close view'; button('detail-view').setAttribute('aria-pressed', 'false');
+  element('brain-legend').hidden = next.scene !== 'brain';
+  element('runner-choice').hidden = next.scene !== 'runner';
+  framing.reset();
+  menu.setCurrent(next);
+}
+async function pickEntry(next: SceneEntry) {
+  if (next.model && importedEntry?.id !== next.id) { await loadBundled(next); return; }
+  if (next.scene === 'imported' && !importedRoot) throw new Error('Use your own character to import one first.');
+  chooseEntry(next);
 }
 on('detail-view', () => {
   const enabled = button('detail-view').getAttribute('aria-pressed') !== 'true';
   stage?.setDetailView(enabled); button('detail-view').setAttribute('aria-pressed', String(enabled)); button('detail-view').textContent = enabled ? 'Full view' : 'Close view';
 });
-for (const item of scenes) {
-  const pick = document.createElement('button'); pick.textContent = item.label; pick.dataset.scene = item.scene; pick.setAttribute('aria-pressed', String(item.scene === scene));
-  pick.addEventListener('click', () => { void run(() => {
-    chooseScene(item.scene);
-  }); });
-  element('scene-picker').append(pick);
-}
+chooseEntry(entry);
 on('rehearse', async () => {
   const intent = ++inputIntent;
   await stopInput(); if (intent !== inputIntent) return;
@@ -275,10 +296,10 @@ on('rehearse', async () => {
   message('Synthetic rehearsal is running. Shape the scene, then record a take.');
 });
 element('stop-input').addEventListener('click', () => {
-  inputIntent++;
+  const intent = ++inputIntent;
   exporting?.abort();
   playing = false;
-  void stopInput().catch(() => message('Capture cleanup failed. Stop again before restarting.', true));
+  void stopInput().then(() => { if (intent === inputIntent) message(''); }, () => message('Capture cleanup failed. Stop again before restarting.', true));
 });
 on('record', async () => {
   if (recorder) { finishRecording(); await stopInput(); setTimeout(() => button('play').focus(), 0); return; }
@@ -341,6 +362,12 @@ async function refreshCameras() {
     if (camera.active) { inputIntent++; await stopInput(); message('The selected camera is unavailable. Choose a camera and reopen preview.', true); }
   }
   select.value = previous;
+  const faceSelect = element<HTMLSelectElement>('face-camera');
+  const face = camera.faceDeviceId ?? faceSelect.value;
+  faceSelect.replaceChildren(new Option('Choose a different camera', ''));
+  devices.forEach((device, index) => { const option = new Option(device.label || `Camera ${index + 1}`, device.deviceId); option.disabled = device.deviceId === camera.deviceId; faceSelect.add(option); });
+  faceSelect.value = devices.some(device => device.deviceId === face && device.deviceId !== camera.deviceId) ? face : '';
+  if (camera.faceDeviceId && faceSelect.value !== camera.faceDeviceId) { await camera.closeFace(); message('The face camera is unavailable. Choose another and open it again.', true); }
 }
 on('refresh-cameras', refreshCameras);
 on('preview', async () => {
@@ -348,16 +375,27 @@ on('preview', async () => {
   const intent = ++inputIntent;
   await stopInput(); if (intent !== inputIntent) return;
   playing = false;
-  await camera.start(input('camera').value || null); await refreshCameras();
+  try { await camera.start(input('camera').value || null); } catch (error) { throw new Error(cameraErrorMessage(error)); }
+  await refreshCameras();
   if (intent !== inputIntent || !camera.active) return;
   element('status').textContent = 'Camera preview only. No SDK measurement is running.';
   message('Preview ready. Start face and body tracking without a key.');
 });
 input('camera').addEventListener('change', () => { void run(async () => { await stopInput(); message('Camera changed. Open a new preview explicitly.'); }); });
+on('open-face-camera', async () => {
+  if (camera.faceDeviceId) { await camera.closeFace(); message('Face camera closed. Body tracking continues.'); return; }
+  const deviceId = input('face-camera').value;
+  try {
+    await camera.openFace({ video: element<HTMLVideoElement>('face-preview'), deviceId, consent: input('face-consent').checked, onDisconnect: () => { message('The face camera disconnected. Body tracking continues; reconnect it and open it again.', true); refreshActions(); } });
+  } catch (error) { throw new Error(cameraErrorMessage(error)); }
+  message('Face camera ready. It adds facial detail while the body camera tracks your body.');
+});
+input('face-consent').addEventListener('change', () => { if (input('face-consent').checked) { refreshActions(); return; } void camera.closeFace().then(refreshActions).catch(() => message('Face camera cleanup failed. Stop input before retrying.', true)); });
+input('face-camera').addEventListener('change', () => { if (camera.faceDeviceId) void run(async () => { await camera.closeFace(); message('Face camera changed. Open it again explicitly.'); }); else refreshActions(); });
 on('local-tracking', async () => {
   if (!input('camera-consent').checked || !camera.active || sourceKind !== null) throw new Error('Open a consented camera preview before starting local tracking.');
   sourceKind = 'local-camera'; latest = null; continuity.reset(); playing = false;
-  source = createLocalTrackingSource(element<HTMLVideoElement>('camera-preview'));
+  source = createLocalTrackingSource(element<HTMLVideoElement>('camera-preview'), { faceVideo: element<HTMLVideoElement>('face-preview') });
   try {
     await source.start(receiveFrame, status => {
       element('status').textContent = status.message;
@@ -400,11 +438,11 @@ async function exportTake(kind: 'data' | 'wav' | 'video' | 'glb') {
   message(kind === 'video' ? 'Rendering the video in real time. Keep this window visible; Cancel stops the export.' : 'Preparing your export…');
   try {
     const copyright = kind === 'video' ? getAssetCopyright(stage.getExportRoot()) : undefined;
-    const blob = kind === 'data' ? exportControlData(take) : kind === 'wav' ? await renderWav(take, scene, controls(), options.signal) : kind === 'glb' ?
-      await bakeAnimation(take, stage, controls(), options) : await exportPreview({ take, scene, controls: controls(), canvas, update: data => stage!.update(data), ...options, onProgress: progress => message(`Rendering video · ${Math.round(progress * 100)}%`) });
+    const blob = kind === 'data' ? exportControlData(take) : kind === 'wav' ? await renderWav(take, entry.scene, controls(), options.signal) : kind === 'glb' ?
+      await bakeAnimation(take, stage, controls(), options) : await exportPreview({ take, scene: entry.scene, controls: controls(), canvas, update: data => stage!.update(data), ...options, onProgress: progress => message(`Rendering video · ${Math.round(progress * 100)}%`) });
     options.signal.throwIfAborted();
-    if (copyright) save(new Blob([`${copyright}\n\nAdapted in Idlewild: rendered with performance animation, lighting and procedural sound.\n`], { type: 'text/plain;charset=utf-8' }), `idlewild-${scene}-${take.source}-credits.txt`);
-    save(blob, `idlewild-${scene}-${take.source}.${kind === 'data' ? 'json' : kind === 'video' ? 'webm' : kind}`);
+    if (copyright) save(new Blob([`${copyright}\n\nAdapted in Idlewild: rendered with performance animation, lighting and procedural sound.\n`], { type: 'text/plain;charset=utf-8' }), `idlewild-${entry.id}-${take.source}-credits.txt`);
+    save(blob, `idlewild-${entry.id}-${take.source}.${kind === 'data' ? 'json' : kind === 'video' ? 'webm' : kind}`);
     message(copyright ? 'Video and model credits are ready. Keep the credits with shared copies.' : 'Export prepared. Save the downloaded file to keep it.');
   } catch (error) {
     if (options.signal.aborted) message('Export canceled. The take is unchanged.'); else throw error;
@@ -419,7 +457,7 @@ input('import-data').addEventListener('change', () => { const file = input('impo
   if (!take.samples.length) throw new Error('The imported take contains no samples.');
   await stopInput(); takes = addTake(takes, take); selectTake(take); message('Control take imported. Its original source and signal quality are preserved.');
 }); });
-async function loadCharacter(file: File) {
+async function loadCharacter(file: File, owner: SceneEntry) {
   element<HTMLDialogElement>('import-dialog').close();
   if (!stage) throw new Error('Wait for the stage to finish loading.');
   const imported = await importCharacter(file);
@@ -432,32 +470,42 @@ async function loadCharacter(file: File) {
       setAssetCopyright(importedRoot, copyright);
     } finally { disposeImported(imported.root); }
   } else {
-    try { stage.setImported(imported.root, imported.clips); importedRoot = imported.root; importedClips = imported.clips; }
+    try { stage.setImported(imported.root, imported.clips); importedRoot = imported.root; importedClips = imported.clips; importedEntry = owner; }
     catch (error) { disposeImported(imported.root); throw error; }
   }
-  chooseScene('imported');
+  menu.setAvailable(userEntry.id, importedEntry === userEntry);
+  chooseEntry(importedEntry ?? owner);
   element('import-status').textContent = imported.summary; button('remove-model').hidden = !importedRoot;
   message(selected ? 'Import ready. Play your take or choose an animation in Import.' : 'Import ready. Start rehearsal to bring the character to life.');
   const copyright = importedRoot ? getAssetCopyright(importedRoot) : undefined;
   element('import-credits').hidden = !copyright; element('import-credit-text').textContent = copyright ?? '';
   const clips = element<HTMLSelectElement>('imported-clip'); clips.replaceChildren();
   importedClips.forEach((clip, index) => clips.add(new Option(clip.name || `Clip ${index + 1}`, String(index))));
-  clips.disabled = !importedClips.length;
+  clips.disabled = !importedClips.length; element('clip-choice').hidden = !importedClips.length;
   const idle = importedClips.findIndex(clip => clip.name.toLowerCase() === 'idle'); clips.value = String(Math.max(0, idle));
 }
-input('import-model').addEventListener('change', () => { const file = input('import-model').files?.[0]; input('import-model').value = ''; if (file) void run(() => loadCharacter(file)); });
-on('try-snow', async () => {
-  const response = await fetch('./models/snow.glb', { signal: AbortSignal.timeout(15_000) });
-  if (!response.ok) throw new Error('Snow could not load. Retry or import your own character.');
-  await loadCharacter(new File([await response.arrayBuffer()], 'snow.glb', { type: 'model/gltf-binary' }));
-});
+input('import-model').addEventListener('change', () => { const file = input('import-model').files?.[0]; input('import-model').value = ''; if (file) void run(() => loadCharacter(file, userEntry)); });
+async function loadBundled(next: SceneEntry) {
+  const replacing = importedEntry === userEntry;
+  loadingCharacter = true; element('stage-state').textContent = 'LOADING'; message(`Loading ${next.label}…`);
+  try {
+    let bytes: ArrayBuffer;
+    try {
+      const response = await fetch(next.model!, { signal: AbortSignal.timeout(15_000) });
+      if (!response.ok) throw new Error(String(response.status));
+      bytes = await response.arrayBuffer();
+    } catch { throw new Error(`${next.label} could not load. Choose it again to retry, or use your own character.`); }
+    await loadCharacter(new File([bytes], `${next.id}.glb`, { type: 'model/gltf-binary' }), next);
+  } finally { loadingCharacter = false; }
+  if (replacing) message(`${next.label} replaced your imported character. Import it again to switch back.`);
+}
 input('imported-clip').addEventListener('change', () => { void run(() => { const clip = importedClips[Number(input('imported-clip').value)]; if (clip) stage?.setImportedClips([clip]); }); });
 on('remove-model', () => {
-  if (scene === 'imported') chooseScene('robot');
-  stage?.setImported(null, []); importedRoot = null; importedClips = []; input('imported-clip').disabled = true; element('imported-clip').replaceChildren(); button('remove-model').hidden = true;
+  if (entry.scene === 'imported') chooseEntry(SCENE_REGISTRY[0]);
+  stage?.setImported(null, []); importedRoot = null; importedClips = []; importedEntry = null; menu.setAvailable(userEntry.id, false);
+  input('imported-clip').disabled = true; element('imported-clip').replaceChildren(); element('clip-choice').hidden = true; button('remove-model').hidden = true;
   element('import-status').textContent = 'Imported character removed.';
   element('import-credits').hidden = true; element('import-credit-text').textContent = '';
-  for (const pick of element('scene-picker').querySelectorAll('button')) pick.setAttribute('aria-pressed', String(pick.dataset.scene === scene));
 });
 
 const resize = new ResizeObserver(entries => { const rect = entries[0].contentRect; stage?.resize(rect.width, rect.height); });

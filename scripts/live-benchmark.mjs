@@ -85,8 +85,8 @@ try {
         if (status.phase === 'idle' && started !== null) { clearInterval(timer); cue.textContent = 'Benchmark stopped. No automatic restart.'; }
       });
     });
-    await page.locator('#open-import').click();
-    await page.locator('#try-snow').click();
+    await page.locator('#character-button').click();
+    await page.locator('[data-scene="snow"]').click();
     await expect(page.locator('#message')).toContainText('Import ready', { timeout: 20_000 });
     await page.locator('#detail-view').click();
     await page.evaluate(() => { document.getElementById('continuity').checked = true; });

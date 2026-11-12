@@ -63,7 +63,7 @@ Rising or falling pulse is not shown. A trend needs multiple distinct valid samp
 
 ## Rendering parameters
 
-- Each mesh gets its own clone of the GLB material once at load (102 materials, same shader program, disposed with the scene). Per frame only `emissiveIntensity` changes: 0.06 baseline glow for every region plus up to 0.9 for highlights. A per-hemisphere `ShaderMaterial` was rejected because the GLB exporter refuses custom shaders.
+- Each mesh gets its own clone of the GLB material once at load (102 materials, same shader program, disposed with the scene). Tissue albedo is shaded to 72% of the GLB color so highlights stay visible under ACES tone mapping. Per frame each region's display level is `smoothstep(0.05, 0.6, activity)^0.7`; it adds up to 1.4 orange emissive over a 0.04 baseline and tints albedo up to 85% toward orange. The legend still reports the unscaled activity. Verified in Electron with real pose inference (`artifacts/local-tracking/brain-body.png`); synthetic rehearsal drives only brief blink/talking cues, so the brain rests at baseline most of the time there. A per-hemisphere `ShaderMaterial` was rejected because the GLB exporter refuses custom shaders.
 - Attack is a smoothstep ramp on each current-frame input. Release comes from the existing freshness tapers above. There is no hidden easing state, so a seek or repeated frame gives the same output. Temporal smoothing stays in `src/tracking/mapping.ts`.
 - Labels list at most the three strongest regions at or above 0.15, using anatomical names.
 - Reduced motion or Motion 0 freezes the slow yaw and returns every region to the baseline glow.

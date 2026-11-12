@@ -68,11 +68,9 @@ try {
       item.once('done', (_event, state) => globalThis.__characterDownloads.push({ path: destination, state }));
     });
   }, output);
-  await page.locator('#open-import').click();
-  if (snow) await page.locator('#try-snow').click();
-  else await page.locator('#import-model').setInputFiles(model);
+  if (snow) { await page.locator('#character-button').click(); await page.locator('[data-scene="snow"]').click(); }
+  else { await page.locator('#open-import').click(); await page.locator('#import-model').setInputFiles(model); }
   await expect(page.locator('#message')).toContainText('Import ready', { timeout: 20_000 });
-  await page.locator('[data-scene="imported"]').click();
   await page.locator('#reduced-motion').uncheck();
   let neutral;
   for (const [name, blink, talking] of [['neutral', 0, 0], ['blink', 1, 0], ['jaw', 0, 1], ['combined', 1, 1], ...expressionClips.map(clip => [clip, 0, 0])]) {
@@ -126,7 +124,7 @@ try {
   await page.locator('#open-export').click();
   await page.locator('#export-video').click();
   await expect(page.locator('#cancel-export')).toBeVisible();
-  assert.deepEqual(await page.evaluate(() => ['imported-clip', 'remove-model', 'try-snow', 'detail-view'].map(id => document.getElementById(id).disabled)), [true, true, true, true]);
+  assert.deepEqual(await page.evaluate(() => ['imported-clip', 'remove-model', 'character-button', 'detail-view'].map(id => document.getElementById(id).disabled)), [true, true, true, true]);
   await page.locator('#cancel-export').click();
   await expect(page.locator('#message')).toContainText('canceled');
   await page.setViewportSize({ width: 760, height: 620 });

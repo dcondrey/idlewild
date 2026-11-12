@@ -29,13 +29,15 @@ try {
       item.once('done', (_event, state) => globalThis.__exports.push({ path: destination, state }));
     });
   }, output);
-  await page.waitForFunction(() => { const stats = JSON.parse(document.querySelector('#stage')?.dataset.diagnostics || '{}'); return stats.assets?.robot.phase === 'ready' && stats.assets?.dragon.phase === 'ready' && stats.assets?.brain.phase === 'ready'; });
+  await page.waitForFunction(() => { const stats = JSON.parse(document.querySelector('#stage')?.dataset.diagnostics || '{}'); return stats.assets?.robot.phase === 'ready' && stats.assets?.dragon.phase === 'ready' && stats.assets?.runner.phase === 'ready' && stats.assets?.brain.phase === 'ready'; });
   await page.locator('#open-import').click();
   await page.locator('#import-data').setInputFiles(fixture);
   await expect(page.locator('#take-count')).toHaveText('1 / 6');
   await page.locator('#reduced-motion').uncheck();
   for (const scene of ['robot', 'bubbles', 'star', 'dragon', 'baby-dragon', 'runner', 'brain']) {
+    await page.locator('#character-button').click();
     await page.locator(`[data-scene="${scene}"]`).click();
+    if (scene === 'brain') await expect(page.locator('#brain-caption')).toContainText('not your measured brain activity');
     await page.locator('#open-export').click();
     await page.locator('#export-glb').click();
     await expect.poll(async () => (await app.evaluate(() => globalThis.__exports)).length, { timeout: 30_000 }).toBe(results.length + 1);
@@ -46,10 +48,10 @@ try {
     assert.ok(json.animations?.[0].channels.length > 0);
     if (scene === 'robot' || scene === 'dragon') assert.match(json.asset.copyright, /CC0 1.0/);
     if (scene === 'brain') assert.match(json.asset.copyright, /CC BY-SA 3\.0/);
+    if (scene === 'runner') assert.match(json.asset.copyright, /CC BY 4\.0/);
     await page.locator('#open-import').click();
     await page.locator('#import-model').setInputFiles(saved.path);
     await expect(page.locator('#message')).toContainText('Import ready', { timeout: 15_000 });
-    await page.locator('[data-scene="imported"]').click();
     await page.locator('#timeline').fill('700');
     await page.screenshot({ path: path.join(output, `${scene}.png`) });
     await page.locator('#open-import').click();

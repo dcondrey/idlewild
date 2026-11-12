@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { sceneDynamics, signalValue } from './dynamics.ts';
+import { RUNNER_PACE } from './procedural.ts';
 import { disposeObject, fitModel } from './resources.ts';
 import { BONE_ALIASES, boneFinder, createRunnerMotion, createTracking, type CharacterMorph } from './tracking.ts';
 import type { SceneSubject } from './types.ts';
@@ -11,7 +12,8 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
   framing.name = `${kind}_Framing`;
   framing.add(model);
   const mixer = new THREE.AnimationMixer(model);
-  const clip = clips.find(candidate => candidate.name.toLowerCase() === 'idle') ?? clips[0];
+  const runClip = kind === 'runner' ? clips.find(candidate => candidate.name.toLowerCase() === 'run') : undefined;
+  const clip = runClip ?? clips.find(candidate => candidate.name.toLowerCase() === 'idle') ?? clips[0];
   if (clip) mixer.clipAction(clip).play();
   mixer.setTime(0);
   framing.updateMatrixWorld(true);
@@ -46,7 +48,7 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
   const tilt = (bone: THREE.Bone, axis: THREE.Vector3, angle: number) => { if (angle !== 0) bone.quaternion.multiply(offset.setFromAxisAngle(axis, angle)); };
   const animationPose = bones.map(bone => ({ bone, quaternion: bone.quaternion.clone(), scale: bone.scale.clone() }));
   const applyTracking = createTracking(model, bones, morphs);
-  const run = kind === 'runner' ? createRunnerMotion(model, bones) : null;
+  const run = kind === 'runner' && !runClip ? createRunnerMotion(model, bones) : null;
   let runnerVariant: 0 | 1 | 2 = 1;
   let disposed = false;
   function restoreAnimationPose() {
@@ -65,7 +67,7 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
   }
   return {
     root,
-    setVariant: run ? variant => {
+    setVariant: kind === 'runner' ? variant => {
       if (variant !== 0 && variant !== 1 && variant !== 2) throw new Error('Unknown runner profile');
       runnerVariant = variant;
     } : undefined,
@@ -83,7 +85,7 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
       const { time, motion, breath, breathingPace, pulsePace, blink, talking } = sceneDynamics(input);
       const signals = motion > 0 && input.frame?.source !== 'local-camera';
       restoreAnimationPose();
-      mixer.setTime(time * motion);
+      mixer.setTime(time * motion * (runClip ? RUNNER_PACE[runnerVariant] : 1));
       rememberAnimationPose();
       const headPitch = -pulsePace * 0.05 + (signals && !blinkMorphs ? blink * 0.06 : 0);
       const headRoll = signals && !jaw && !jawMorphs ? talking * 0.05 : 0;

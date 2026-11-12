@@ -86,7 +86,7 @@ try {
       return stream;
     } });
   }, fixtures);
-  await page.locator('#open-import').click(); await page.locator('#try-snow').click();
+  await page.locator('#character-button').click(); await page.locator('[data-scene="snow"]').click();
   await expect(page.locator('#message')).toContainText('Import ready', { timeout: 20_000 });
   await page.locator('#open-camera').click();
   await expect(page.locator('#local-tracking')).toBeDisabled();
@@ -100,6 +100,15 @@ try {
   await page.locator('#record').click();
   await page.waitForTimeout(2200);
   await page.locator('#stage').screenshot({ path: path.join(output, 'body.png') });
+  await page.locator('#character-button').click(); await page.locator('[data-scene="brain"]').click();
+  const brainRows = page.locator('#brain-regions li:not([hidden]):not(.baseline)');
+  await expect(brainRows.first()).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(600);
+  const brainRegions = await brainRows.allTextContents();
+  assert.ok(brainRegions.length > 0, 'Tracked body pose highlights brain regions');
+  report.brainRegions = brainRegions;
+  await page.locator('#stage').screenshot({ path: path.join(output, 'brain-body.png') });
+  await page.locator('#character-button').click(); await page.locator('[data-scene="snow"]').click();
   await page.evaluate(() => { window.__fixtureMode = 'portrait'; });
   await expect(page.locator('#tracking-summary')).toContainText('Face tracked', { timeout: 15_000 });
   await page.waitForTimeout(1500);

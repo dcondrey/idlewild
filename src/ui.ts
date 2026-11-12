@@ -1,3 +1,32 @@
+import type { SceneEntry } from './scenes/registry';
+import { BRAIN_CAPTION, type BrainRegion } from './scenes/brain';
+
+const FRAMING_DELAY_MS = 1000;
+const NOTICE_MAX_CHARS = 512 * 1024;
+
+const ICON_PATHS: Record<string, string> = {
+  robot: '<rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 8V4.5M9.5 13h.01M14.5 13h.01M9.5 16h5"/>',
+  snow: '<circle cx="12" cy="7.5" r="3.5"/><path d="M5 20c.9-4 3.8-6 7-6s6.1 2 7 6"/>',
+  bubbles: '<circle cx="9" cy="14.5" r="5"/><circle cx="16.5" cy="7.5" r="3"/><circle cx="18" cy="15.5" r="1.5"/>',
+  star: '<path d="M12 3.5l2.5 5.4 5.9.7-4.4 4 1.2 5.9L12 16.6l-5.2 2.9L8 13.6l-4.4-4 5.9-.7z"/>',
+  dragon: '<path d="M3 18c4.5 0 7-3 8-8 1.8 2.8 5 4 10 3-2.8 3.2-6.8 5-11.5 5"/><path d="M11 10L8.5 4.5l5 3.2"/>',
+  'baby-dragon': '<circle cx="12" cy="13.5" r="5.5"/><path d="M8.5 9L6.5 4.5l4 2.2M15.5 9l2-4.5-4 2.2M10 13h.01M14 13h.01"/>',
+  runner: '<circle cx="14.5" cy="4.5" r="2"/><path d="M8 21l3-6 3 2.2V21M5.5 12.5l4-4h4.2l2 4 3 1"/>',
+  brain: '<path d="M11 5.5a3 3 0 0 0-5 2 3 3 0 0 0-1.5 5 3 3 0 0 0 2 4.5 3 3 0 0 0 4.5 1.5zM13 5.5a3 3 0 0 1 5 2 3 3 0 0 1 1.5 5 3 3 0 0 1-2 4.5 3 3 0 0 1-4.5 1.5z"/>',
+  imported: '<path d="M12 15V4.5M7.5 9L12 4.5 16.5 9M5 19.5h14"/>',
+  add: '<path d="M12 5v14M5 12h14"/>',
+};
+
+function icon(id: string) {
+  return `<svg class="scene-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[id] ?? ICON_PATHS.imported}</svg>`;
+}
+
+function byId<T extends HTMLElement = HTMLElement>(id: string) {
+  const found = document.getElementById(id);
+  if (!found) throw new Error(`Missing studio element #${id}`);
+  return found as T;
+}
+
 export function mountStudio(root: HTMLElement) {
   root.innerHTML = `
     <header class="topbar">
@@ -13,9 +42,32 @@ export function mountStudio(root: HTMLElement) {
         <div class="acquisition"><span id="source-badge" class="tag">NO INPUT</span><p id="status" role="status" aria-live="polite">Ready for a rehearsal.</p><button id="stop-input" class="wide danger" title="Stop input and release the camera" hidden>Stop input</button><button id="open-signals" class="text-button" hidden>View signal details</button></div>
       </aside>
       <section class="stage-panel" aria-label="Creative stage">
-        <div class="stage-heading"><h2 id="scene-title">The robot</h2><button id="detail-view" class="quiet" aria-pressed="false" hidden>Close view</button><span id="stage-state" class="tag">LOADING</span></div>
-        <div class="viewport"><canvas id="stage" aria-label="Animated creative scene"></canvas><div class="stage-caption"><span id="scene-caption">Breathing gives a character its own rhythm.</span><span id="input-watermark">NO INPUT</span></div></div>
-        <div id="scene-picker" class="scene-picker" role="group" aria-label="Choose a scene"></div>
+        <div class="stage-heading">
+          <div id="character-picker" class="character-picker">
+            <button id="character-button" class="character-button" aria-expanded="false" aria-controls="character-menu"><span id="character-icon" class="character-icon">${icon('robot')}</span><span class="character-kicker">Character</span><strong id="character-current">Robot</strong><span class="chevron" aria-hidden="true"></span></button>
+            <div id="character-menu" class="character-menu" hidden>
+              <button id="menu-own-character" class="own-tile">${icon('add')}<span><strong>Use your own character</strong><span>GLB or glTF · see rig requirements</span></span></button>
+              <p id="defaults-label" class="menu-label">Included</p>
+              <div id="scene-picker" class="scene-grid" role="group" aria-labelledby="defaults-label"></div>
+              <p id="yours-label" class="menu-label" hidden>Yours</p>
+              <div id="yours-picker" class="scene-grid" role="group" aria-labelledby="yours-label" hidden></div>
+            </div>
+          </div>
+          <button id="use-own-character" class="accent-outline" aria-label="Use your own character">${icon('add')}<span class="label-long">Use your own character</span><span class="label-short" aria-hidden="true">Use your own</span></button>
+          <span id="stage-state" class="tag">LOADING</span>
+        </div>
+        <div class="viewport">
+          <canvas id="stage" aria-label="Animated creative scene"></canvas>
+          <div class="stage-overlay">
+            <div class="overlay-start">
+              <button id="detail-view" class="overlay-button" aria-pressed="false" hidden>Close view</button>
+              <div id="framing-region" role="status" aria-live="polite"><div id="framing-prompt" class="framing-prompt" hidden><p>Move back so your whole body is visible.</p><button id="dismiss-framing" class="dismiss" aria-label="Dismiss framing tip">×</button></div></div>
+              <div id="brain-legend" class="brain-legend" hidden><p id="brain-caption">${BRAIN_CAPTION}</p><ul id="brain-regions" class="brain-regions" aria-live="off" aria-label="Simulated region highlights" aria-describedby="brain-caption"></ul></div>
+            </div>
+            <div id="pip" class="pip" hidden><video id="pip-video" muted playsinline autoplay aria-label="Live camera feed. Not recorded or exported."></video><button id="pip-toggle" class="overlay-button" aria-controls="pip-video" aria-expanded="true">Hide camera</button></div>
+          </div>
+          <div class="stage-caption"><div class="caption-copy"><h2 id="scene-title">The robot</h2><span id="scene-caption">A small character with a rhythm of its own.</span></div><span id="input-watermark">NO INPUT</span></div>
+        </div>
         <div id="transport" class="transport" hidden>
           <div class="transport-top"><button id="record" class="record" hidden>● Record take</button><button id="play" hidden>Play</button><label id="loop-control" class="check" hidden><input id="loop" type="checkbox" checked> Loop</label><output id="time">0:00.00 / 0:00.00</output><div id="take-actions" class="take-actions" hidden><button id="open-edit" class="quiet">Edit</button><button id="open-export">Export</button></div></div>
           <div id="timeline-control" hidden><label class="sr-only" for="timeline">Playback position</label><input id="timeline" type="range" min="0" max="0" value="0" step="1"></div>
@@ -27,20 +79,27 @@ export function mountStudio(root: HTMLElement) {
         <span class="eyebrow">MAKE IT YOURS</span><h2>Shape it.</h2>
         <div id="creative-controls"><label for="motion">Motion <output id="motion-value">70%</output></label><input id="motion" type="range" min="0" max="100" value="70"><label for="sensitivity">Sensitivity <output id="sensitivity-value">65%</output></label><input id="sensitivity" type="range" min="0" max="100" value="65"><label for="sound">Sound <output id="sound-value">45%</output></label><input id="sound" type="range" min="0" max="100" value="45"><button id="enable-sound" class="wide">Enable sound</button></div>
         <label class="check reduce-motion"><input id="reduced-motion" type="checkbox"> Reduce motion</label>
-        <div class="runner-choice"><label for="runner-variant">Runner character</label><select id="runner-variant"><option value="0">Coral</option><option value="1">Ocean</option><option value="2">Meadow</option></select></div>
+        <div id="runner-choice" class="runner-choice" hidden><label for="runner-variant">Runner pace</label><select id="runner-variant"><option value="0">Easy</option><option value="1">Steady</option><option value="2">Brisk</option></select></div>
       </aside>
     </main>
-    <footer><span>Local workspace · export to keep your takes</span><span>Creative animation, not medical measurement</span></footer>
+    <footer><span>Local workspace · export to keep your takes</span><button id="open-credits" class="footer-link">Credits &amp; licenses</button><span>Creative animation, not medical measurement</span></footer>
 
     <dialog id="camera-dialog" aria-labelledby="camera-title">
       <button class="close" data-close aria-label="Close camera settings">×</button><span class="eyebrow">PERFORMANCE INPUT</span><h2 id="camera-title">Your camera, your choice.</h2>
       <p>Animate your face and body on this device. No API key, account or credits needed.</p>
       <label class="check consent"><input id="camera-consent" type="checkbox"> I consent to camera preview and on-device face and body tracking.</label>
-      <label for="camera">System camera</label><select id="camera"><option value="">System default (first preview)</option></select>
+      <label for="camera">Body camera</label><select id="camera"><option value="">System default (first preview)</option></select>
+      <p class="fine">Desk View and Continuity Camera appear here as ordinary cameras. Idlewild asks each camera for its widest view; choose a wide camera and step back.</p>
       <div class="row"><button id="refresh-cameras">Refresh cameras</button><button id="preview" class="primary">Open preview</button></div>
-      <div id="camera-view" hidden><video id="camera-preview" muted playsinline aria-label="Camera preview"></video><p class="fine">Preview remains active when you close this panel. Use Stop input to release the camera.</p></div>
-      <p class="fine">An iPhone appears here when your operating system makes it available as a webcam.</p>
+      <div id="camera-view" hidden><video id="camera-preview" muted playsinline aria-label="Body camera preview"></video><p class="fine">Preview stays on when you close this panel and appears in the corner of the stage. Stop input releases every camera.</p></div>
       <button id="local-tracking" class="wide primary" disabled>Start face & body tracking</button><p class="fine">Open preview first. Keep your face and upper body visible; step back to track your legs. Camera images stay on this device in local mode. No microphone is used.</p>
+      <details id="face-camera-settings" hidden><summary>Second camera · face close-up (optional)</summary>
+        <p class="fine">A second camera near your face can add facial detail. It must be a different device; your body camera keeps tracking your body.</p>
+        <label class="check consent"><input id="face-consent" type="checkbox"> I consent to a second camera preview for on-device face tracking.</label>
+        <label for="face-camera">Face camera</label><select id="face-camera"><option value="">Choose a different camera</option></select>
+        <button id="open-face-camera" class="wide" disabled>Open face camera</button>
+        <video id="face-preview" muted playsinline aria-label="Face camera preview" hidden></video>
+      </details>
       <details id="measurement-settings"><summary>SmartSpectra · optional API key</summary>
         <p class="fine">Open a preview first. Live measurement uses account credits and vendor network processing. Automatic vitals insights may upload data; retention is unverified. Telemetry is disabled. This integration awaits consented live validation.</p>
         <label for="api-key">Presage API key · this session only</label><input id="api-key" type="password" autocomplete="off" spellcheck="false" maxlength="512" placeholder="Enter your own key">
@@ -56,14 +115,22 @@ export function mountStudio(root: HTMLElement) {
       <p class="dialog-message message" role="status" aria-live="polite"></p><div class="dialog-actions"><button data-close>Done</button></div>
     </dialog>
     <dialog id="import-dialog" aria-labelledby="import-title">
-      <button class="close" data-close aria-label="Close imports">×</button><span class="eyebrow">BRING YOUR OWN</span><h2 id="import-title">Import a character or take.</h2>
-      <p>A saved take works across scenes. A character gives that same performance a new home.</p>
-      <button id="try-snow" class="wide">Try Snow · expressive character</button>
+      <button class="close" data-close aria-label="Close imports">×</button><span class="eyebrow">BRING YOUR OWN</span><h2 id="import-title">Use your own character.</h2>
+      <p>Give your performance a new home, or reopen a saved take.</p>
+      <label class="file-button primary-file"><strong>Choose a character or clips</strong><span>Self-contained GLB or embedded glTF, up to 32 MiB</span><input id="import-model" type="file" accept=".glb,.gltf"></label>
+      <details id="rig-requirements"><summary>Rig requirements</summary>
+        <ul class="requirements">
+          <li>One scene, embedded resources, no compression; up to 256 nodes and 500,000 vertices.</li>
+          <li>Body tracking rotates named bones such as Spine, Head, LeftArm, LeftForeArm, LeftUpLeg and LeftLeg. Mixamo and Snow names work; there is no automatic retargeting.</li>
+          <li>Face tracking drives ARKit-style morphs such as eyeBlinkLeft, jawOpen and mouthSmileLeft.</li>
+          <li>Static models get creative root movement. Animation-only files need their matching character first.</li>
+        </ul>
+        <p class="fine">Every limit and bone alias is listed in docs/FORMATS.md, “Character and clip imports”.</p>
+      </details>
       <label class="file-button"><strong>Import control data</strong><span>A previously exported JSON take</span><input id="import-data" type="file" accept=".json,application/json"></label>
-      <label class="file-button"><strong>Import character or clips</strong><span>Self-contained GLB or embedded glTF</span><input id="import-model" type="file" accept=".glb,.gltf"></label>
-      <p id="import-status" class="fine">For clip reuse, named nodes and morph targets must match your imported character.</p>
+      <p id="import-status" class="fine">Use assets you have rights to use. Importing a model does not grant reuse rights.</p>
       <details id="import-credits" hidden><summary>Model credits</summary><p id="import-credit-text" class="fine"></p></details>
-      <label for="imported-clip">Animation clip</label><select id="imported-clip" disabled><option value="">Import a character with animation</option></select><button id="remove-model" class="wide danger" hidden>Remove imported character</button>
+      <div id="clip-choice" hidden><label for="imported-clip">Animation clip</label><select id="imported-clip" disabled></select></div><button id="remove-model" class="wide danger" hidden>Remove imported character</button>
       <p class="dialog-message message" role="status" aria-live="polite"></p><div class="dialog-actions"><button data-close>Done</button></div>
     </dialog>
     <dialog id="takes-dialog" aria-labelledby="takes-title">
@@ -77,33 +144,228 @@ export function mountStudio(root: HTMLElement) {
     </dialog>
     <dialog id="export-dialog" aria-labelledby="export-title">
       <button class="close" data-close aria-label="Close export choices">×</button><span class="eyebrow">SAVE YOUR PERFORMANCE</span><h2 id="export-title">Take it with you.</h2><p>Export the selected take with your current scene and creative settings.</p>
-      <div class="export-grid"><button id="export-video"><strong>Video preview</strong><span>WebM · picture and sound</span></button><button id="export-glb"><strong>Baked GLB</strong><span>Reusable character animation</span></button><button id="export-wav"><strong>WAV sound</strong><span>Audio for your project</span></button><button id="export-data"><strong>Control data</strong><span>JSON · replay and reuse</span></button></div><p class="fine">Video renders in real time. Keep this window visible until it finishes. Supplied model credits download alongside the video.</p>
+      <div class="export-grid"><button id="export-video"><strong>Video preview</strong><span>WebM · picture and sound</span></button><button id="export-glb"><strong>Baked GLB</strong><span>Reusable character animation</span></button><button id="export-wav"><strong>WAV sound</strong><span>Audio for your project</span></button><button id="export-data"><strong>Control data</strong><span>JSON · replay and reuse</span></button></div><p class="fine">Video renders the stage in real time; the camera feed is never included. Keep this window visible until it finishes. Supplied model credits download alongside the video.</p>
       <p class="dialog-message message" role="status" aria-live="polite"></p>
+    </dialog>
+    <dialog id="credits-dialog" aria-labelledby="credits-title">
+      <button class="close" data-close aria-label="Close credits">×</button><span class="eyebrow">CREDITS &amp; LICENSES</span><h2 id="credits-title">Made with open work.</h2>
+      <ul class="credits">
+        <li><strong>Robot</strong> RobotExpressive by Tomás Laulhé (Quaternius), modified by Don McCurdy · CC0 1.0</li>
+        <li><strong>European dragon</strong> Dragon sample by afk.ai · CC0 1.0</li>
+        <li><strong>Snow</strong> Snow Rig (CC) Blender Foundation | studio.blender.org · adapted under CC BY 4.0</li>
+        <li><strong>Brain</strong> Brain for Blender by Anderson Winkler, brainder.org · adapted under CC BY-SA 3.0</li>
+        <li><strong>Local tracking</strong> MediaPipe Tasks Vision with Face and Pose Landmarker models by Google · Apache 2.0</li>
+      </ul>
+      <p class="fine">Bubbles, star, baby dragon and runner are original procedural geometry. Imported characters keep their own rights.</p>
+      <details id="credits-full"><summary>Full attributions and third-party notices</summary><div id="credits-files" class="credit-files"></div></details>
+      <p class="dialog-message message" role="status" aria-live="polite"></p><div class="dialog-actions"><button data-close>Done</button></div>
     </dialog>
     <dialog id="guide" aria-labelledby="guide-title"><form method="dialog"><button class="close" aria-label="Close studio guide">×</button></form><span id="guide-step" class="eyebrow"></span><h2 id="guide-title"></h2><p id="guide-copy"></p><div class="row"><button id="guide-back">Back</button><button id="guide-next" class="primary">Next</button><button id="guide-skip">Skip guide</button></div></dialog>`;
 }
 
 export function setupPanels() {
-  for (const name of ['camera', 'signals', 'import', 'takes', 'edit', 'export']) {
-    const dialog = document.getElementById(`${name}-dialog`) as HTMLDialogElement;
-    document.getElementById(`open-${name}`)!.addEventListener('click', () => {
+  const openers = [['open-camera', 'camera'], ['open-signals', 'signals'], ['open-import', 'import'], ['use-own-character', 'import'], ['menu-own-character', 'import'], ['open-takes', 'takes'], ['open-edit', 'edit'], ['open-export', 'export'], ['open-credits', 'credits']] as const;
+  for (const [trigger, name] of openers) {
+    const dialog = byId<HTMLDialogElement>(`${name}-dialog`);
+    byId(trigger).addEventListener('click', () => {
       const feedback = dialog.querySelector('.dialog-message');
       if (feedback) feedback.textContent = '';
       if (!dialog.open) dialog.showModal();
     });
   }
   for (const close of document.querySelectorAll<HTMLButtonElement>('[data-close]')) close.addEventListener('click', () => close.closest('dialog')?.close());
-  const exports = document.getElementById('export-dialog') as HTMLDialogElement;
+  const exports = byId<HTMLDialogElement>('export-dialog');
   for (const button of exports.querySelectorAll<HTMLButtonElement>('.export-grid button')) button.addEventListener('click', () => { if (!button.disabled) exports.close(); });
-  document.getElementById('takes')!.addEventListener('click', event => {
-    if ((event.target as HTMLElement).closest('button.take')) (document.getElementById('takes-dialog') as HTMLDialogElement).close();
+  byId('takes').addEventListener('click', event => {
+    if ((event.target as HTMLElement).closest('button.take')) byId<HTMLDialogElement>('takes-dialog').close();
+  });
+  setupCredits();
+}
+
+function setupCredits() {
+  const files = [['Model provenance', './models/ATTRIBUTION.md'], ['Local tracking assets', './tracking/ATTRIBUTION.md'], ['Third-party notices', './THIRD_PARTY_NOTICES.txt']] as const;
+  const details = byId<HTMLDetailsElement>('credits-full');
+  const container = byId('credits-files');
+  let loading: Promise<void> | null = null;
+  details.addEventListener('toggle', () => {
+    if (!details.open || loading) return;
+    loading = Promise.all(files.map(async ([title, path]) => {
+      const section = document.createElement('section');
+      const heading = document.createElement('h3');
+      const text = document.createElement('pre');
+      heading.textContent = title;
+      text.textContent = 'Loading…';
+      section.append(heading, text);
+      container.append(section);
+      try {
+        const response = await fetch(path, { signal: AbortSignal.timeout(5000) });
+        if (!response.ok) throw new Error(String(response.status));
+        const body = await response.text();
+        text.textContent = body.length > NOTICE_MAX_CHARS ? `${body.slice(0, NOTICE_MAX_CHARS)}\n…` : body;
+      } catch {
+        text.textContent = `Unavailable in this build. The file ships as ${path.slice(2)} with Idlewild.`;
+        text.classList.add('error');
+      }
+    })).then(() => undefined);
   });
 }
 
+export function cameraErrorMessage(error: unknown): string {
+  const name = error instanceof DOMException ? error.name : '';
+  if (name === 'NotAllowedError' || name === 'SecurityError') return 'Camera access was blocked. Allow Idlewild in System Settings › Privacy & Security › Camera, then open the preview again.';
+  if (name === 'NotFoundError' || name === 'OverconstrainedError') return 'That camera is unavailable. Refresh cameras, choose another one, then open the preview again.';
+  if (name === 'NotReadableError' || name === 'AbortError') return 'Another app may be using that camera. Close it, then open the preview again.';
+  return error instanceof Error && error.message ? error.message : 'The camera could not open. Refresh cameras and try again.';
+}
+
+export interface CharacterMenu {
+  setCurrent(entry: SceneEntry): void;
+  setAvailable(id: string, available: boolean): void;
+  setDisabled(disabled: boolean): void;
+}
+
+export function setupCharacterMenu(entries: readonly SceneEntry[], onPick: (entry: SceneEntry) => void): CharacterMenu {
+  const picker = byId('character-picker');
+  const trigger = byId<HTMLButtonElement>('character-button');
+  const panel = byId('character-menu');
+  const groups = { default: byId('scene-picker'), yours: byId('yours-picker') };
+  const items = new Map<string, HTMLButtonElement>();
+  let refocus = false;
+  for (const entry of entries) {
+    const item = document.createElement('button');
+    item.className = 'scene-item';
+    item.dataset.scene = entry.id;
+    item.setAttribute('aria-pressed', 'false');
+    item.innerHTML = icon(entry.id);
+    const label = document.createElement('span');
+    label.textContent = entry.label;
+    item.append(label);
+    item.hidden = entry.group === 'yours';
+    item.addEventListener('click', () => onPick(entry));
+    groups[entry.group].append(item);
+    items.set(entry.id, item);
+  }
+  const visible = () => [...panel.querySelectorAll<HTMLButtonElement>('button')].filter(item => !item.hidden && !item.disabled && !item.closest('[hidden]'));
+  const close = (restoreFocus: boolean) => {
+    if (panel.hidden) return;
+    panel.hidden = true;
+    trigger.setAttribute('aria-expanded', 'false');
+    if (restoreFocus) trigger.focus();
+  };
+  const open = () => {
+    panel.hidden = false;
+    trigger.setAttribute('aria-expanded', 'true');
+    (visible().find(item => item.getAttribute('aria-pressed') === 'true') ?? visible()[0])?.focus();
+  };
+  trigger.addEventListener('click', () => { if (panel.hidden) open(); else close(true); });
+  panel.addEventListener('click', event => { if ((event.target as HTMLElement).closest('button')) close(true); }, true);
+  picker.addEventListener('keydown', event => {
+    if (panel.hidden) return;
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(true); return; }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    const options = visible();
+    if (!options.length) return;
+    event.preventDefault();
+    const index = options.indexOf(document.activeElement as HTMLButtonElement);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+    options[next].focus();
+  });
+  picker.addEventListener('focusout', event => { const target = event.relatedTarget as Node | null; if (target && !picker.contains(target)) close(false); });
+  document.addEventListener('pointerdown', event => { if (!picker.contains(event.target as Node)) close(false); });
+  const refreshGroups = () => {
+    const hasYours = [...groups.yours.querySelectorAll('button')].some(item => !item.hidden);
+    groups.yours.hidden = !hasYours;
+    byId('yours-label').hidden = !hasYours;
+  };
+  return {
+    setCurrent(entry) {
+      for (const [id, item] of items) item.setAttribute('aria-pressed', String(id === entry.id));
+      byId('character-current').textContent = entry.label;
+      byId('character-icon').innerHTML = icon(entry.id);
+    },
+    setAvailable(id, available) {
+      const item = items.get(id);
+      if (item) item.hidden = !available;
+      refreshGroups();
+    },
+    setDisabled(disabled) {
+      if (disabled === trigger.disabled) return;
+      if (disabled) refocus = document.activeElement === trigger;
+      trigger.disabled = disabled;
+      for (const item of panel.querySelectorAll('button')) item.disabled = disabled;
+      if (disabled) close(false);
+      else if (refocus) { refocus = false; trigger.focus(); }
+    },
+  };
+}
+
+export function createCameraFeed(preview: HTMLVideoElement) {
+  const container = byId('pip');
+  const video = byId<HTMLVideoElement>('pip-video');
+  const toggle = byId<HTMLButtonElement>('pip-toggle');
+  let collapsed = false;
+  const sync = (active: boolean) => {
+    container.hidden = !active;
+    const stream = active && !collapsed ? preview.srcObject : null;
+    if (video.srcObject !== stream) video.srcObject = stream;
+    video.hidden = collapsed;
+    container.classList.toggle('collapsed', collapsed);
+    toggle.textContent = collapsed ? 'Show camera' : 'Hide camera';
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+  };
+  toggle.addEventListener('click', () => { collapsed = !collapsed; sync(!container.hidden); });
+  return sync;
+}
+
+export function createFramingPrompt() {
+  const card = byId('framing-prompt');
+  let cutOffSince: number | null = null;
+  let clearSince: number | null = null;
+  let dismissed = false;
+  const reset = () => { cutOffSince = null; clearSince = null; dismissed = false; card.hidden = true; };
+  byId('dismiss-framing').addEventListener('click', () => { dismissed = true; card.hidden = true; });
+  return {
+    reset,
+    update(now: number, cutOff: boolean) {
+      if (cutOff) {
+        clearSince = null;
+        cutOffSince ??= now;
+        if (!dismissed && now - cutOffSince >= FRAMING_DELAY_MS) card.hidden = false;
+        return;
+      }
+      cutOffSince = null;
+      clearSince ??= now;
+      if (now - clearSince >= FRAMING_DELAY_MS) { card.hidden = true; dismissed = false; }
+    },
+  };
+}
+
+export function createBrainLegend() {
+  const list = byId('brain-regions');
+  const rows = Array.from({ length: 3 }, () => {
+    const row = document.createElement('li');
+    const label = document.createElement('span');
+    row.hidden = true;
+    row.append(label);
+    list.append(row);
+    return { row, label };
+  });
+  return (regions: readonly BrainRegion[]) => {
+    rows.forEach(({ row, label }, index) => {
+      const region = regions[index];
+      const baseline = !regions.length && index === 0;
+      row.hidden = !region && !baseline;
+      row.classList.toggle('baseline', baseline);
+      label.textContent = region ? region.label : baseline ? 'Neutral baseline — no mapped input right now' : '';
+      row.style.setProperty('--level', String(region ? Math.min(1, Math.max(0, region.intensity)) : 0));
+    });
+  };
+}
+
 export function updateStudioFlow(state: { hasInput: boolean; cameraActive: boolean; recording: boolean; hasTake: boolean; playing: boolean; busy: boolean; exporting: boolean }): void {
-  const show = (id: string, visible: boolean) => { document.getElementById(id)!.hidden = !visible; };
+  const show = (id: string, visible: boolean) => { byId(id).hidden = !visible; };
   const active = state.hasInput || state.hasTake;
-  document.getElementById('main')!.classList.toggle('has-performance', active);
+  byId('main').classList.toggle('has-performance', active);
   show('interpretation', active);
   show('rehearse', !state.hasInput && !state.cameraActive && !state.recording && !state.exporting);
   show('rehearsal-note', !active && !state.cameraActive && !state.exporting);
@@ -111,6 +373,7 @@ export function updateStudioFlow(state: { hasInput: boolean; cameraActive: boole
   show('open-signals', active);
   show('open-takes', state.hasTake);
   show('camera-view', state.cameraActive);
+  show('face-camera-settings', state.cameraActive);
   show('record', state.hasInput && !state.exporting);
   show('play', state.hasTake && !state.recording && !state.exporting);
   show('transport', active && !state.exporting);
@@ -118,38 +381,40 @@ export function updateStudioFlow(state: { hasInput: boolean; cameraActive: boole
   show('timeline-control', state.hasTake && !state.recording);
   show('take-actions', state.hasTake && !state.recording && !state.exporting);
   show('recording-hint', state.hasInput && !state.hasTake);
-  document.getElementById('rehearse')!.classList.toggle('primary', !state.hasTake);
-  document.getElementById('record')!.classList.toggle('primary', state.hasInput);
-  document.getElementById('play')!.classList.toggle('primary', state.hasTake && !state.hasInput);
-  document.getElementById('open-camera')!.textContent = state.cameraActive ? 'Camera settings' : 'Use camera';
-  document.getElementById('open-camera')!.classList.toggle('primary', state.cameraActive && !state.hasInput && !state.hasTake);
-  document.getElementById('stop-input')!.textContent = state.cameraActive && !state.hasInput ? 'Stop camera' : 'Stop input';
+  byId('rehearse').classList.toggle('primary', !state.hasTake);
+  byId('record').classList.toggle('primary', state.hasInput);
+  byId('play').classList.toggle('primary', state.hasTake && !state.hasInput);
+  byId('open-camera').textContent = state.cameraActive ? 'Camera settings' : 'Use camera';
+  byId('open-camera').classList.toggle('primary', state.cameraActive && !state.hasInput && !state.hasTake);
+  byId('stop-input').textContent = state.cameraActive && !state.hasInput ? 'Stop camera' : 'Stop input';
   const title = state.exporting ? 'Saving…' : state.recording ? 'On record.' : state.playing ? 'Your replay.' : state.hasInput ? 'You’re ready.' : state.hasTake ? 'Your take.' : state.cameraActive ? 'Preview on.' : 'Start here.';
-  const hint = state.exporting ? 'Keep the studio visible while your export finishes.' : state.recording ? 'Finish your take when you have the performance you want.' : state.playing ? 'One performance can bring every scene to life.' : state.hasInput ? 'Shape the scene, then record a take.' : state.hasTake ? 'Play your take, explore another scene, or export it.' : state.cameraActive ? 'Open camera settings to start face and body tracking.' : 'Animate with your camera, or try a rehearsal. No key needed.';
-  document.getElementById('flow-title')!.textContent = title;
-  document.getElementById('next-step')!.textContent = state.busy && !state.exporting ? 'Preparing your studio…' : hint;
+  const hint = state.exporting ? 'Keep the studio visible while your export finishes.' : state.recording ? 'Finish your take when you have the performance you want.' : state.playing ? 'One performance can bring every character to life.' : state.hasInput ? 'Pick a character, then record a take.' : state.hasTake ? 'Play your take, try another character, or export it.' : state.cameraActive ? 'Open camera settings to start face and body tracking.' : 'Animate with your camera, or try a rehearsal. No key needed.';
+  byId('flow-title').textContent = title;
+  byId('next-step').textContent = state.busy && !state.exporting ? 'Preparing your studio…' : hint;
 }
 
 export function setupGuide() {
-  const dialog = document.querySelector<HTMLDialogElement>('#guide')!;
+  const dialog = byId<HTMLDialogElement>('guide');
   const steps = [
-    ['Start with a rehearsal', 'Choose Start rehearsal for clearly labeled synthetic input. It needs no camera, account or credits. Controls appear when your input is running.'],
-    ['Your camera, your decision', 'Use camera opens consented preview. Start face & body tracking runs on this device without a key or credits. Keep your face and upper body visible; step back for your legs. Optional SmartSpectra signals require a separate key and metered-processing consent. Stop input releases the camera.'],
-    ['Give it a character', 'Try Snow in Import for face and body animation, or use a compatible rig. Local movement also shapes procedural scenes and sound. Switch scenes and adjust Motion and Sensitivity. Face expressions are geometric estimates, not emotions; gaze is unavailable. The brain scene is educational.'],
-    ['Record once, play anywhere', 'Start an input, then Record take. Finish your take to keep up to three minutes of controls. Play, scrub and loop it on another scene. Edit opens trim and delete; Takes opens your saved performances.'],
-    ['Bring your own character', 'Import accepts a saved JSON take, a self-contained GLB, or embedded glTF. Animation clips need matching named nodes and morph targets. Oversized assets, external resources and unsupported compression are rejected with an explanation.'],
-    ['Keep your performance', 'Export offers rendered WebM, procedural WAV, reusable baked GLB animation and control JSON. Camera images and keys are excluded. Takes live in memory, so export before closing. Replay this guide any time.'],
-  ];
+    ['Start with a rehearsal', 'Choose Start rehearsal for clearly labeled synthetic input. It needs no camera, account or credits. Controls appear once your input is running.'],
+    ['Your camera, your decision', 'Use camera asks for consent, then opens a preview. Desk View and Continuity Camera appear as ordinary cameras. Start face & body tracking runs on this device without a key or credits. Stop input releases every camera.'],
+    ['Add a face camera', 'Once the preview is open, Second camera adds an optional face close-up with its own consent. It must be a different device. Face values are geometric estimates, not emotions.'],
+    ['See yourself while you perform', 'A small live feed sits in the corner of the stage while a camera runs; Hide camera tucks it away. It is never part of an export. If you are too close, a tip asks you to step back.'],
+    ['Choose a character', 'The Character menu holds Robot, Snow, both dragons, Runner and three abstract scenes. The brain scene is an educational simulation, not your measured brain activity.'],
+    ['Use your own character', 'Use your own character opens import for a GLB or embedded glTF. Named bones and ARKit-style face morphs receive tracking; static models get creative movement. Rig requirements are listed there.'],
+    ['Record once, play anywhere', 'Start an input, then Record take. Finish to keep up to three minutes of controls. Play, scrub and loop it on another character. Edit trims or deletes; Takes opens your library.'],
+    ['Keep your performance', 'Export offers WebM video, WAV sound, a baked GLB and control JSON. Camera images and keys are excluded. Takes live in memory, so export before closing. Credits & licenses sit in the footer.'],
+  ] as const;
   let step = 0;
   const render = () => {
-    document.querySelector('#guide-step')!.textContent = `STUDIO GUIDE / ${step + 1} OF ${steps.length}`;
-    document.querySelector('#guide-title')!.textContent = steps[step][0];
-    document.querySelector('#guide-copy')!.textContent = steps[step][1];
-    (document.querySelector('#guide-back') as HTMLButtonElement).disabled = step === 0;
-    document.querySelector('#guide-next')!.textContent = step === steps.length - 1 ? 'Start creating' : 'Next';
+    byId('guide-step').textContent = `STUDIO GUIDE / ${step + 1} OF ${steps.length}`;
+    byId('guide-title').textContent = steps[step][0];
+    byId('guide-copy').textContent = steps[step][1];
+    byId<HTMLButtonElement>('guide-back').disabled = step === 0;
+    byId('guide-next').textContent = step === steps.length - 1 ? 'Start creating' : 'Next';
   };
-  document.querySelector('#help')!.addEventListener('click', () => { step = 0; render(); dialog.showModal(); });
-  document.querySelector('#guide-next')!.addEventListener('click', () => { if (step === steps.length - 1) dialog.close(); else { step++; render(); } });
-  document.querySelector('#guide-back')!.addEventListener('click', () => { step = Math.max(0, step - 1); render(); });
-  document.querySelector('#guide-skip')!.addEventListener('click', () => dialog.close());
+  byId('help').addEventListener('click', () => { step = 0; render(); dialog.showModal(); });
+  byId('guide-next').addEventListener('click', () => { if (step === steps.length - 1) dialog.close(); else { step++; render(); } });
+  byId('guide-back').addEventListener('click', () => { step = Math.max(0, step - 1); render(); });
+  byId('guide-skip').addEventListener('click', () => dialog.close());
 }

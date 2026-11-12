@@ -185,22 +185,25 @@ export function topBrainRegions(input: SceneFrame, count = 3): BrainRegion[] {
     .map(([region, entry]) => ({ region, label: regionLabel(region), intensity: entry.intensity, rule: entry.rule }));
 }
 
-const GLOW = 0xffa45c;
-const BASE_GLOW = 0.06;
-const HIGHLIGHT_GLOW = 0.9;
+const GLOW = 0xff7a2e;
+const BASE_GLOW = 0.04;
+const HIGHLIGHT_GLOW = 1.4;
+const TISSUE_SHADE = 0.72;
+const HIGHLIGHT_TINT = new THREE.Color(0xff6a1f);
 const TILT = 0.45;
 
 export function createAnatomicalBrain(model: THREE.Group): BrainSubject {
   const originals = new Set<THREE.Material>();
-  const regions: { name: string; material: THREE.MeshStandardMaterial }[] = [];
+  const regions: { name: string; material: THREE.MeshStandardMaterial; base: THREE.Color }[] = [];
   model.traverse(object => {
     if (!(object instanceof THREE.Mesh) || !(object.material instanceof THREE.MeshStandardMaterial)) return;
     originals.add(object.material);
     const material = object.material.clone();
     material.emissive.setHex(GLOW);
     material.emissiveIntensity = BASE_GLOW;
+    material.color.multiplyScalar(TISSUE_SHADE);
     object.material = material;
-    regions.push({ name: object.name, material });
+    regions.push({ name: object.name, material, base: material.color.clone() });
   });
   for (const material of originals) material.dispose();
   const names = new Set(regions.map(region => region.name));
@@ -250,7 +253,11 @@ export function createAnatomicalBrain(model: THREE.Group): BrainSubject {
       gauge(pulseRateRing, 1.2, pulsePace * 0.2);
       for (const region of activity.keys()) activity.set(region, 0);
       evaluate(input, raise);
-      for (const region of regions) region.material.emissiveIntensity = BASE_GLOW + HIGHLIGHT_GLOW * (activity.get(region.name) ?? 0);
+      for (const region of regions) {
+        const visible = ramp(activity.get(region.name) ?? 0, 0.05, 0.6) ** 0.7;
+        region.material.emissiveIntensity = BASE_GLOW + HIGHLIGHT_GLOW * visible;
+        region.material.color.copy(region.base).lerp(HIGHLIGHT_TINT, visible * 0.85);
+      }
     },
     topRegions: (count = 3) => last ? topBrainRegions(last, count) : [],
     dispose: () => disposeObject(root),

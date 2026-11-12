@@ -593,6 +593,30 @@ test('blink is a subtle uniform response that keeps bubbles round', () => {
   star.dispose();
 });
 
+test('a runner asset with an authored Run clip plays it at the selected pace instead of the procedural cycle', () => {
+  const model = new THREE.Group();
+  model.add(new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshStandardMaterial()));
+  const pacer = new THREE.Bone();
+  pacer.name = 'Pacer';
+  model.add(pacer);
+  const clips = [
+    new THREE.AnimationClip('Idle', 2, [new THREE.VectorKeyframeTrack('Pacer.position', [0, 2], [0, 0, 0, 0, 2, 0])]),
+    new THREE.AnimationClip('Run', 2, [new THREE.VectorKeyframeTrack('Pacer.position', [0, 2], [0, 0, 0, 2, 0, 0])]),
+  ];
+  const subject = createCharacter(model, clips, 'runner');
+  const travelled = (variant: 0 | 1 | 2) => {
+    subject.setVariant!(variant);
+    subject.update(trackedInput(1000));
+    assert.equal(pacer.position.y, 0);
+    return pacer.position.x;
+  };
+  const easy = travelled(0), steady = travelled(1), brisk = travelled(2);
+  assert.ok(easy > 0);
+  assert.ok(Math.abs(easy / steady - 0.8) < 1e-9 && Math.abs(brisk / steady - 1.2) < 1e-9);
+  assert.throws(() => subject.setVariant!(3 as 0));
+  subject.dispose();
+});
+
 test('runner pace stays bounded and faster or deeper breathing earns no extra stride', () => {
   const procedural = createRunner();
   const { subject: character } = trackingRig('runner');

@@ -16,7 +16,7 @@ function assetPath(value, root) {
   if (url.protocol !== 'idlewild:' || url.host !== 'studio' || url.username || url.password) throw new Error('Invalid resource');
   const name = decodeURIComponent(url.pathname);
   if (url.search && !(/^\/tracking\/wasm\/vision_wasm_module_internal\.js$/.test(name) && /^\?task=(face|pose)$/.test(url.search))) throw new Error('Invalid resource');
-  if (!/^\/(index\.html|assets\/[A-Za-z0-9_.-]+|models\/[A-Za-z0-9_.-]+\.glb|tracking\/(face_landmarker\.task|pose_landmarker_lite\.task|wasm\/vision_wasm_module_internal\.(js|wasm)))$/.test(name)) throw new Error('Invalid resource');
+  if (!/^\/(index\.html|assets\/[A-Za-z0-9_.-]+|models\/[A-Za-z0-9_.-]+\.glb|models\/ATTRIBUTION\.md|tracking\/ATTRIBUTION\.md|THIRD_PARTY_NOTICES\.txt|tracking\/(face_landmarker\.task|pose_landmarker_lite\.task|wasm\/vision_wasm_module_internal\.(js|wasm)))$/.test(name)) throw new Error('Invalid resource');
   return path.join(root, name.slice(1));
 }
 

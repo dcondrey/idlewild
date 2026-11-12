@@ -14,10 +14,12 @@ type AssetState = { phase: 'loading' | 'ready' | 'error'; message: string };
 const CHARACTER_ASSETS = Object.freeze({
   robot: { label: 'robot', credit: 'RobotExpressive by Tomas Laulhe (Quaternius), adapted by Don McCurdy. CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/ . Source: https://github.com/mrdoob/three.js/tree/eba30de865cfbf31ac736f792defd9a60ff28d57/examples/models/gltf/RobotExpressive' },
   dragon: { label: 'European dragon', credit: 'Dragon sample by afk.ai. CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/ . Source: https://afk.ai/auto-rig/dragon' },
+  runner: { label: 'runner', credit: 'Rain Rig (CC) Blender Foundation | studio.blender.org. CC BY 4.0: https://creativecommons.org/licenses/by/4.0/ . Source: https://studio.blender.org/characters/rain/v3/ . Modified for Idlewild.' },
 } satisfies Partial<Record<Parameters<typeof createCharacter>[2], { label: string; credit: string }>>);
 type CharacterAsset = keyof typeof CHARACTER_ASSETS;
 type StageAsset = CharacterAsset | 'brain';
 const ASSET_IDS: readonly StageAsset[] = [...Object.keys(CHARACTER_ASSETS) as CharacterAsset[], 'brain'];
+const ASSET_MAX_BYTES: Partial<Record<StageAsset, number>> = { runner: 12 * 1024 * 1024 };
 const assetLabel = (id: StageAsset) => id === 'brain' ? 'anatomical brain' : CHARACTER_ASSETS[id].label;
 
 export interface Stage {
@@ -145,7 +147,7 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
       const response = await fetch(`./models/${id}.glb`, { signal: controller.signal });
       if (!response.ok) throw new Error('Asset unavailable');
       const data = await response.arrayBuffer();
-      if (data.byteLength > 8 * 1024 * 1024) throw new Error('Asset exceeds limit');
+      if (data.byteLength > (ASSET_MAX_BYTES[id] ?? 8 * 1024 * 1024)) throw new Error('Asset exceeds limit');
       if (disposed) return;
       const gltf = await new GLTFLoader().parseAsync(data, './models/');
       loaded = gltf.scene;

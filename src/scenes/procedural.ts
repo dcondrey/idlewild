@@ -203,6 +203,8 @@ export function createBabyDragon(): SceneSubject {
   };
 }
 
+export const RUNNER_PACE = [0.8, 1, 1.2] as const;
+
 export function createRunner(): SceneSubject {
   const root = group('Runner');
   root.rotation.y = -0.4;
@@ -224,6 +226,7 @@ export function createRunner(): SceneSubject {
   const hips: THREE.Group[] = [];
   const knees: THREE.Group[] = [];
   const arms: THREE.Group[] = [];
+  let pace: number = RUNNER_PACE[0];
   for (const side of [-1, 1]) {
     const suffix = side < 0 ? 'L' : 'R';
     const hip = group(`Hip_${suffix}`, body, [side * 0.17, -0.08, 0]);
@@ -245,21 +248,12 @@ export function createRunner(): SceneSubject {
   return {
     root,
     setVariant(variant) {
-      const palettes = [
-        { shirt: 0xf49864, skin: 0xb77d58, hair: 0x263539, width: 1, height: 1 },
-        { shirt: 0x7bc9ba, skin: 0x684632, hair: 0x171e24, width: 0.92, height: 1.08 },
-        { shirt: 0xb6a4e2, skin: 0xe7ba97, hair: 0x654438, width: 1.12, height: 0.95 },
-      ];
-      const palette = palettes[variant];
-      shirt.color.setHex(palette.shirt);
-      skin.color.setHex(palette.skin);
-      hair.color.setHex(palette.hair);
-      root.scale.set(palette.width, palette.height, palette.width);
+      pace = RUNNER_PACE[variant];
     },
     update(input) {
       const { time, motion, breath, breathingPace, pulsePace, blink, talking, movement } = sceneDynamics(input);
       const response = breath + movement;
-      const phase = time * 7.5;
+      const phase = time * 7.5 * pace;
       const stride = motion * 0.5;
       body.position.y = 1.18 + Math.abs(Math.cos(phase)) * 0.055 * motion;
       body.rotation.x = 0.08 * motion;

@@ -18,7 +18,7 @@ export const SCENE_REGISTRY: readonly SceneEntry[] = Object.freeze(([
   { id: 'star', scene: 'star', label: 'Star', title: 'A little starlight', caption: 'A soft glow shaped by the same performance.', group: 'default' },
   { id: 'dragon', scene: 'dragon', label: 'Dragon', title: 'The European dragon', caption: 'Ancient wings. A new performance.', group: 'default', credit: 'Dragon sample by afk.ai, CC0' },
   { id: 'baby-dragon', scene: 'baby-dragon', label: 'Baby dragon', title: 'Small but mighty', caption: 'An original little creature finding its wings.', group: 'default' },
-  { id: 'runner', scene: 'runner', label: 'Runner', title: 'Find your stride', caption: 'A comfortable, bounded creative pace. Faster breathing earns no reward.', group: 'default' },
+  { id: 'runner', scene: 'runner', label: 'Runner', title: 'Find your stride', caption: 'A comfortable, bounded creative pace. Faster breathing earns no reward.', group: 'default', credit: 'Rain Rig (CC) Blender Foundation | studio.blender.org, CC BY 4.0, modified' },
   { id: 'brain', scene: 'brain', label: 'Brain', title: 'Body & brain', caption: 'Educational simulation based on published studies; not your measured brain activity.', group: 'default', credit: 'Brain for Blender by Anderson Winkler (brainder.org), CC BY-SA 3.0, modified' },
   { id: 'imported', scene: 'imported', label: 'Your character', title: 'Your character', caption: 'A new home for the same performance.', group: 'yours' },
 ] satisfies SceneEntry[]).map(entry => Object.freeze(entry)));

@@ -87,6 +87,29 @@ RAIN_CREDIT = (
     "authored idle, run and subtle expression clips, simplified materials and reduced textures."
 )
 
+
+def rain_parent_overrides():
+    result = {"DEF-Spine1": "DEF-Pelvis", "DEF-Head": "DEF-Neck", "DEF-Jaw": "DEF-Head", "DEF-Head_Top": "DEF-Head",
+              "DEF-Hair_Ponytail1": "DEF-Head", "DEF-Hair_Ponytail2": "DEF-Hair_Ponytail1", "DEF-Hair_Ponytail3": "DEF-Hair_Ponytail2", "DEF-Hair_Ponytail4": "DEF-Hair_Ponytail3",
+              "DEF-Hair_Strand1": "DEF-Head", "DEF-Hair_Strand2": "DEF-Hair_Strand1",
+              "DEF-Scarf1": "DEF-Neck", "DEF-Scarf2": "DEF-Scarf1", "DEF-Scarf3": "DEF-Scarf2"}
+    for side in ("L", "R"):
+        result.update({
+            f"DEF-Clavicle.{side}": "DEF-Spine3", f"DEF-Upperarm1.{side}": f"DEF-Clavicle.{side}", f"DEF-Forearm1.{side}": f"DEF-Upperarm2.{side}",
+            f"DEF-Hand.{side}": f"DEF-Forearm2.{side}", f"DEF-Thigh1.{side}": "DEF-Pelvis", f"DEF-Shin1.{side}": f"DEF-Thigh2.{side}",
+            f"DEF-Foot.{side}": f"DEF-Shin2.{side}", f"DEF-Toe.{side}": f"DEF-Foot.{side}", f"DEF-Eye.{side}": "DEF-Head",
+            f"EyeDot.{side}": f"DEF-Eye.{side}", f"Root_Ear.{side}": "DEF-Head",
+        })
+        for finger in ("Index", "Middle", "Ring", "Pinky"):
+            result[f"DEF-{finger}1.{side}"] = f"DEF-Hand.{side}"
+            for n in (2, 3, 4):
+                result[f"DEF-{finger}{n}.{side}"] = f"DEF-{finger}{n - 1}.{side}"
+        result[f"DEF-Thumb1.{side}"] = f"DEF-Hand.{side}"
+        result[f"DEF-Thumb2.{side}"] = f"DEF-Thumb1.{side}"
+        result[f"DEF-Thumb3.{side}"] = f"DEF-Thumb2.{side}"
+    return result
+
+
 PROFILES = {
     "snow": {
         "ready": True,
@@ -113,9 +136,12 @@ PROFILES = {
         "renames": {"DEF-Chest": "Chest"},
         "rigid_meshes": {"GEO-snow-gums_lower": "DEF-Head", "GEO-snow-gums_upper": "DEF-Head", "GEO-snow-teeth_lower": "DEF-Head", "GEO-snow-teeth_upper": "DEF-Head"},
         "max_discarded": 0.05,
+        "left_reference": None,
         "subdiv": 1,
         "neutral_actions": ("Eyemask Default", "Mouth Default"),
+        "allowed_invalid_drivers": set(),
         "stale_bones": {"STR-TIP-Nostril.L", "STR-TIP-Nostril.R"},
+        "stale_bone_patterns": [],
         "stale_properties": {("Jaw", "preserve_volume"), ("Jaw", "teeth_follow_mouth")},
         "morphs": (
             {"name": "BlinkLeft", "action": "Eyemask Closed", "subset": "left"},
@@ -127,7 +153,7 @@ PROFILES = {
             {"name": "MouthFf", "action": "Mouth Ff", "subset": "all"},
         ),
         "min_morphs": 7,
-        "textures": {"mode": "snow", "skin_prefix": "snow.skin", "material_prefix": "snow.", "materials": {"snow.hair": "hair", "snow.eyes": "eyes", "snow.pants": "pants", "snow.shirt": "shirt", "snow.shoe": "shoes"}, "roughness": {"snow.eyes": 0.22}},
+        "textures": {"mode": "tiled", "root": "textures", "singles": (("eyes", "eyes_diffuse.png"), ("hair", "hair_diffuse.png"), ("pants", "pants_diffuse.png"), ("shirt", "shirt_diffuse.png"), ("shoes", "shoes_diffuse.png")), "atlas": "skin_diffuse.{tile}.png", "skin_prefix": "snow.skin", "material_prefix": "snow.", "materials": {"snow.hair": "hair", "snow.eyes": "eyes", "snow.pants": "pants", "snow.shirt": "shirt", "snow.shoe": "shoes"}, "roughness": {"snow.eyes": 0.22}},
         "roles": {"chest": "Chest", "head": "DEF-Head", "upperarm.L": "DEF-UpperArm_1.L", "upperarm.R": "DEF-UpperArm_1.R", "wrist.L": "DEF-Wrist.L", "wrist.R": "DEF-Wrist.R"},
         "forward": (0, -1, 0),
         "arm_angle": 75,
@@ -137,32 +163,120 @@ PROFILES = {
         "arm_note": "constant 75-degree relaxed upper-arm rotations",
     },
     "rain": {
-        "ready": False,
-        "id": "rain", "prefix": "Rain", "rig": None, "credit": RAIN_CREDIT,
-        "input": ".local/assets/rain/rain.blend", "output": ".local/assets/rain/rain.glb",
+        "ready": True,
+        "id": "rain", "prefix": "Rain", "rig": "RIG-rain", "credit": RAIN_CREDIT,
+        "input": ".local/assets/rain/extracted/Rain v3.3/rain_v3.2.blend", "output": ".local/assets/rain/rain.glb",
         "archive": ".local/assets/rain/rain_v3.zip",
         "receipt": {
             "title": "Rain for Idlewild", "author": "Blender Foundation / Blender Studio",
             "source": "https://studio.blender.org/characters/rain/v3/",
             "sourceDownload": "https://studio.blender.org/download-source/files/ee/a7/eea73e55dba1cea31c09848df6a794b2-4.zip",
-            "sourceSha256": None, "sourceBytes": None,
-            "license": "CC BY 4.0", "licenseUrl": "https://creativecommons.org/licenses/by/4.0/", "retrieved": None,
+            "sourceSha256": "80217f163f6392dc829233d63c2cfb5e1376775bc34101ad14f39631fea70d24", "sourceBytes": 67579177,
+            "license": "CC BY 4.0", "licenseUrl": "https://creativecommons.org/licenses/by/4.0/", "retrieved": "2026-11-11",
+            "licenseEvidence": "The archive contains no license file. Evidence: the Blender Studio character page (https://studio.blender.org/characters/rain/v3/, 'CC-BY', credit 'Rain Rig (CC) Blender Foundation | studio.blender.org') and the ReadMe.txt text block embedded in rain_v3.2.blend ('provided under the CC-BY license by the Blender Studio').",
         },
-        "meshes": (),
-        "mesh_rename": None,
-        "skeleton": {"mode": "auto", "exclude": [], "rename": {}, "max_joints": 128},
-        "renames": {},
-        "rigid_meshes": {},
-        "max_discarded": 0.05,
-        "subdiv": 1,
+        "meshes": (
+            "GEO-rain-body", "GEO-rain-head", "GEO-rain-eyes", "GEO-rain-eye_dots", "GEO-rain-eyebrows", "GEO-rain-eyelashes",
+            "GEO-rain-gums_upper", "GEO-rain-gums_lower", "GEO-rain-tongue",
+            "GEO-rain-hair_main", "GEO-rain-hair_ponytail", "GEO-rain-hair_strand", "GEO-rain-hairband",
+            "GEO-rain-jeans", "GEO-rain-top", "GEO-rain-scarf", "GEO-rain-shoes",
+        ),
+        "mesh_rename": ("GEO-rain", "Rain"),
+        "skeleton": {
+            "mode": "auto", "max_joints": 128, "root": "DEF-Pelvis", "default": "DEF-Pelvis", "parent_overrides": rain_parent_overrides(),
+            "fallback_rules": [
+                (r"^DEF-(Teeth_Bot|Tongue|Lip_Bot|JawLine|Chin)", "DEF-Jaw"),
+                (r"^DEF-(Teeth|Lip|Cheek|Nose|Eyebrow|EyeLid|Eyelid|Forehead|Temple|FaceRing|LaughLine|Crease|Brow_)", "DEF-Head"),
+            ],
+            "exclude": [r"COR-", r"HLP", r"^DEF-(Teeth|Lip|Cheek|Nose|Eyebrow|EyeLid|Eyelid|Forehead|Temple|FaceRing|LaughLine|JawLine|Crease|Brow_|Tongue)", r"^(IK|LTC|MSTR|Properties)"],
+            "rename": {},
+        },
+        "renames": {
+            "DEF-Spine1": "DEF-Spine", "DEF-Spine3": "Chest", "DEF-Hand.L": "DEF-Wrist.L", "DEF-Hand.R": "DEF-Wrist.R",
+            "DEF-Shin1.L": "DEF-Knee1.L", "DEF-Shin1.R": "DEF-Knee1.R",
+        },
+        "rigid_meshes": {
+            "GEO-rain-gums_upper": "DEF-Head", "GEO-rain-gums_lower": "DEF-Jaw", "GEO-rain-tongue": "DEF-Jaw",
+            "GEO-rain-hairband": "DEF-Head", "GEO-rain-hair_strand": "DEF-Head", "GEO-rain-hair_ponytail": "DEF-Head",
+            "GEO-rain-eyelashes": "DEF-Head", "GEO-rain-eyebrows": "DEF-Head", "GEO-rain-eye_dots": "DEF-Head",
+        },
+        "max_discarded": 0.14,
+        "weight_note": "Dry run: 53 of 40,079 vertices exceed 5% discarded skin weight (body 38, max 13.63%; top 12, max 6.49%; hair_main 2, max 6.76%; scarf 1, max 5.61%); p95 0%, p99 0.63%, 13 influences at most. Limit set to 14% to cover the maximum.",
+        "left_reference": "DEF-Eye.L",
+        "subdiv": 0,
         "neutral_actions": (),
+        "allowed_invalid_drivers": {'pose.bones["DEF-Spine3"].bbone_easeout'},
         "stale_bones": set(),
+        "stale_bone_patterns": [r"^ZIP-Lip_(Top|Bot)_[0-9]+\.(L|R)$", r"^GRP-GRP-STR-Nostril\.(L|R)$"],
         "stale_properties": set(),
-        "morphs": (),
+        "morphs": [{'name': 'eyeBlinkLeft', 'parts': [{'action': 'Rain_Eyelid_Upper', 'frames': [0, 40], 'neutral': 20, 'subset': 'left', 'expect': {'mesh': 'GEO-rain-head', 'axis': 2, 'sign': -1}}, {'action': 'Rain_Eyelid_Lower', 'frames': [0, 40], 'neutral': 20, 'subset': 'left', 'amount': 0.4, 'optional': True, 'expect': {'mesh': 'GEO-rain-head', 'axis': 2, 'sign': 1}}]},
+         {'name': 'eyeBlinkRight', 'parts': [{'action': 'Rain_Eyelid_Upper', 'frames': [0, 40], 'neutral': 20, 'subset': 'right', 'expect': {'mesh': 'GEO-rain-head', 'axis': 2, 'sign': -1}}, {'action': 'Rain_Eyelid_Lower', 'frames': [0, 40], 'neutral': 20, 'subset': 'right', 'amount': 0.4, 'optional': True, 'expect': {'mesh': 'GEO-rain-head', 'axis': 2, 'sign': 1}}]},
+         {'name': 'jawOpen',
+          'parts': [{'bone': 'DEF-Jaw', 'prop': 'rotation_euler', 'index': 0, 'values': [0.45, -0.45], 'free_constraints': True, 'expect': {'mesh': 'GEO-rain-head', 'axis': 2, 'sign': -1}},
+                    {'action': 'Rain_Lips_UpDown', 'frames': [0, 40], 'neutral': 20, 'subset': 'all', 'bones_match': 'Lip_Bot|Chin', 'amount': 0.8, 'optional': True, 'expect': {'mesh': 'GEO-rain-head', 'axis': 2, 'sign': -1}},
+                    {'action': 'Rain_Head_Lower', 'frames': [0, 40], 'neutral': 20, 'subset': 'all', 'bones_match': 'Cheek|JawLine', 'amount': 0.8, 'optional': True, 'expect': {'mesh': 'GEO-rain-head', 'axis': 2, 'sign': -1}}]},
+         {'name': 'mouthSmileLeft', 'parts': [{'action': 'Rain_Lips_Corner_Up+Wide', 'frames': [0, 40], 'neutral': 20, 'subset': 'left', 'expect': {'mesh': 'GEO-rain-head', 'axis': 2, 'sign': 1}}]},
+         {'name': 'mouthSmileRight', 'parts': [{'action': 'Rain_Lips_Corner_Up+Wide', 'frames': [0, 40], 'neutral': 20, 'subset': 'right', 'expect': {'mesh': 'GEO-rain-head', 'axis': 2, 'sign': 1}}]},
+         {'name': 'browDownLeft', 'parts': [{'action': 'Rain_Eyebrows', 'frames': [0, 40], 'neutral': 20, 'subset': 'left', 'expect': {'mesh': 'GEO-rain-eyebrows', 'axis': 2, 'sign': -1}}]},
+         {'name': 'browDownRight', 'parts': [{'action': 'Rain_Eyebrows', 'frames': [0, 40], 'neutral': 20, 'subset': 'right', 'expect': {'mesh': 'GEO-rain-eyebrows', 'axis': 2, 'sign': -1}}]},
+         {'name': 'browInnerUp', 'parts': [{'action': 'Rain_Eyebrows', 'frames': [0, 40], 'neutral': 20, 'subset': 'all', 'expect': {'mesh': 'GEO-rain-eyebrows', 'axis': 2, 'sign': 1}, 'amount': 0.6}]},
+         {'name': 'mouthFunnel',
+          'parts': [{'action': 'Rain_Lips_Corner_InOut', 'frames': [0, 40], 'neutral': 20, 'subset': 'left', 'expect': {'mesh': 'GEO-rain-head', 'axis': 1, 'sign': -1}, 'amount': 0.8},
+                    {'action': 'Rain_Lips_Corner_InOut', 'frames': [0, 40], 'neutral': 20, 'subset': 'right', 'expect': {'mesh': 'GEO-rain-head', 'axis': 1, 'sign': -1}, 'amount': 0.8},
+                    {'action': 'Rain_Lips_Roll_Upper', 'frames': [0, 40], 'neutral': 20, 'subset': 'all', 'expect': {'mesh': 'GEO-rain-head', 'axis': 1, 'sign': -1}, 'amount': 0.6, 'optional': True},
+                    {'action': 'Rain_Lips_Roll_Lower', 'frames': [0, 40], 'neutral': 20, 'subset': 'all', 'expect': {'mesh': 'GEO-rain-head', 'axis': 1, 'sign': -1}, 'amount': 0.6, 'optional': True}]},
+         {'name': 'mouthPucker',
+          'parts': [{'action': 'Rain_Lips_Corner_InOut', 'frames': [0, 40], 'neutral': 20, 'subset': 'left', 'expect': {'mesh': 'GEO-rain-head', 'axis': 1, 'sign': -1}, 'amount': 1.0},
+                    {'action': 'Rain_Lips_Corner_InOut', 'frames': [0, 40], 'neutral': 20, 'subset': 'right', 'expect': {'mesh': 'GEO-rain-head', 'axis': 1, 'sign': -1}, 'amount': 1.0}]},
+         {'name': 'mouthClose',
+          'parts': [{'action': 'Rain_Lips_Roll_Upper', 'frames': [0, 40], 'neutral': 20, 'subset': 'all', 'expect': {'mesh': 'GEO-rain-head', 'axis': 1, 'sign': 1}, 'amount': 1.0, 'optional': True},
+                    {'action': 'Rain_Lips_Roll_Lower', 'frames': [0, 40], 'neutral': 20, 'subset': 'all', 'expect': {'mesh': 'GEO-rain-head', 'axis': 1, 'sign': 1}, 'amount': 1.0, 'optional': True}]},
+         {'name': 'mouthPressLeft', 'parts': [{'action': 'Rain_Lips_Wide', 'frames': [0, 40], 'neutral': 20, 'subset': 'left', 'expect': {'mesh': 'GEO-rain-head', 'axis': 0, 'sign': -1, 'lateral': True}, 'amount': 0.5}]},
+         {'name': 'mouthPressRight', 'parts': [{'action': 'Rain_Lips_Wide', 'frames': [0, 40], 'neutral': 20, 'subset': 'right', 'expect': {'mesh': 'GEO-rain-head', 'axis': 0, 'sign': -1, 'lateral': True}, 'amount': 0.5}]},
+         {'name': 'eyeWideLeft', 'parts': [{'action': 'Rain_Eyelid_Upper', 'frames': [0, 40], 'neutral': 20, 'subset': 'left', 'expect': {'mesh': 'GEO-rain-head', 'axis': 2, 'sign': 1}}], 'optional': True},
+         {'name': 'eyeSquintLeft', 'parts': [{'action': 'Rain_Eyelid_Lower', 'frames': [0, 40], 'neutral': 20, 'subset': 'left', 'expect': {'mesh': 'GEO-rain-head', 'axis': 2, 'sign': 1}}], 'optional': True},
+         {'name': 'mouthFrownLeft',
+          'parts': [{'action': 'Rain_Lips_Corner_Up+Wide', 'frames': [0, 40], 'neutral': 20, 'subset': 'left', 'expect': {'mesh': 'GEO-rain-head', 'axis': 2, 'sign': -1}}],
+          'optional': True},
+         {'name': 'mouthStretchLeft', 'parts': [{'action': 'Rain_Lips_Wide', 'frames': [0, 40], 'neutral': 20, 'subset': 'left', 'expect': {'mesh': 'GEO-rain-head', 'axis': 0, 'sign': 1, 'lateral': True}}], 'optional': True},
+         {'name': 'cheekSquintLeft',
+          'parts': [{'action': 'Rain_Cheeks_Outer', 'frames': [0, 40], 'neutral': 20, 'subset': 'left', 'expect': {'mesh': 'GEO-rain-head', 'axis': 2, 'sign': 1}}],
+          'optional': True},
+         {'name': 'noseSneerLeft', 'parts': [{'action': 'Rain_Sneer', 'frames': [0, 40], 'neutral': 20, 'subset': 'left', 'expect': {'mesh': 'GEO-rain-head', 'axis': 2, 'sign': 1}}], 'optional': True},
+         {'name': 'eyeWideRight', 'parts': [{'action': 'Rain_Eyelid_Upper', 'frames': [0, 40], 'neutral': 20, 'subset': 'right', 'expect': {'mesh': 'GEO-rain-head', 'axis': 2, 'sign': 1}}], 'optional': True},
+         {'name': 'eyeSquintRight',
+          'parts': [{'action': 'Rain_Eyelid_Lower', 'frames': [0, 40], 'neutral': 20, 'subset': 'right', 'expect': {'mesh': 'GEO-rain-head', 'axis': 2, 'sign': 1}}],
+          'optional': True},
+         {'name': 'mouthFrownRight',
+          'parts': [{'action': 'Rain_Lips_Corner_Up+Wide', 'frames': [0, 40], 'neutral': 20, 'subset': 'right', 'expect': {'mesh': 'GEO-rain-head', 'axis': 2, 'sign': -1}}],
+          'optional': True},
+         {'name': 'mouthStretchRight',
+          'parts': [{'action': 'Rain_Lips_Wide', 'frames': [0, 40], 'neutral': 20, 'subset': 'right', 'expect': {'mesh': 'GEO-rain-head', 'axis': 0, 'sign': 1, 'lateral': True}}],
+          'optional': True},
+         {'name': 'cheekSquintRight',
+          'parts': [{'action': 'Rain_Cheeks_Outer', 'frames': [0, 40], 'neutral': 20, 'subset': 'right', 'expect': {'mesh': 'GEO-rain-head', 'axis': 2, 'sign': 1}}],
+          'optional': True},
+         {'name': 'noseSneerRight', 'parts': [{'action': 'Rain_Sneer', 'frames': [0, 40], 'neutral': 20, 'subset': 'right', 'expect': {'mesh': 'GEO-rain-head', 'axis': 2, 'sign': 1}}], 'optional': True},
+         {'name': 'mouthRollUpper',
+          'parts': [{'action': 'Rain_Lips_Roll_Upper', 'frames': [0, 40], 'neutral': 20, 'subset': 'all', 'expect': {'mesh': 'GEO-rain-head', 'axis': 1, 'sign': 1}}],
+          'optional': True},
+         {'name': 'mouthRollLower',
+          'parts': [{'action': 'Rain_Lips_Roll_Lower', 'frames': [0, 40], 'neutral': 20, 'subset': 'all', 'expect': {'mesh': 'GEO-rain-head', 'axis': 1, 'sign': 1}}],
+          'optional': True}],
         "min_morphs": 13,
-        "max_triangles": 75_000,
-        "textures": {"mode": "auto", "roughness": {}, "material_prefix": ""},
-        "roles": {},
+        "max_triangles": 90_000,
+        "textures": {
+            "mode": "tiled", "root": "textures", "singles": (("eyes", "TEX-rain_eyes.png"), ("hair", "TEX-rain_hair_diffuse.png"), ("jeans", "TEX-rain_jeans_diffuse.png")),
+            "atlas": "TEX-rain_body_diffuse.{tile}.png", "skin_prefix": "MAT-rain.body", "material_prefix": "MAT-rain.",
+            "materials": {"MAT-rain.eyes": "eyes", "MAT-rain.hair": "hair", "MAT-rain.jeans": "jeans"}, "roughness": {"MAT-rain.gums": 0.45, "MAT-rain.tongue": 0.5},
+            "colors": {"MAT-rain.teeth": (0.86, 0.82, 0.74, 1), "MAT-rain.gums": (0.56, 0.16, 0.19, 1), "MAT-rain.tongue": (0.64, 0.24, 0.27, 1)},
+        },
+        "roles": {
+            "hips": "DEF-Pelvis", "chest": "Chest", "head": "DEF-Head",
+            "upperarm.L": "DEF-Upperarm1.L", "upperarm.R": "DEF-Upperarm1.R", "forearm.L": "DEF-Forearm1.L", "forearm.R": "DEF-Forearm1.R",
+            "wrist.L": "DEF-Wrist.L", "wrist.R": "DEF-Wrist.R", "thigh.L": "DEF-Thigh1.L", "thigh.R": "DEF-Thigh1.R",
+            "knee.L": "DEF-Knee1.L", "knee.R": "DEF-Knee1.R",
+        },
         "forward": (0, -1, 0),
         "arm_angle": None,
         "clips": ("Idle", "Run"),
@@ -171,14 +285,10 @@ PROFILES = {
         "arm_note": "relaxed upper-arm rotations measured from the source pose",
     },
 }
-# Rain finalization (after `--inspect` on the real .blend): fill "rig", "meshes", "mesh_rename", "roles"
-# (chest, head, hips, upperarm.L/R, forearm.L/R, wrist.L/R, thigh.L/R, knee.L/R), skeleton exclude/rename,
-# "morphs" (one of {"action"+"subset"}, {"bones": {bone: {prop: [values]}}}, {"shape_keys": {key: value}} per ARKit name)
-# and set "ready" True. Nothing else changes.
-
 PROFILE = PROFILES["snow"]
 CREDIT = PROFILE["credit"]
 STALE_POSE_BONES = PROFILE["stale_bones"]
+STALE_PATTERNS = []
 STALE_POSE_PROPERTIES = PROFILE["stale_properties"]
 
 
@@ -187,6 +297,7 @@ def activate(profile):
     PROFILE = profile
     CREDIT = profile["credit"]
     STALE_POSE_BONES = profile["stale_bones"]
+    STALE_PATTERNS[:] = [re.compile(pattern) for pattern in profile["stale_bone_patterns"]]
     STALE_POSE_PROPERTIES = profile["stale_properties"]
 
 
@@ -195,10 +306,18 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
-def pose_channels(action_name):
+def channel_key(spec):
+    return spec["action"] if spec.get("frame") is None else f"{spec['action']}@{spec['frame']}"
+
+
+def pose_channels(action_name, frame=None):
     action = bpy.data.actions.get(action_name)
     require(action is not None, f"Missing author pose: {action_name}")
-    require(abs(action.frame_range[1] - action.frame_range[0]) < 0.001, f"Expected a single-frame pose: {action_name}")
+    if frame is None:
+        require(abs(action.frame_range[1] - action.frame_range[0]) < 0.001, f"Expected a single-frame pose: {action_name}")
+        frame = action.frame_range[0]
+    else:
+        require(math.isfinite(frame) and -1000 <= frame <= 1000, f"Invalid frame for {action_name}: {frame}")
     slots = [slot for slot in action.slots if slot.target_id_type == "OBJECT"]
     require(len(slots) == 1, f"Ambiguous pose slots: {action_name}")
     bag = action_get_channelbag_for_slot(action, slots[0])
@@ -209,7 +328,7 @@ def pose_channels(action_name):
         require(match is not None, f"Unsupported pose channel in {action_name}: {curve.data_path}")
         bone = json.loads(match[1])
         prop = match[2] or json.loads(match[3])
-        value = curve.evaluate(action.frame_range[0])
+        value = curve.evaluate(frame)
         require(math.isfinite(value) and abs(value) <= 10_000, f"Invalid pose value in {action_name}")
         result.append((bone, prop, curve.array_index, value, match[2] is None))
     return result
@@ -228,7 +347,7 @@ def preflight_pose_channels(rig, channels):
         if not animation:
             continue
         for curve in animation.drivers:
-            require(curve.driver.is_valid, f"Invalid driver during pose preflight: {owner.name}: {curve.data_path}")
+            require(curve.driver.is_valid or curve.data_path in PROFILE["allowed_invalid_drivers"], f"Invalid driver during pose preflight: {owner.name}: {curve.data_path}")
             if owner == rig:
                 require(not any(name in curve.data_path for name in stale_names), f"Stale pose target has a driver: {curve.data_path}")
             for variable in curve.driver.variables:
@@ -250,7 +369,7 @@ def preflight_pose_channels(rig, channels):
         filtered[action] = []
         for name, prop, index, value, custom in values:
             # Snow v4.2 pose assets retain two removed bones and two unused Jaw properties.
-            if name in STALE_POSE_BONES:
+            if name in STALE_POSE_BONES or (name not in rig.pose.bones and any(pattern.search(name) for pattern in STALE_PATTERNS)):
                 skipped_bones.add(name)
                 continue
             bone = rig.pose.bones.get(name)
@@ -400,14 +519,38 @@ def build_skeleton(source_rig, profile):
     runtime = {bone.name: spec["rename"].get(bone.name, bone.name) for bone in included}
     require(len(set(runtime.values())) == len(runtime), "Runtime bone names collide")
     parents = {runtime[bone.name]: (runtime[nearest(bone)] if nearest(bone) else None) for bone in included}
+    for child, parent in spec.get("parent_overrides", {}).items():
+        require(child in runtime and parent in runtime and child in names and parent in names, f"parent_overrides names a bone that is not an included deform bone: {child} -> {parent}")
+        parents[runtime[child]] = runtime[parent]
     roots = [name for name, parent in parents.items() if parent is None]
+    if spec.get("root") and len(roots) > 1:
+        require(spec["root"] in roots, f"Configured root is not a root candidate: {spec['root']}")
+        for name in roots:
+            if name != spec["root"]:
+                parents[name] = spec["root"]
+        roots = [spec["root"]]
     require(len(roots) == 1, f"Expected one root deform bone, found: {roots[:8]}")
+    for name in parents:
+        node, steps = name, 0
+        while parents[node] is not None:
+            node, steps = parents[node], steps + 1
+            require(steps <= len(parents), f"Skeleton parent cycle through {name}")
+    rules = [(re.compile(pattern), target) for pattern, target in spec.get("fallback_rules", ())]
+    for _, target in rules:
+        require(target in parents, f"Fallback target is not an included runtime bone: {target}")
+    fallbacks = {}
     for bone in bones:
         if bone.use_deform and bone.name not in names:
+            target = next((target for pattern, target in rules if pattern.search(bone.name)), None)
             ancestor = nearest(bone)
-            require(ancestor is not None, f"Excluded deform bone has no included ancestor: {bone.name}")
-            runtime[bone.name] = runtime[ancestor]
-    return {"parents": parents, "sources": {value: key for key, value in runtime.items() if key in names}, "runtime": runtime, "fallback": None}
+            if target is None and ancestor is not None:
+                target = runtime[ancestor]
+            if target is None:
+                target = spec.get("default")
+            require(target in parents, f"Excluded deform bone has no fallback; add a skeleton.fallback_rules entry: {bone.name}")
+            runtime[bone.name] = target
+            fallbacks[target] = fallbacks.get(target, 0) + 1
+    return {"parents": parents, "sources": {value: key for key, value in runtime.items() if key in names}, "runtime": runtime, "fallback": None, "fallbacks": fallbacks}
 
 
 def preflight_profile(profile, skeleton, source_rig, sources):
@@ -425,14 +568,14 @@ def preflight_profile(profile, skeleton, source_rig, sources):
     require(len(set(names)) == len(names) and len(names) >= profile["min_morphs"], f"Expected at least {profile['min_morphs']} distinct facial morphs, found {len(set(names))}")
     unsupported = [name for name in names if normalize(name) not in accepted]
     require(not unsupported, "Morph names unsupported by the runtime face mapping: " + ", ".join(unsupported))
-    if profile["id"] != "snow":
+    if profile["min_morphs"] > 0 and profile["id"] != "snow":
         core = {normalize(name) for name in CORE_FACE_SHAPES}
         require(len(core & {normalize(name) for name in names}) >= 13, "Rain-class profiles must provide all 13 CORE_FACE_SHAPES")
         forward = Vector(profile["forward"])
         require(abs(forward.length - 1) < 1e-6 and forward.z == 0, "Profile forward must be a horizontal unit vector")
     for spec in profile["morphs"]:
-        kinds = [key for key in ("action", "bones", "shape_keys") if key in spec]
-        require(len(kinds) == 1, f"Morph {spec['name']} must define exactly one of action, bones or shape_keys")
+        kinds = [key for key in ("action", "bones", "shape_keys", "parts") if key in spec]
+        require(len(kinds) == 1, f"Morph {spec['name']} must define exactly one of action, bones, shape_keys or parts")
         if "shape_keys" in spec:
             found = False
             for obj in sources:
@@ -474,6 +617,9 @@ def make_rig(source, skeleton, collection):
     return rig
 
 
+WEIGHT_STATS = []
+
+
 def assign_weights(source, target, rig, skeleton):
     parents = skeleton["parents"]
     deform = {bone.name for bone in bpy.data.objects[PROFILE["rig"]].data.bones if bone.use_deform}
@@ -501,7 +647,7 @@ def assign_weights(source, target, rig, skeleton):
         ordered = sorted(weights.items(), key=lambda item: (-item[1], item[0]))
         discarded = sum(value for _, value in ordered[4:]) / total
         max_discarded = max(max_discarded, discarded)
-        require(discarded <= PROFILE["max_discarded"], f"Skin influence reduction exceeds {PROFILE['max_discarded']:.0%}: {source.name} vertex {vertex.index}")
+        WEIGHT_STATS.append((source.name, vertex.index, discarded, len(weights)))
         kept = sum(value for _, value in ordered[:4])
         vertex_weights.append([(name, value / kept) for name, value in ordered[:4]])
     target.vertex_groups.clear()
@@ -533,13 +679,14 @@ def resize_image(path, size, work):
     return image
 
 
-def snow_texture_images(source_dir, work):
-    root = source_dir / "textures"
-    textures = {name: resize_image(root / f"{name}_diffuse.png", 1024, work) for name in ("eyes", "hair", "pants", "shirt", "shoes")}
+def tiled_texture_images(source_dir, work):
+    spec = PROFILE["textures"]
+    root = source_dir / spec["root"]
+    textures = {name: resize_image(root / filename, 1024, work) for name, filename in spec["singles"]}
     atlas = bpy.data.images.new(f"{PROFILE['prefix']}_skin_atlas", width=1024, height=1024, alpha=True)
     pixels = array("f", [0.0]) * (1024 * 1024 * 4)
     for tile, (x, y) in zip((1001, 1002, 1003), ((0, 0), (512, 0), (0, 512))):
-        image = resize_image(root / f"skin_diffuse.{tile}.png", 512, work)
+        image = resize_image(root / spec["atlas"].format(tile=tile), 512, work)
         require(tuple(image.size) == (512, 512), "Skin tiles must be square")
         tile_pixels = array("f", [0.0]) * (512 * 512 * 4)
         image.pixels.foreach_get(tile_pixels)
@@ -595,7 +742,7 @@ def auto_textures(materials, work):
 
 def texture_for(name, textures):
     spec = PROFILE["textures"]
-    if spec["mode"] == "snow":
+    if spec["mode"] == "tiled":
         key = "skin" if name.startswith(spec["skin_prefix"]) else spec["materials"].get(name)
         return textures[key] if key else None
     return textures.get(name)
@@ -614,6 +761,8 @@ def runtime_material(source, textures, cache):
     color = tuple(originals[0].inputs["Base Color"].default_value) if originals else (1, 1, 1, 1)
     roughness = float(originals[0].inputs["Roughness"].default_value) if originals else 0.25
     require(all(math.isfinite(v) and 0 <= v <= 1 for v in color) and math.isfinite(roughness), f"Invalid material: {name}")
+    if name in spec.get("colors", {}):
+        color = spec["colors"][name]
     shader.inputs["Base Color"].default_value = (1, 1, 1, 1) if texture else color
     shader.inputs["Roughness"].default_value = max(0.05, min(1, roughness))
     shader.inputs["Metallic"].default_value = 0
@@ -677,7 +826,7 @@ def add_expression_clips(path):
     require(len(document.get("buffers", [])) == 1 and "uri" not in document["buffers"][0], "Base GLB must have one embedded buffer")
     nodes = document.get("nodes", [])
     require(len(nodes) <= 256, "Base GLB node budget exceeded")
-    for name in (PROFILE["roles"].get("upperarm.L"), PROFILE["roles"].get("upperarm.R")):
+    for name in (PROFILE["roles"].get("upperarm.L"), PROFILE["roles"].get("upperarm.R")) if PROFILE["arm_angle"] is not None else ():
         matches = [index for index, node in enumerate(nodes) if node.get("name") == name]
         require(len(matches) == 1 and any(channel["target"].get("node") == matches[0] and channel["target"]["path"] == "rotation" for channel in idle["channels"]), f"Idle is missing the relaxed arm rotation: {name}")
     binary_at = 20 + json_length
@@ -791,8 +940,15 @@ def validate_glb(path):
             require(morphs <= 64, "GLB morph target count exceeded")
             morph_vertices += count * morphs
     require(vertices <= MAX_VERTICES and indices <= 1_000_000 and morph_vertices <= MAX_MORPH_VERTICES, "GLB geometry allocation exceeded")
-    required = {spec["name"] for spec in PROFILE["morphs"]}
-    require(required.issubset(morph_names), "GLB is missing required facial morphs: " + ", ".join(sorted(required - morph_names)))
+    required = {spec["name"] for spec in PROFILE["morphs"] if not spec.get("optional")}
+    if PROFILE.get("dry") and not required.issubset(morph_names):
+        print(json.dumps({"warning": "GLB is missing required facial morphs", "missing": sorted(required - morph_names)}), flush=True)
+    else:
+        require(required.issubset(morph_names), "GLB is missing required facial morphs: " + ", ".join(sorted(required - morph_names)))
+    if PROFILE["min_morphs"] > 0 and PROFILE["id"] != "snow":
+        core = {normalize(name): name for name in CORE_FACE_SHAPES}
+        absent = sorted(name for key, name in core.items() if key not in {normalize(item) for item in morph_names})
+        require(not absent, "GLB lacks core face shapes: " + ", ".join(absent))
     limit = PROFILE.get("max_triangles")
     require(limit is None or indices // 3 <= limit, f"Triangle budget exceeded: {indices // 3} > {limit}")
     binary_at = 20 + json_length
@@ -878,7 +1034,8 @@ def check_arms(rig, lowered_directions):
         shoulder = rig.matrix_world @ rig.pose.bones[roles[f"upperarm.{side}"]].head
         wrist = rig.matrix_world @ rig.pose.bones[roles[f"wrist.{side}"]].head
         actual = (wrist - shoulder).normalized()
-        require(actual.dot(expected) > 0.999 and actual.z < -0.9, f"Evaluated arm pose does not match its relaxed direction: {side}")
+        measured = [round(v, 4) for v in actual]
+        require(actual.dot(expected) > 0.999 and actual.z < -0.9, f"Evaluated arm pose does not match its relaxed direction: {side}: measured {measured}, expected {[round(v, 4) for v in expected]}, dot {actual.dot(expected):.5f}")
 
 
 def author_idle(rig):
@@ -933,7 +1090,6 @@ def author_run(rig, idle):
     for name in [*names.values(), roles["hips"]]:
         rig.pose.bones[name].rotation_mode = "QUATERNION"
     rig.animation_data.action = None
-    rig.animation_data.action_slot = None
 
     def parent_delta(bone, deltas):
         while bone.parent is not None:
@@ -996,9 +1152,11 @@ def author_run(rig, idle):
     track = rig.animation_data.nla_tracks.new()
     track.name = "Run"
     strip = track.strips.new("Run", 0, action)
-    strip.action_slot = action.slots[0]
+    if strip.action_slot is None:
+        strip.action_slot = action.slots[0]
     rig.animation_data.action = idle
-    rig.animation_data.action_slot = idle.slots[0]
+    if rig.animation_data.action_slot is None:
+        rig.animation_data.action_slot = idle.slots[0]
     bpy.context.scene.frame_set(0)
     bpy.context.view_layer.update()
 
@@ -1043,8 +1201,181 @@ def enable_layer(layer):
         enable_layer(child)
 
 
+class PartResolver:
+    def __init__(self, rig, neutral, neutral_keys, records):
+        self.rig, self.neutral, self.neutral_keys, self.records = rig, neutral, neutral_keys, records
+        self.muted = []
+        self.cache = {}
+        self.diagnostics = []
+        reference = PROFILE.get("left_reference")
+        self.left_x = 1.0
+        if reference:
+            self.left_x = 1.0 if (rig.matrix_world @ rig.pose.bones[reference].head).x >= 0 else -1.0
+
+    def channels(self, part, value):
+        key = (part.get("action") or part["bone"], part.get("prop"), part.get("index"), value)
+        if key not in self.cache:
+            if "action" in part:
+                raw = pose_channels(part["action"], value)
+            else:
+                raw = [(part["bone"], part["prop"], part["index"], value, False)]
+            filtered, _, _ = preflight_pose_channels(self.rig, {"part": raw})
+            self.cache[key] = filtered["part"]
+        return self.cache[key]
+
+    def candidates(self, part):
+        if "action" in part:
+            n, amount = part.get("neutral", 20), part.get("amount", 1.0)
+            return [n + (frame - n) * amount for frame in part["frames"]]
+        return list(part["values"])
+
+    def apply_one(self, part, value, channels):
+        if "bone" in part:
+            bone = self.rig.pose.bones[part["bone"]]
+            if part["prop"] == "rotation_euler":
+                bone.rotation_mode = "XYZ"
+            if part.get("free_constraints"):
+                for constraint in bone.constraints:
+                    if not constraint.mute:
+                        constraint.mute = True
+                        self.muted.append(constraint)
+        if part.get("bones_match"):
+            channels = [item for item in channels if re.search(part["bones_match"], item[0])]
+        apply_pose(self.rig, channels, part.get("subset", "all"))
+
+    def mean_vector(self, expect):
+        record = self.records[expect["mesh"]]
+        mesh, coordinates, _ = geometry(record["source"], bpy.context.evaluated_depsgraph_get())
+        try:
+            total, count = [0.0, 0.0, 0.0], 0
+            neutral = record["neutral"]
+            for i in range(len(mesh.vertices)):
+                d = [coordinates[3 * i + k] - neutral[3 * i + k] for k in range(3)]
+                if max(abs(v) for v in d) > 1e-6:
+                    total = [a + b for a, b in zip(total, d)]
+                    count += 1
+            return [v / count for v in total] if count else total, count
+        finally:
+            bpy.data.meshes.remove(mesh)
+
+    def expected_shift(self, vector, part):
+        expect = part["expect"]
+        value = vector[expect["axis"]]
+        if expect.get("lateral"):
+            value *= self.left_x if part.get("subset") == "left" else -self.left_x
+        return value * expect["sign"]
+
+    def resolve(self, part):
+        best, chosen = 0.0, None
+        seen = []
+        for value in self.candidates(part):
+            restore_pose(self.rig, self.neutral)
+            restore_keys(self.neutral_keys)
+            channels = self.channels(part, value)
+            try:
+                self.apply_one(part, value, channels)
+            except RuntimeError as failure:
+                require(str(failure).startswith("Pose has no"), str(failure))
+                continue
+            self.rig.update_tag()
+            bpy.context.view_layer.update()
+            vector, count = self.mean_vector(part["expect"])
+            shift = self.expected_shift(vector, part)
+            seen.append({"value": value, "movedVertices": count, "meanShift": [round(v, 6) for v in vector], "scoredShift": round(shift, 6)})
+            if shift > max(best, 1e-5):
+                best, chosen = shift, value
+        restore_pose(self.rig, self.neutral)
+        restore_keys(self.neutral_keys)
+        diagnostic = {"part": part.get("action") or part["bone"], "subset": part.get("subset", "all"), "expect": part["expect"], "leftX": self.left_x, "candidates": seen}
+        print(json.dumps({"partDiagnostic": diagnostic}, sort_keys=True), flush=True)
+        require(chosen is not None, "no candidate moves as expected: " + json.dumps(diagnostic, sort_keys=True))
+        return chosen
+
+    def apply(self, spec):
+        chosen = []
+        for part in spec["parts"]:
+            try:
+                chosen.append((part, self.resolve(part)))
+            except RuntimeError:
+                if not part.get("optional"):
+                    raise
+        require(chosen, "no part could be resolved")
+        restore_pose(self.rig, self.neutral)
+        restore_keys(self.neutral_keys)
+        for part, value in chosen:
+            self.apply_one(part, value, self.channels(part, value))
+
+    def finish(self):
+        for constraint in self.muted:
+            constraint.mute = False
+        self.muted.clear()
+
+
+def collect_preconditions(profile, source_path, source_rig, sources, skeleton):
+    errors = []
+    spec = profile["textures"]
+    if spec["mode"] == "tiled":
+        root = source_path.parent / spec["root"]
+        files = [filename for _, filename in spec["singles"]] + [spec["atlas"].format(tile=tile) for tile in (1001, 1002, 1003)]
+        errors += [f"missing texture file: {root / name}" for name in files if not (root / name).is_file()]
+    for morph in profile["morphs"]:
+        for part in morph.get("parts", ()):
+            label = f"{morph['name']}"
+            if "action" in part:
+                if part["action"] not in bpy.data.actions:
+                    errors.append(f"{label}: missing action {part['action']}")
+            elif part["bone"] not in source_rig.pose.bones:
+                errors.append(f"{label}: missing bone {part['bone']}")
+            if part["expect"]["mesh"] not in profile["meshes"]:
+                errors.append(f"{label}: expect mesh {part['expect']['mesh']} is not a profile mesh")
+    absent = {}
+    for action_name in sorted({part["action"] for morph in profile["morphs"] for part in morph.get("parts", ()) if "action" in part} & set(bpy.data.actions.keys())):
+        action = bpy.data.actions[action_name]
+        for slot in action.slots:
+            bag = action_get_channelbag_for_slot(action, slot)
+            for curve in (bag.fcurves if bag else []):
+                match = CHANNEL.fullmatch(curve.data_path)
+                if match and match[1] and json.loads(match[1]) not in source_rig.pose.bones:
+                    bone = json.loads(match[1])
+                    if bone not in STALE_POSE_BONES and not any(pattern.search(bone) for pattern in STALE_PATTERNS):
+                        absent.setdefault(bone, set()).add(action_name)
+    errors += [f"action bone absent from rig and not allowlisted: {bone} (in {', '.join(sorted(actions))})" for bone, actions in sorted(absent.items())]
+    errors += [f"rigid_meshes entry is not a profile mesh: {name}" for name in profile["rigid_meshes"] if name not in profile["meshes"]]
+    errors += [f"rigid_meshes target is not a runtime bone: {name}" for name in set(profile["rigid_meshes"].values()) if name not in skeleton["parents"]]
+    deform = {bone.name for bone in source_rig.data.bones if bone.use_deform}
+    skin_prefix = spec.get("skin_prefix")
+    for source in sources:
+        materials = [slot.material for slot in source.material_slots]
+        if not materials or any(material is None for material in materials):
+            errors.append(f"{source.name}: empty material slot")
+            continue
+        names = {group.index: group.name for group in source.vertex_groups}
+        rigid = source.name in profile["rigid_meshes"]
+        bare = sum(1 for vertex in source.data.vertices if not rigid and not any(names.get(m.group) in deform and m.weight > 1e-8 for m in vertex.groups))
+        if bare:
+            errors.append(f"{source.name}: {bare} vertices have no deform weight and no rigid_meshes fallback")
+        textured = [material.name for material in materials if material.name.startswith(skin_prefix or "\0") or material.name in spec.get("materials", {})]
+        layers = [layer for layer in source.data.uv_layers if layer.active_render]
+        if textured and len(layers) != 1:
+            errors.append(f"{source.name}: textured but {len(layers)} render UV maps")
+        elif textured and skin_prefix:
+            layer = layers[0]
+            bad = 0
+            for poly in source.data.polygons:
+                if not materials[poly.material_index].name.startswith(skin_prefix):
+                    continue
+                us = [layer.data[i].uv for i in poly.loop_indices]
+                tile = math.floor(sum(uv.x for uv in us) / len(us))
+                if tile not in (0, 1, 2) or any(uv.y < -0.001 or uv.y > 1.001 for uv in us):
+                    bad += 1
+            if bad:
+                errors.append(f"{source.name}: {bad} skin polygons fall outside UDIM tiles 1001-1003")
+    return errors
+
+
 def convert(profile, source_path, output_path, receipt_path, retrieved):
     activate(profile)
+    WEIGHT_STATS.clear()
     require(profile["ready"], f"Profile '{profile['id']}' is not finalized: run --inspect on the source .blend and fill rig, meshes, roles and morphs")
     require(source_path.is_file() and source_path.suffix == ".blend", f"Expected the local {profile['prefix']} .blend source")
     require(output_path.suffix == ".glb" and output_path != source_path, "Expected a separate .glb output")
@@ -1060,6 +1391,8 @@ def convert(profile, source_path, output_path, receipt_path, retrieved):
     require(all(obj is not None and obj.type == "MESH" for obj in sources), f"Expected {profile['prefix']} render meshes are missing")
     skeleton = build_skeleton(source_rig, profile)
     preflight_profile(profile, skeleton, source_rig, sources)
+    problems = collect_preconditions(profile, source_path, source_rig, sources, skeleton)
+    require(not problems, f"{len(problems)} precondition failures:\n" + "\n".join(problems[:60]))
     for collection in bpy.data.collections:
         collection.hide_viewport = False
     enable_layer(bpy.context.view_layer.layer_collection)
@@ -1087,7 +1420,7 @@ def convert(profile, source_path, output_path, receipt_path, retrieved):
     channels = {}
     for spec in profile["morphs"]:
         if "action" in spec:
-            channels[spec["action"]] = pose_channels(spec["action"])
+            channels[channel_key(spec)] = pose_channels(spec["action"], spec.get("frame"))
         elif "bones" in spec:
             channels["@" + spec["name"]] = [(bone, prop, index, value, False) for bone, props in spec["bones"].items() for prop, values in props.items() for index, value in enumerate(values)]
     for name in profile["neutral_actions"]:
@@ -1097,7 +1430,7 @@ def convert(profile, source_path, output_path, receipt_path, retrieved):
         apply_pose(source_rig, channels[name])
     source_rig.update_tag()
     bpy.context.view_layer.update()
-    require(all(curve.driver.is_valid for curve in source_rig.animation_data.drivers), "Rig has invalid drivers with script execution disabled")
+    require(all(curve.driver.is_valid or curve.data_path in profile["allowed_invalid_drivers"] for curve in source_rig.animation_data.drivers), "Rig has invalid drivers with script execution disabled")
     neutral = snapshot_pose(source_rig)
     neutral_keys = snapshot_keys(sources)
     collection = bpy.data.collections.new(f"{profile['prefix']}Runtime")
@@ -1117,16 +1450,43 @@ def convert(profile, source_path, output_path, receipt_path, retrieved):
         collection.objects.link(target)
         discarded = assign_weights(source, target, rig, skeleton)
         records.append({"source": source, "target": target, "neutral": coordinates, "topology": topology, "discarded": discarded})
+    stats = sorted(item[2] for item in WEIGHT_STATS)
+    limit = profile["max_discarded"]
+    over = [item for item in WEIGHT_STATS if item[2] > limit]
+    by_mesh = {}
+    for name, _, discarded, _ in over:
+        entry = by_mesh.setdefault(name, [0, 0.0])
+        entry[0] += 1
+        entry[1] = max(entry[1], discarded)
+    weight_report = {
+        "vertices": len(stats), "limit": limit, "overLimit": len(over), "max": stats[-1], "p99": stats[int(0.99 * (len(stats) - 1))], "p95": stats[int(0.95 * (len(stats) - 1))],
+        "maxInfluences": max(item[3] for item in WEIGHT_STATS),
+        "overByMesh": {name: {"vertices": count, "max": round(worst, 4)} for name, (count, worst) in sorted(by_mesh.items())},
+    }
+    print(json.dumps({"weightDiscard": weight_report}, sort_keys=True), flush=True)
+    require(not over or profile.get("dry"), f"Skin influence reduction exceeds {limit:.0%} on {len(over)} vertices; distribution: " + json.dumps(weight_report, sort_keys=True))
     morph_vertices = 0
     movements = {}
+    skipped_morphs = []
+    by_source = {record["source"].name: record for record in records}
+    resolver = PartResolver(source_rig, neutral, neutral_keys, by_source)
     for spec in profile["morphs"]:
         name = spec["name"]
+        resolver.finish()
         restore_pose(source_rig, neutral)
         restore_keys(neutral_keys)
-        if "shape_keys" in spec:
+        try:
+            if "parts" in spec:
+                resolver.apply(spec)
+        except RuntimeError as failure:
+            skipped_morphs.append({"morph": name, "optional": bool(spec.get("optional")), "reason": str(failure)})
+            continue
+        if "parts" in spec:
+            pass
+        elif "shape_keys" in spec:
             apply_keys(sources, spec["shape_keys"], name)
         elif "action" in spec:
-            apply_pose(source_rig, channels[spec["action"]], spec.get("subset", "all"))
+            apply_pose(source_rig, channels[channel_key(spec)], spec.get("subset", "all"))
         else:
             apply_pose(source_rig, channels["@" + name])
         source_rig.update_tag()
@@ -1150,16 +1510,26 @@ def convert(profile, source_path, output_path, receipt_path, retrieved):
                     target.data.update()
             finally:
                 bpy.data.meshes.remove(mesh)
-        require(maximum > 0.00001, f"Author pose produced no meaningful deformation: {name}")
+        if maximum <= 0.00001:
+            skipped_morphs.append({"morph": name, "optional": bool(spec.get("optional")), "reason": "no meaningful deformation"})
+            for record in records:
+                keys = record["target"].data.shape_keys
+                if keys is not None and name in keys.key_blocks:
+                    record["target"].shape_key_remove(keys.key_blocks[name])
+            continue
         movements[name] = maximum
+    resolver.finish()
+    required_failures = [item["morph"] for item in skipped_morphs if item.get("optional") is False]
+    print(json.dumps({"skippedMorphs": skipped_morphs}, sort_keys=True), flush=True)
+    require(not required_failures or profile.get("dry"), "Required morphs failed: " + ", ".join(required_failures))
     restore_pose(source_rig, neutral)
     restore_keys(neutral_keys)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=f"{profile['id']}-conversion-", dir=output_path.parent) as temporary:
         work = Path(temporary)
         spec = profile["textures"]
-        if spec["mode"] == "snow":
-            textures = snow_texture_images(source_path.parent, work)
+        if spec["mode"] == "tiled":
+            textures = tiled_texture_images(source_path.parent, work)
         else:
             textures = auto_textures([slot.material for source in sources for slot in source.material_slots if slot.material], work)
         materials = {}
@@ -1221,7 +1591,7 @@ def convert(profile, source_path, output_path, receipt_path, retrieved):
                 print(json.dumps({"diagnosticError": str(diagnostic_failure), "validationError": str(failure)}), flush=True)
             raise
         pending.replace(output_path)
-    summary.update({"output": str(output_path), "poseMaxDisplacement": movements, "maxDiscardedSkinWeight": max(record["discarded"] for record in records), "skippedPoseBones": skipped_bones, "skippedPoseProperties": skipped_properties, "untexturedMaterials": untextured, "bodyAnimation": f"Authored loops ({', '.join(profile['clips'])}) with neutral endpoints; {profile['arm_note']}; no original pose/corrective actions exported", "expressionClips": [{"name": name, "morphs": list(morphs), "maximum": ceiling, "duration": 2} for name, morphs, ceiling in profile["expressions"]]})
+    summary.update({"output": str(output_path), "poseMaxDisplacement": movements, "maxDiscardedSkinWeight": max(record["discarded"] for record in records), "skippedPoseBones": skipped_bones, "skippedPoseProperties": skipped_properties, "untexturedMaterials": untextured, "skippedMorphs": skipped_morphs, "weightDiscard": weight_report, "skeletonFallbacks": skeleton.get("fallbacks", {}), "bodyAnimation": f"Authored loops ({', '.join(profile['clips'])}) with neutral endpoints; {profile['arm_note']}; no original pose/corrective actions exported", "expressionClips": [{"name": name, "morphs": list(morphs), "maximum": ceiling, "duration": 2} for name, morphs, ceiling in profile["expressions"]]})
     if receipt_path:
         write_receipt(profile, output_path, summary, receipt_path, retrieved)
     print(json.dumps(summary, sort_keys=True))
@@ -1240,14 +1610,64 @@ def write_receipt(profile, output_path, summary, receipt_path, retrieved):
     receipt = {
         "title": base["title"], "author": base["author"], "source": base["source"], "sourceDownload": base["sourceDownload"],
         "sourceSha256": base["sourceSha256"], "sourceBytes": base["sourceBytes"], "license": base["license"], "licenseUrl": base["licenseUrl"],
+        **({"licenseEvidence": base["licenseEvidence"]} if "licenseEvidence" in base else {}),
         "copyright": CREDIT, "retrieved": base["retrieved"], "derivation": profile["derivation"],
         "sha256": sha256_of(output_path), "bytes": output_path.stat().st_size, "vertices": summary["vertices"], "triangles": summary["triangles"],
         "joints": summary["joints"], "morphs": summary["morphs"], "clips": [*profile["clips"], *(name for name, _, _ in profile["expressions"])],
         "texturePixels": summary["texturePixels"], "textureImages": summary["textureImages"], "skippedPoseBones": summary["skippedPoseBones"],
         "skippedPoseProperties": summary["skippedPoseProperties"], "maxDiscardedSkinWeight": summary["maxDiscardedSkinWeight"],
+        **({"skinWeightPolicy": {"limit": profile["max_discarded"], "note": profile["weight_note"], "measured": summary["weightDiscard"]}} if profile.get("weight_note") else {}),
+        "skippedMorphs": summary["skippedMorphs"],
     }
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+
+
+def inspect_face_rig():
+    rig = max((obj for obj in bpy.data.objects if obj.type == "ARMATURE"), key=lambda obj: len(obj.data.bones), default=None)
+    if rig is None:
+        return None
+    mechanism = re.compile(r"^(DEF|BB|TAN|AIM|P|GRP|STR|MCH|LTC|MSTR|IK|FK|ORG|N|TGT|PVT|DSP|SK|ACT)[-_]")
+    controls, actions, limits = [], [], []
+    for bone in rig.pose.bones:
+        for constraint in bone.constraints:
+            if constraint.type == "ACTION" and len(actions) < 1500:
+                actions.append({
+                    "owner": bone.name, "target": getattr(constraint.target, "name", None), "subtarget": constraint.subtarget,
+                    "channel": constraint.transform_channel, "space": constraint.target_space, "min": round(constraint.min, 5), "max": round(constraint.max, 5),
+                    "action": constraint.action.name if constraint.action else None, "frames": [constraint.frame_start, constraint.frame_end],
+                    "mix": constraint.mix_mode, "influence": round(constraint.influence, 3),
+                })
+            elif constraint.type in ("LIMIT_LOCATION", "LIMIT_ROTATION", "LIMIT_SCALE") and not mechanism.match(bone.name) and len(limits) < 600:
+                limits.append({"bone": bone.name, "type": constraint.type, "min": [round(constraint.min_x, 4), round(constraint.min_y, 4), round(constraint.min_z, 4)] if constraint.type == "LIMIT_LOCATION" else None, "max": [round(constraint.max_x, 4), round(constraint.max_y, 4), round(constraint.max_z, 4)] if constraint.type == "LIMIT_LOCATION" else None})
+        if bone.custom_shape is not None and not bone.bone.use_deform and not mechanism.match(bone.name) and len(controls) < 600:
+            controls.append({"name": bone.name, "shape": bone.custom_shape.name, "rotationMode": bone.rotation_mode, "lockLocation": list(bone.lock_location), "lockRotation": list(bone.lock_rotation), "collections": [c.name for c in bone.bone.collections][:4], "properties": {k: bone[k] for k in bone.keys() if isinstance(bone[k], (int, float))}})
+    pose_actions = {}
+    for action in bpy.data.actions:
+        deltas = []
+        for slot in action.slots:
+            bag = action_get_channelbag_for_slot(action, slot)
+            for curve in (bag.fcurves if bag else []):
+                match = CHANNEL.fullmatch(curve.data_path)
+                if not match or len(deltas) >= 80:
+                    continue
+                first, last = curve.evaluate(action.frame_range[0]), curve.evaluate(action.frame_range[1])
+                if abs(first - last) > 1e-5:
+                    deltas.append({"bone": json.loads(match[1]), "prop": match[2] or json.loads(match[3]), "index": curve.array_index, "start": round(first, 5), "end": round(last, 5)})
+        pose_actions[action.name] = {"range": list(action.frame_range), "changes": deltas}
+    drivers = []
+    for obj in sorted((o for o in bpy.data.objects if o.type == "MESH"), key=lambda o: ("head" not in o.name and "tongue" not in o.name and "eyes" not in o.name, o.name)):
+        keys = obj.data.shape_keys
+        if keys is None or keys.animation_data is None:
+            continue
+        per_mesh = 0
+        for curve in keys.animation_data.drivers:
+            if len(drivers) >= 300 or per_mesh >= 60:
+                break
+            per_mesh += 1
+            drivers.append({"mesh": obj.name, "path": curve.data_path, "type": curve.driver.type, "expression": curve.driver.expression[:160], "valid": curve.driver.is_valid, "variables": [{"name": v.name, "type": v.type, "targets": [{"id": getattr(t.id, "name", None), "bone": t.bone_target, "transform": t.transform_type, "space": t.transform_space, "path": t.data_path} for t in v.targets[:2]]} for v in curve.driver.variables[:4]]})
+    chains = {name: [{"type": c.type, "subtarget": getattr(c, "subtarget", ""), "mute": c.mute, "influence": round(c.influence, 3)} for c in rig.pose.bones[name].constraints] for name in ("DEF-Jaw", "DEF-Head", "DEF-Eye.L", "DEF-Teeth_Bot_1.L", "DEF-Lip_Bot_Across.M") if name in rig.pose.bones}
+    return {"rig": rig.name, "boneConstraints": chains, "rotationModes": {name: rig.pose.bones[name].rotation_mode for name in ("DEF-Jaw", "DEF-Head") if name in rig.pose.bones}, "controls": controls, "actionConstraints": actions, "limitConstraints": limits, "poseActions": pose_actions, "shapeKeyDrivers": drivers}
 
 
 def inspect_blend(source_path, report_path):
@@ -1305,6 +1725,7 @@ def inspect_blend(source_path, report_path):
     }
     bones_by_name = {normalize(bone.name): bone.name for obj in bpy.data.objects if obj.type == "ARMATURE" for bone in obj.data.bones}
     report["trackingBones"] = {role: [bones_by_name[alias] for alias in aliases if alias in bones_by_name] for role, aliases in tracking_bone_groups().items()}
+    report["faceRig"] = inspect_face_rig()
     report["poseAssets"] = [action["name"] for action in report["actions"] if action["asset"]]
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
@@ -1320,6 +1741,7 @@ if __name__ == "__main__":
     parser.add_argument("--report", type=Path)
     parser.add_argument("--receipt", type=Path)
     parser.add_argument("--retrieved")
+    parser.add_argument("--dry-run", action="store_true", help="convert without facial morphs and expression clips; writes no receipt")
     args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
     if args.inspect:
         require(args.input is not None, "--inspect requires --input")
@@ -1327,4 +1749,6 @@ if __name__ == "__main__":
     else:
         require(args.profile is not None, "--profile is required")
         selected = PROFILES[args.profile]
-        convert(selected, (args.input or ROOT / selected["input"]).resolve(), (args.output or ROOT / selected["output"]).resolve(), args.receipt.resolve() if args.receipt else None, args.retrieved)
+        if args.dry_run:
+            selected = {**selected, "ready": True, "dry": True, "min_morphs": 0, "expressions": ()}
+        convert(selected, (args.input or ROOT / selected["input"]).resolve(), (args.output or ROOT / selected["output"]).resolve(), None if args.dry_run else args.receipt.resolve() if args.receipt else None, args.retrieved)

@@ -42,6 +42,19 @@ Idlewild welds each hemisphere, decimates it to at most 150,000 triangles for th
 .local/tools/Blender.app/Contents/MacOS/Blender --background --factory-startup --disable-autoexec --python-exit-code 1 --python scripts/prepare-brain.py -- --retrieved 2026-11-11
 ```
 
+## Rain (runner)
+
+**Rain Rig (CC) Blender Foundation | studio.blender.org**
+
+`runner.glb` adapts [Rain v3](https://studio.blender.org/characters/rain/v3/) under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); see [runner.receipt.json](runner.receipt.json) for source and runtime SHA-256, sizes and conversion measurements. The downloaded archive (`rain_v3.zip`, SHA-256 `80217f163f6392dc829233d63c2cfb5e1376775bc34101ad14f39631fea70d24`) contains no license file. The license evidence is the Blender Studio character page and the ReadMe.txt text block embedded in `rain_v3.2.blend`, which states the rig is provided under CC BY by Blender Studio.
+
+Modifications: 27 evaluated ARKit-named facial morphs, a reduced deformation skeleton with four weights per vertex, a relaxed arm pose, authored Idle, Run and two subtle expression clips, simplified materials and four reduced textures. Attribution, the license link and an indication of changes are required; preserve the embedded credit (`asset.copyright`) when sharing the model or exports derived from it. Regenerate with:
+
+```sh
+.local/tools/Blender.app/Contents/MacOS/Blender --background --factory-startup --disable-autoexec --python-exit-code 1 --python scripts/prepare-character.py -- --profile rain --receipt .local/assets/rain/rain.receipt.json
+cp .local/assets/rain/rain.glb public/models/runner.glb && cp .local/assets/rain/rain.receipt.json public/models/runner.receipt.json
+```
+
 ## Original procedural subjects
 
-`src/scenes/procedural.ts` constructs Idlewild's bubbles, star, baby dragon, three runner variants and abstract educational brain from mathematical geometry. These contain no downloaded third-party artwork. The baby dragon has its own juvenile proportions, articulated wings/limbs, eyes and jaw; it is not a scaled European-dragon asset. The brain is a whole-brain illustration without anatomical region labels. Generated geometry and baked animation may be reused in the creator's projects. User-imported assets retain their own rights and licenses.
+`src/scenes/procedural.ts` constructs Idlewild's bubbles, star, baby dragon and the fallback runner (used only if `runner.glb` cannot load) from mathematical geometry. These contain no downloaded third-party artwork. The baby dragon has its own juvenile proportions, articulated wings/limbs, eyes and jaw; it is not a scaled European-dragon asset. Generated geometry and baked animation may be reused in the creator's projects. User-imported assets retain their own rights and licenses.
