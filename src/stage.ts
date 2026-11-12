@@ -13,7 +13,6 @@ type AssetState = { phase: 'loading' | 'ready' | 'error'; message: string };
 
 const CHARACTER_ASSETS = Object.freeze({
   rex: { label: 'Rex', credit: 'Rex Rig (CC) Blender Foundation | studio.blender.org. CC BY 4.0: https://creativecommons.org/licenses/by/4.0/ . Source: https://studio.blender.org/characters/rex/v1/ . Modified for Idlewild.' },
-  dragon: { label: 'European dragon', credit: 'Dragon sample by afk.ai. CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/ . Source: https://afk.ai/auto-rig/dragon' },
   runner: { label: 'runner', credit: 'Rain Rig (CC) Blender Foundation | studio.blender.org. CC BY 4.0: https://creativecommons.org/licenses/by/4.0/ . Source: https://studio.blender.org/characters/rain/v3/ . Modified for Idlewild.' },
 } satisfies Partial<Record<Parameters<typeof createCharacter>[2], { label: string; credit: string }>>);
 type CharacterAsset = keyof typeof CHARACTER_ASSETS;
@@ -111,9 +110,9 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
       camera.lookAt(target);
       return;
     }
-    const distance = Math.max(selected === 'dragon' ? 7.5 : 8.1, 2.8 / (Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect) + 1.2);
-    camera.position.set(0, selected === 'dragon' ? 2.1 : 2.5, distance);
-    camera.lookAt(0, selected === 'dragon' ? 0.7 : 1.6, 0);
+    const distance = Math.max(8.1, 2.8 / (Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect) + 1.2);
+    camera.position.set(0, 2.5, distance);
+    camera.lookAt(0, 1.6, 0);
   }
   const lost = (event: Event) => { event.preventDefault(); contextLost = true; };
   const restored = () => { contextLost = false; };

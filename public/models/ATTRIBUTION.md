@@ -1,6 +1,6 @@
 # Model provenance
 
-Receipts record source URLs, byte counts, SHA-256 hashes and runtime metadata. Dragon retains its downloaded bytes; Rex, Snow, Sprite, the Rain runner and the brain are adaptations described below. Local visual and export checks are recorded in `docs/CONTEXT.md`.
+Receipts record source URLs, byte counts, SHA-256 hashes and runtime metadata. Rex, Sprite, the Rain runner and the brain are adaptations described below. Local visual and export checks are recorded in `docs/CONTEXT.md`.
 
 ## Rex
 
@@ -8,34 +8,12 @@ Receipts record source URLs, byte counts, SHA-256 hashes and runtime metadata. D
 
 `rex.glb` adapts [Rex](https://studio.blender.org/characters/rex/v1/) from the open movie Sprite Fright under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); see [rex.receipt.json](rex.receipt.json) for source and runtime SHA-256, sizes and conversion measurements. The public download (`rex.blend`, SHA-256 `7e0a774da5f309cde4eb9ba313890b554b9fd8d284d2b668a28f72b1380e5335`) embeds a ReadMe.txt text block stating the rig is provided under CC BY by Blender Studio, matching the character page.
 
-Modifications: 15 evaluated ARKit-named facial morphs from the rig's own pose assets and face controls, a reduced 71-joint deformation skeleton with four weights per vertex, a relaxed arm pose, the mesh hairstyle in place of particle hair, the wristwatch removed, authored Idle and two subtle expression clips, and flat materials with colors matched to the source shading. Attribution, the license link and an indication of changes are required; preserve the embedded credit (`asset.copyright`) when sharing the model or exports derived from it. Regenerate with:
+Modifications: 19 evaluated ARKit-named facial morphs (including eyelid wide and squint) from the rig's own pose assets and face controls, a reduced 71-joint deformation skeleton with four weights per vertex, a relaxed arm pose, the mesh hairstyle in place of particle hair, the branded wristwatch removed, authored Idle and two expression clips, and flat materials with colors matched to the source shading. Attribution, the license link and an indication of changes are required; preserve the embedded credit (`asset.copyright`) when sharing the model or exports derived from it. Regenerate with:
 
 ```sh
 .local/tools/Blender.app/Contents/MacOS/Blender --background --factory-startup --disable-autoexec --python-exit-code 1 --python scripts/prepare-character.py -- --profile rex --receipt .local/assets/blender-studio/rex.receipt.json
 cp .local/assets/blender-studio/rex.glb public/models/rex.glb && cp .local/assets/blender-studio/rex.receipt.json public/models/rex.receipt.json
 ```
-
-## Dragon
-
-`dragon.glb` is the downloadable sample from [afk.ai's dragon page](https://afk.ai/auto-rig/dragon), which explicitly offers the sample and its animations under CC0. The file contains a 100-joint skin and 20 animation entries, including Rest Pose; the source advertises 19 animations. See [receipt](dragon.receipt.json).
-
-Only the existing free sample was downloaded. No paid/cloud rigging or generation job was submitted. Source license declarations were checked on 2026-11-10; they do not establish runtime or artistic suitability.
-
-## Snow
-
-**Snow Rig (CC) Blender Foundation | studio.blender.org**
-
-`snow.glb` adapts [Snow v4.2](https://studio.blender.org/characters/snow/v4/) under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The downloaded archive's ReadMe grants this license. Commercial adaptation and redistribution require attribution, the license link and an indication of changes; preserve the embedded credit when sharing model or animation files. See [receipt](snow.receipt.json).
-
-Idlewild evaluates the original facial poses into seven morph targets, reduces the skeleton to 74 joints and skinning to four weights per vertex, applies subdivision level 1, simplifies materials, omits the outer corneas and reduces textures to six 1024×1024 images. It adds a relaxed stance and three authored two-second clips: Idle, Soft smile and Brow motion. These are creative animations, not measurements of emotion or microexpressions.
-
-The source archive and Blender installation stay in ignored `.local/`; neither is needed to run the app. To reproduce the adaptation with Blender 4.5.9 and the original archive extracted under `.local/assets/snow/`, run:
-
-```sh
-.local/tools/Blender.app/Contents/MacOS/Blender --background --factory-startup --disable-autoexec --python-exit-code 1 --python scripts/prepare-character.py -- --profile snow --receipt .local/assets/snow/snow.receipt.json
-```
-
-The converter writes `.local/assets/snow/snow.glb`; qualification (`python3 -I .local/tools/compare_glb.py public/models/snow.glb .local/assets/snow/snow.glb --receipts public/models/snow.receipt.json .local/assets/snow/snow.receipt.json`) precedes copying it into `public/models/` and updating its receipt. Source-embedded scripts are disabled. No cloud processing or paid generation was used.
 
 ## Brain
 

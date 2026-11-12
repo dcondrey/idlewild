@@ -2,7 +2,7 @@
 
 A desktop creative studio built with Electron, TypeScript and Three.js: record a control performance, replay it across characters and procedural scenes, then export animation and sound.
 
-Use consented, on-device face and body tracking without an API key, account or credits, or try visibly synthetic rehearsal without a camera. Scenes include Rex, Snow, Sprite and the Rain runner (detailed Blender Studio characters), bubbles, star, European dragon and an anatomical brain whose highlighted regions are an educational simulation based on published studies, not measured brain activity. Optional SmartSpectra signals require separate credentials and consent; that desktop integration still requires live validation. See [verification evidence and remaining limits](docs/CONTEXT.md).
+Use consented, on-device face and body tracking without an API key, account or credits, or try visibly synthetic rehearsal without a camera. Scenes include three detailed Blender Studio characters (Rex, Sprite and the Rain runner), bubbles, star and an anatomical brain whose highlighted regions are an educational simulation based on published studies, not measured brain activity. Optional SmartSpectra signals require separate credentials and consent; that desktop integration still requires live validation. See [verification evidence and remaining limits](docs/CONTEXT.md).
 
 ## Run locally
 
@@ -45,7 +45,7 @@ Takes and imported characters are held in memory. Export before closing. **Guide
 
 Choose **Use your own character** (beside the Character menu, or at the top of it) for a self-contained GLB or embedded-resource glTF; its **Rig requirements** summarize bone and morph names. **Import** also reopens saved takes. Static models support creative root movement; compatible named bones and morphs receive additional controls. Import an animation-only file after its matching character and choose its animation clip in the import dialog. See [formats, rig mapping and reuse](docs/FORMATS.md) for limits and supported features.
 
-**Runner** uses Rain (CC BY 4.0) with its authored run cycle; **Runner pace** chooses Easy, Steady or Brisk, and breathing never speeds it up. Choose **Snow** in the **Character** menu for the included detailed Blender Studio character. Local tracking drives supported face morphs, head orientation and body bones; **Close view** brings its face forward. Choose Idle, Soft smile or Brow motion as the underlying authored clip. Missing joints or facial input preserve that animation. Other rigs need compatible bone and morph names; static models receive creative root movement. Tracking estimates visible movement, not microexpressions or emotions. Snow permits commercial reuse under CC BY 4.0; retain its [credit and modification notice](public/models/ATTRIBUTION.md#snow) with shared exports.
+**Runner** uses Rain (CC BY 4.0) with its authored run cycle; **Runner pace** chooses Easy, Steady or Brisk, and breathing never speeds it up. Choose **Sprite** in the **Character** menu for the bundled creature character. Local tracking drives supported face morphs, head orientation and body bones; **Close view** brings its face forward. Choose Idle, Soft smile or Brow motion as the underlying authored clip. Missing joints or facial input preserve that animation. Other rigs need compatible bone and morph names; static models receive creative root movement. Tracking estimates visible movement, not microexpressions or emotions. Rex, Sprite and Rain permit commercial reuse under CC BY 4.0; retain their [credits and modification notices](public/models/ATTRIBUTION.md) with shared exports.
 
 ## Camera, keys and data
 
@@ -65,7 +65,7 @@ Source and input availability remain visible. For SmartSpectra/rehearsal signals
 
 | Symptom | Action |
 | --- | --- |
-| Desktop cannot start or an asset is missing | Run `npm ci --ignore-scripts`, then `npm run build`, and launch from the repository root. Confirm `public/models/rex.glb`, `dragon.glb` and `runner.glb` are present; model receipts and provenance are below. |
+| Desktop cannot start or an asset is missing | Run `npm ci --ignore-scripts`, then `npm run build`, and launch from the repository root. Confirm `public/models/rex.glb`, `sprite.glb`, `runner.glb` and `brain.glb` are present; model receipts and provenance are below. |
 | Blank stage or graphics lost | Use a WebGL-capable desktop session, close other GPU-heavy applications, then reopen Idlewild. Export takes before restarting when possible. |
 | Camera denied or disconnected | Stop input, allow camera access in system privacy settings, reconnect the intended device, select Refresh, and explicitly reopen preview. Close another application if it owns the camera. |
 | Local models fail to load or tracking falls behind | Confirm both `.task` models and the `wasm/` files in `public/tracking/` are present, rebuild, then reopen preview and start tracking. Improve lighting, keep the intended joints visible and close other CPU-heavy applications. Signals shows face/body availability; inference speed depends on the device. |

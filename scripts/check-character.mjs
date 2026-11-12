@@ -6,11 +6,11 @@ import assert from 'node:assert/strict';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const modelFlag = process.argv.indexOf('--model');
-const modelId = modelFlag >= 0 ? process.argv[modelFlag + 1] : process.argv[2] ? null : 'snow';
+const modelId = modelFlag >= 0 ? process.argv[modelFlag + 1] : process.argv[2] ? null : 'sprite';
 if (modelId !== null && !/^[a-z0-9-]{1,32}$/.test(modelId ?? '')) throw new Error('Usage: check-character.mjs [--model <id> | <path.glb>]');
 const model = modelId ? path.join(root, 'public/models', `${modelId}.glb`) : path.resolve(process.argv[2]);
 const bundled = modelId !== null;
-const snow = modelId === 'snow';
+const fromMenu = modelId === 'sprite';
 const output = path.join(root, 'artifacts/character', modelId ?? path.basename(model, '.glb'));
 await mkdir(output, { recursive: true });
 const prior = JSON.parse(await readFile(path.join(root, 'artifacts/ui/report.json'), 'utf8'));
@@ -19,7 +19,7 @@ const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
 const app = await electron.launch({ args: [root], cwd: root, env });
 const errors = [];
 const report = { model, poses: [], exports: [] };
-let expressionClips = snow ? ['Soft smile', 'Brow motion'] : [];
+let expressionClips = [];
 try {
   if (bundled) {
     const bytes = await readFile(model);
@@ -27,10 +27,9 @@ try {
     const gltf = JSON.parse(bytes.subarray(20, 20 + jsonLength).toString('utf8'));
     const binaryOffset = 28 + jsonLength;
     const names = gltf.animations.map(clip => clip.name);
-    if (snow) assert.deepEqual(names, ['Idle', 'Soft smile', 'Brow motion']);
-    else {
+    {
       assert.ok(names.includes('Idle'), 'Bundled characters need an Idle clip');
-      expressionClips = names.filter(name => name !== 'Idle');
+      expressionClips = names.filter(name => name !== 'Idle' && name !== 'Run');
       assert.ok(expressionClips.length >= 2, 'Bundled characters need at least two expression clips');
     }
     assert.ok(typeof gltf.asset.copyright === 'string' && gltf.asset.copyright.length > 0, 'Bundled characters need asset.copyright');
@@ -51,6 +50,7 @@ try {
     report.loopClips = gltf.animations.map(clip => clip.name);
   }
   const page = await app.firstWindow();
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setIgnoreMouseEvents(true));
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', entry => { if (entry.type() === 'error') errors.push(entry.text()); });
   await expect(page.locator('#stage-state')).toHaveText('READY');
@@ -68,7 +68,7 @@ try {
       item.once('done', (_event, state) => globalThis.__characterDownloads.push({ path: destination, state }));
     });
   }, output);
-  if (snow) { await page.locator('#character-button').click(); await page.locator('[data-scene="snow"]').click(); }
+  if (fromMenu) { await page.locator('#character-button').click(); await page.locator('[data-scene="sprite"]').click(); }
   else { await page.locator('#open-import').click(); await page.locator('#import-model').setInputFiles(model); }
   await expect(page.locator('#message')).toContainText('Import ready', { timeout: 20_000 });
   await page.locator('#reduced-motion').uncheck();

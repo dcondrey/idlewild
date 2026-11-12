@@ -19,7 +19,17 @@ try {
   page = await app.firstWindow();
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', item => { if (item.type() === 'error') errors.push(item.text()); });
+  await page.evaluate(() => {
+    window.__dialogOpens = [];
+    const showModal = HTMLDialogElement.prototype.showModal;
+    HTMLDialogElement.prototype.showModal = function () {
+      window.__dialogOpens.push({ id: this.id, atMs: Math.round(performance.now()), stack: new Error().stack?.split('\n').slice(1, 4).join(' | '), trigger: window.__lastPointer ?? null });
+      return showModal.call(this);
+    };
+    addEventListener('pointerdown', event => { const target = event.target instanceof Element ? event.target.closest('[id]')?.id ?? event.target.tagName : null; window.__lastPointer = { target, x: Math.round(event.clientX), y: Math.round(event.clientY), atMs: Math.round(performance.now()) }; }, true);
+  });
   await app.evaluate(({ BrowserWindow }, directory) => {
+    BrowserWindow.getAllWindows()[0].setIgnoreMouseEvents(true);
     globalThis.__idlewildDownloads = [];
     BrowserWindow.getAllWindows()[0].webContents.session.on('will-download', (_event, item) => {
       const target = process.getBuiltinModule('node:path').join(directory, item.getFilename());
@@ -120,7 +130,7 @@ try {
   await expect(page.locator('#character-button')).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('[data-scene="rex"]')).toBeFocused();
   const menu = await page.evaluate(() => [...document.querySelectorAll('#character-menu button')].filter(item => item.checkVisibility()).map(item => item.id || item.dataset.scene));
-  assert.deepEqual(menu, ['menu-own-character', 'rex', 'snow', 'bubbles', 'star', 'dragon', 'sprite', 'runner', 'brain'], 'Menu lists the own-character entry first, then registry defaults; no import before one is loaded');
+  assert.deepEqual(menu, ['menu-own-character', 'rex', 'bubbles', 'star', 'sprite', 'runner', 'brain'], 'Menu lists the own-character entry first, then registry defaults; no import before one is loaded');
   const [own, item] = await Promise.all([page.locator('#menu-own-character').boundingBox(), page.locator('[data-scene="rex"]').boundingBox()]);
   assert.ok(own.width > item.width && own.height >= item.height, 'Use your own character is the most prominent menu entry');
   for (const viewport of sizes) { await page.setViewportSize(viewport); assert.equal(await fits(), true, `Open menu fits ${viewport.width}×${viewport.height}`); }
@@ -316,7 +326,7 @@ try {
   await page.locator('#play').click();
   report.checks.push('record, trim, replay and loop');
   await page.locator('#timeline').fill('500');
-  const sceneIds = ['rex', 'bubbles', 'star', 'dragon', 'runner', 'brain'];
+  const sceneIds = ['rex', 'bubbles', 'star', 'runner', 'brain'];
   for (const scene of sceneIds) {
     await pickScene(scene);
     await expect(page.locator('#brain-legend')).toBeVisible({ visible: scene === 'brain' });
@@ -411,6 +421,8 @@ try {
   await page?.screenshot({ path: path.join(output, 'failure.png'), fullPage: true });
   report.errors = errors;
   report.failure = String(error);
+  report.dialogOpens = await page?.evaluate(() => window.__dialogOpens).catch(() => null);
+  console.error(JSON.stringify({ dialogOpens: report.dialogOpens }));
   await writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2));
   throw error;
 } finally { await app.close(); }

@@ -26,7 +26,7 @@ const element = <T extends HTMLElement = HTMLElement>(id: string) => document.ge
 const input = (id: string) => element<HTMLInputElement>(id);
 const button = (id: string) => element<HTMLButtonElement>(id);
 const canvas = element<HTMLCanvasElement>('stage');
-const FULL_BODY_SCENES: ReadonlySet<SceneId> = new Set(['rex', 'dragon', 'runner', 'imported']);
+const FULL_BODY_SCENES: ReadonlySet<SceneId> = new Set(['rex', 'runner', 'imported']);
 const userEntry = SCENE_REGISTRY.find(item => item.group === 'yours')!;
 let stage: Awaited<ReturnType<typeof createStage>> | null = null;
 let entry: SceneEntry = SCENE_REGISTRY[0];

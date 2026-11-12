@@ -17,6 +17,7 @@ const report = {};
 let page;
 try {
   page = await app.firstWindow();
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setIgnoreMouseEvents(true));
   page.on('pageerror', error => errors.push(error.message));
   page.on('request', request => { requests.add(request.url().split('?')[0]); });
   await expect(page.locator('#stage-state')).toHaveText('READY');
@@ -35,7 +36,7 @@ try {
     });
   }, output);
   await installFixtureCamera(page, fixtures);
-  await page.locator('#character-button').click(); await page.locator('[data-scene="snow"]').click();
+  await page.locator('#character-button').click(); await page.locator('[data-scene="sprite"]').click();
   await expect(page.locator('#message')).toContainText('Import ready', { timeout: 20_000 });
   await page.locator('#open-camera').click();
   await expect(page.locator('#local-tracking')).toBeDisabled();
@@ -57,7 +58,7 @@ try {
   assert.ok(brainRegions.length > 0, 'Tracked body pose highlights brain regions');
   report.brainRegions = brainRegions;
   await page.locator('#stage').screenshot({ path: path.join(output, 'brain-body.png') });
-  await page.locator('#character-button').click(); await page.locator('[data-scene="snow"]').click();
+  await page.locator('#character-button').click(); await page.locator('[data-scene="sprite"]').click();
   await page.evaluate(() => { window.__fixtureMode = 'portrait'; });
   await expect(page.locator('#tracking-summary')).toContainText('Face tracked', { timeout: 15_000 });
   await page.waitForTimeout(1500);

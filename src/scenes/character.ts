@@ -5,7 +5,7 @@ import { disposeObject, fitModel } from './resources.ts';
 import { BONE_ALIASES, boneFinder, createRunnerMotion, createTracking, type CharacterMorph } from './tracking.ts';
 import type { SceneSubject } from './types.ts';
 
-export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[], kind: 'rex' | 'dragon' | 'imported' | 'runner'): SceneSubject {
+export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[], kind: 'rex' | 'imported' | 'runner'): SceneSubject {
   const root = new THREE.Group();
   root.name = `${kind}_Performance`;
   const framing = new THREE.Group();

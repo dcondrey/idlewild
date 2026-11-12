@@ -86,7 +86,7 @@ try {
       });
     });
     await page.locator('#character-button').click();
-    await page.locator('[data-scene="snow"]').click();
+    await page.locator('[data-scene="sprite"]').click();
     await expect(page.locator('#message')).toContainText('Import ready', { timeout: 20_000 });
     await page.locator('#detail-view').click();
     await page.evaluate(() => { document.getElementById('continuity').checked = true; });

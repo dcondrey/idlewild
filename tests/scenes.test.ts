@@ -32,7 +32,7 @@ function difference(a: number[][], b: number[][]) {
   return largest;
 }
 
-function loadModel(name: 'rex' | 'dragon' | 'snow') {
+function loadModel(name: 'rex' | 'sprite' | 'runner') {
   const bytes = readFileSync(new URL(`../public/models/${name}.glb`, import.meta.url));
   const loader = new GLTFLoader().register(() => ({ name: 'idlewild_test_untextured', loadTexture: () => Promise.resolve(new THREE.Texture()) }));
   return loader.parseAsync(new Uint8Array(bytes).buffer, '');
@@ -299,7 +299,7 @@ function direction(from: THREE.Object3D, to: THREE.Object3D) {
   return to.getWorldPosition(new THREE.Vector3()).sub(from.getWorldPosition(new THREE.Vector3())).normalize();
 }
 
-test('local body tracking follows physical limb segments rather than Snow bone axes', () => {
+test('local body tracking follows physical limb segments rather than rig bone axes', () => {
   const { subject, bones } = trackingRig();
   const frame = trackedInput(500, { body: {
     leftShoulder: [0.25, 1.2, 0, 1], rightShoulder: [-0.25, 1.2, 0, 1],
@@ -376,7 +376,7 @@ test('local tracking expires at 300 ms and missing, future, foreign-source or re
   subject.dispose();
 });
 
-test('local facial weights map Snow aliases, preserve unmatched animation and restore on loss', () => {
+test('local facial weights map legacy aliases, preserve unmatched animation and restore on loss', () => {
   const { subject, face, bones } = trackingRig();
   const neutral = trackedInput(500);
   subject.update(neutral);
@@ -525,28 +525,11 @@ test('detailed runner cycles use anatomical segments, loop, seek and stop under 
   subject.dispose();
 });
 
-test('dragon framing keeps forward orientation and uniform proportions consistent with other characters', () => {
-  const results = [];
-  for (const kind of ['dragon', 'imported'] as const) {
-    const model = new THREE.Group();
-    model.add(new THREE.Mesh(new THREE.BoxGeometry(1, 2, 3), new THREE.MeshStandardMaterial()));
-    const subject = createCharacter(model, [], kind);
-    subject.update(input(0, true));
-    assert.ok(new THREE.Vector3(0, 0, 1).transformDirection(model.matrixWorld).z > 0.9999);
-    const size = new THREE.Box3().setFromObject(subject.root).getSize(new THREE.Vector3());
-    assert.ok(Math.abs(size.x / size.y - 0.5) < 1e-8 && Math.abs(size.z / size.y - 1.5) < 1e-8);
-    results.push(size.toArray());
-    subject.dispose();
-  }
-  assert.deepEqual(results[0], results[1]);
-});
-
 test('every scene responds to each SDK signal only while it is valid and fresh', async () => {
-  const [rex, dragon, snow] = await Promise.all((['rex', 'dragon', 'snow'] as const).map(loadModel));
+  const [rex, sprite] = await Promise.all((['rex', 'sprite'] as const).map(loadModel));
   const subjects: [string, SceneSubject][] = [
     ['rex', createCharacter(rex.scene, rex.animations, 'rex')],
-    ['dragon', createCharacter(dragon.scene, dragon.animations, 'dragon')],
-    ['snow', createCharacter(snow.scene, snow.animations, 'imported')],
+    ['sprite', createCharacter(sprite.scene, sprite.animations, 'imported')],
     ['runner character', trackingRig('runner').subject],
     ['bubbles', createBubbles()], ['star', createStar()], ['runner', createRunner()],
   ];
@@ -671,9 +654,9 @@ test('elbow aim clamps to an anatomical range without snapping near a folded pos
   subject.dispose();
 });
 
-test('dragon, Rex and Snow face forward and share the same uniform fitting rule', async t => {
+test('Rex, Sprite and Rain face forward and share the same uniform fitting rule', async t => {
   const forward = new Map<string, THREE.Vector3>();
-  for (const [name, kind, back, front] of [['rex', 'rex', 'DEF-FootL', 'DEF-ToesL'], ['dragon', 'dragon', 'hips', 'mouth_upper_tip'], ['snow', 'imported', 'DEF-FootL', 'DEF-ToesL']] as const) {
+  for (const [name, kind, back, front] of [['rex', 'rex', 'DEF-FootL', 'DEF-ToesL'], ['sprite', 'imported', 'DEF-FootL', 'DEF-ToesL'], ['runner', 'runner', 'DEF-FootL', 'DEF-ToeL']] as const) {
     const gltf = await loadModel(name);
     const subject = createCharacter(gltf.scene, gltf.animations, kind);
     subject.update(input(0, true));
@@ -686,23 +669,22 @@ test('dragon, Rex and Snow face forward and share the same uniform fitting rule'
     assert.ok(Math.abs(bounds.min.y) < 1e-6 && Math.abs(bounds.getCenter(new THREE.Vector3()).x) < 1e-6, name);
     assert.ok(size.y <= 2.7 + 1e-6 && footprint <= 5.2 + 1e-6, name);
     assert.ok(Math.abs(size.y - 2.7) < 1e-6 || Math.abs(footprint - 5.2) < 1e-6, name);
-    if (name === 'dragon') assert.ok(Math.abs(footprint - 5.2) < 1e-6);
     t.diagnostic(`${name} fitted size ${size.toArray().map(value => value.toFixed(3)).join(' x ')}`);
     if (back && front) {
-      const vector = subject.root.getObjectByName(front)!.getWorldPosition(new THREE.Vector3()).sub(subject.root.getObjectByName(back)!.getWorldPosition(new THREE.Vector3()));
+      const at = (bone: string) => subject.root.getObjectByName(bone)!.getWorldPosition(new THREE.Vector3());
+      const vector = at(front).sub(at(back)).add(at(front.replace(/L$/, 'R')).sub(at(back.replace(/L$/, 'R'))));
       vector.y = 0;
       forward.set(name, vector.normalize());
     }
     expectDisposed(subject);
   }
-  assert.ok(forward.get('dragon')!.z > 0.95 && forward.get('snow')!.z > 0.95 && forward.get('rex')!.z > 0.95);
-  assert.ok(forward.get('dragon')!.dot(forward.get('snow')!) > 0.95);
+  for (const name of ['rex', 'sprite', 'runner']) assert.ok(forward.get(name)!.z > 0.95, name);
 });
 
-test('Snow arms follow tracked directions overhead without a clamp or axis snap', async () => {
-  const gltf = await loadModel('snow');
-  const subject = createCharacter(gltf.scene, gltf.animations, 'imported');
-  const arm = subject.root.getObjectByName('DEF-UpperArm_1L')!, forearm = subject.root.getObjectByName('DEF-Forearm_1L')!;
+test('Rex arms follow tracked directions overhead without a clamp or axis snap', async () => {
+  const gltf = await loadModel('rex');
+  const subject = createCharacter(gltf.scene, gltf.animations, 'rex');
+  const arm = subject.root.getObjectByName('DEF-UpperArm1L')!, forearm = subject.root.getObjectByName('DEF-Forearm1L')!;
   for (const [x, z] of [[0, 0], [0.01, 0], [-0.01, 0], [0, 0.01], [0, -0.01]]) {
     subject.update(trackedInput(500, { body: { leftShoulder: [0.2, 1.4, 0, 1], leftElbow: [0.2 + x, 1.7, z, 1] } }));
     assert.ok(direction(arm, forearm).angleTo(new THREE.Vector3(x, 0.3, z).normalize()) < 1e-3, `${x} ${z}`);

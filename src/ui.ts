@@ -7,10 +7,8 @@ const NOTICE_MAX_CHARS = 512 * 1024;
 
 const ICON_PATHS: Record<string, string> = {
   rex: '<circle cx="12" cy="6.5" r="3"/><path d="M6.5 21v-5.5a5.5 5.5 0 0 1 11 0V21M9 13.5l3 3 3-3"/>',
-  snow: '<circle cx="12" cy="7.5" r="3.5"/><path d="M5 20c.9-4 3.8-6 7-6s6.1 2 7 6"/>',
   bubbles: '<circle cx="9" cy="14.5" r="5"/><circle cx="16.5" cy="7.5" r="3"/><circle cx="18" cy="15.5" r="1.5"/>',
   star: '<path d="M12 3.5l2.5 5.4 5.9.7-4.4 4 1.2 5.9L12 16.6l-5.2 2.9L8 13.6l-4.4-4 5.9-.7z"/>',
-  dragon: '<path d="M3 18c4.5 0 7-3 8-8 1.8 2.8 5 4 10 3-2.8 3.2-6.8 5-11.5 5"/><path d="M11 10L8.5 4.5l5 3.2"/>',
   sprite: '<path d="M4 11c0-4 3.6-7 8-7s8 3 8 7z"/><path d="M8.5 11v3.5a3.5 3.5 0 0 0 7 0V11M10.5 20h3"/>',
   runner: '<circle cx="14.5" cy="4.5" r="2"/><path d="M8 21l3-6 3 2.2V21M5.5 12.5l4-4h4.2l2 4 3 1"/>',
   brain: '<path d="M11 5.5a3 3 0 0 0-5 2 3 3 0 0 0-1.5 5 3 3 0 0 0 2 4.5 3 3 0 0 0 4.5 1.5zM13 5.5a3 3 0 0 1 5 2 3 3 0 0 1 1.5 5 3 3 0 0 1-2 4.5 3 3 0 0 1-4.5 1.5z"/>',
@@ -123,7 +121,7 @@ export function mountStudio(root: HTMLElement) {
       <details id="rig-requirements"><summary>Rig requirements</summary>
         <ul class="requirements">
           <li>One scene, embedded resources, no compression; up to 256 nodes and 500,000 vertices.</li>
-          <li>Body tracking rotates named bones such as Spine, Head, LeftArm, LeftForeArm, LeftUpLeg and LeftLeg. Mixamo and Snow names work; there is no automatic retargeting.</li>
+          <li>Body tracking rotates named bones such as Spine, Head, LeftArm, LeftForeArm, LeftUpLeg and LeftLeg. Mixamo and Blender Studio rig names (Rex, Sprite, Rain) work; there is no automatic retargeting.</li>
           <li>Face tracking drives ARKit-style morphs such as eyeBlinkLeft, jawOpen and mouthSmileLeft.</li>
           <li>Static models get creative root movement. Animation-only files need their matching character first.</li>
         </ul>
@@ -153,8 +151,6 @@ export function mountStudio(root: HTMLElement) {
       <button class="close" data-close aria-label="Close credits">×</button><span class="eyebrow">CREDITS &amp; LICENSES</span><h2 id="credits-title">Made with open work.</h2>
       <ul class="credits">
         <li><strong>Rex</strong> Rex Rig (CC) Blender Foundation | studio.blender.org · CC BY 4.0 · modified</li>
-        <li><strong>European dragon</strong> Dragon sample by afk.ai · CC0 1.0</li>
-        <li><strong>Snow</strong> Snow Rig (CC) Blender Foundation | studio.blender.org · adapted under CC BY 4.0</li>
         <li><strong>Sprite</strong> Sprite Rig (CC) Blender Foundation | studio.blender.org · adapted under CC BY 4.0</li>
         <li><strong>Runner</strong> Rain Rig (CC) Blender Foundation | studio.blender.org · adapted under CC BY 4.0</li>
         <li><strong>Brain</strong> Brain for Blender by Anderson Winkler, brainder.org · adapted under CC BY-SA 3.0</li>
@@ -408,7 +404,7 @@ export function setupGuide() {
     ['Your camera, your decision', 'Use camera asks for consent, then opens a preview. Desk View and Continuity Camera appear as ordinary cameras. Start face & body tracking runs on this device without a key or credits. Stop input releases every camera.'],
     ['Add a face camera', 'Once the preview is open, Second camera adds an optional face close-up with its own consent. It must be a different device. Face values are geometric estimates, not emotions.'],
     ['See yourself while you perform', 'A small live feed sits in the corner of the stage while a camera runs; Hide camera tucks it away. It is never part of an export. If you are too close, a tip asks you to step back.'],
-    ['Choose a character', 'The Character menu holds Rex, Snow, Sprite, the dragon, the runner, two abstract scenes and the brain. The brain scene is an educational simulation, not your measured brain activity.'],
+    ['Choose a character', 'The Character menu holds Rex, Sprite, the Rain runner, two abstract scenes and the brain. The brain scene is an educational simulation, not your measured brain activity.'],
     ['Use your own character', 'Use your own character opens import for a GLB or embedded glTF. Named bones and ARKit-style face morphs receive tracking; static models get creative movement. Rig requirements are listed there.'],
     ['Record once, play anywhere', 'Start an input, then Record take. Finish to keep up to three minutes of controls. Play, scrub and loop it on another character. Edit trims or deletes; Takes opens your library.'],
     ['Keep your performance', 'Export offers WebM video, WAV sound, a baked GLB and control JSON. Camera images and keys are excluded. Takes live in memory, so export before closing. Credits & licenses sit in the footer.'],

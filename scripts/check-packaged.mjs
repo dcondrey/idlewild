@@ -30,6 +30,7 @@ const electronApp = await electron.launch({ executablePath: executable, args: []
 const errors = [];
 try {
   const page = await electronApp.firstWindow();
+  await electronApp.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setIgnoreMouseEvents(true));
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', item => { if (item.type() === 'error' && !item.text().startsWith('INFO: ')) errors.push(item.text()); });
   await expect(page.locator('#stage-state')).toHaveText('READY', { timeout: 60_000 });
