@@ -11,6 +11,6 @@ Draft. No release is approved. Unsigned builds are for local smoke tests only.
 7. Clean-machine smoke test (no Node, no repo, no network for the local path): open the app from the DMG; the stage and a model load; Credits & licenses shows all three files; no camera prompt until consent is given in the app, then exactly one video-only prompt; no microphone prompt; local tracking starts; quit releases the camera. Optional SDK probe: `scripts/check-native.mjs` equivalent against the packaged app, require-only, no session, no key.
 8. Confirm `Info.plist` has `NSCameraUsageDescription` and the entitlements contain no microphone entry: `codesign -d --entitlements - release/mac-arm64/Idlewild.app`.
 
-User-gated before publication: Apple Developer signing credentials; owner and legal approval of `docs/PRIVACY.md` and `docs/TERMS.md`; confirmation of Presage redistribution terms and retention behavior; the app icon; publication itself.
+User-gated before publication: Apple Developer signing credentials; owner and legal approval of `docs/PRIVACY.md` and `docs/TERMS.md`; confirmation of Presage redistribution terms and retention behavior; publication itself.
 
 Linux and Windows are not configured: the SDK ships prebuilds for them but nothing here has been built or tested on those platforms.
