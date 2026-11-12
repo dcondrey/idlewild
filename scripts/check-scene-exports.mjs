@@ -29,7 +29,7 @@ try {
       item.once('done', (_event, state) => globalThis.__exports.push({ path: destination, state }));
     });
   }, output);
-  await page.waitForFunction(() => { const stats = JSON.parse(document.querySelector('#stage')?.dataset.diagnostics || '{}'); return stats.assets?.robot.phase === 'ready' && stats.assets?.dragon.phase === 'ready'; });
+  await page.waitForFunction(() => { const stats = JSON.parse(document.querySelector('#stage')?.dataset.diagnostics || '{}'); return stats.assets?.robot.phase === 'ready' && stats.assets?.dragon.phase === 'ready' && stats.assets?.brain.phase === 'ready'; });
   await page.locator('#open-import').click();
   await page.locator('#import-data').setInputFiles(fixture);
   await expect(page.locator('#take-count')).toHaveText('1 / 6');
@@ -45,6 +45,7 @@ try {
     const json = JSON.parse(bytes.subarray(20, 20 + bytes.readUInt32LE(12)).toString('utf8'));
     assert.ok(json.animations?.[0].channels.length > 0);
     if (scene === 'robot' || scene === 'dragon') assert.match(json.asset.copyright, /CC0 1.0/);
+    if (scene === 'brain') assert.match(json.asset.copyright, /CC BY-SA 3\.0/);
     await page.locator('#open-import').click();
     await page.locator('#import-model').setInputFiles(saved.path);
     await expect(page.locator('#message')).toContainText('Import ready', { timeout: 15_000 });

@@ -305,7 +305,7 @@ export async function exportPreview(options: ExportOptions & {
     const render = (timeMs: number) => {
       options.update(inputAt(take, timeMs, controls, options.reducedMotion ?? false));
       drawing.drawImage(canvas, 0, 0, output.width, output.height);
-      const label = `${take.source === 'rehearsal' ? 'SYNTHETIC REHEARSAL' : take.source === 'local-camera' ? 'LOCAL CAMERA TRACKING' : 'LIVE CONTROL RECORDING'} · ${options.scene === 'brain' ? 'Educational illustration — not brain activity' : options.scene}`;
+      const label = `${take.source === 'rehearsal' ? 'SYNTHETIC REHEARSAL' : take.source === 'local-camera' ? 'LOCAL CAMERA TRACKING' : 'LIVE CONTROL RECORDING'} · ${options.scene === 'brain' ? 'Educational simulation — not your measured brain activity' : options.scene}`;
       const font = Math.max(10, Math.min(16, output.width / 55));
       drawing.fillStyle = 'rgba(8, 15, 28, 0.9)';
       drawing.fillRect(0, output.height - font * 2.5, output.width, font * 2.5);

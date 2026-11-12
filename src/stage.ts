@@ -2,10 +2,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import type { SceneFrame, SceneId } from './contracts.ts';
 import { createCharacter } from './scenes/character.ts';
-import { createBabyDragon, createBrain, createBubbles, createRunner, createStar } from './scenes/procedural.ts';
+import { createAnatomicalBrain, type BrainRegion, type BrainSubject } from './scenes/brain.ts';
+import { createBabyDragon, createBubbles, createRunner, createStar } from './scenes/procedural.ts';
 import { disposeObject } from './scenes/resources.ts';
 import type { SceneSubject } from './scenes/types.ts';
-import { setAssetCopyright } from './asset-credits.ts';
+import { getAssetCopyright, setAssetCopyright } from './asset-credits.ts';
 import { SCENE_IDS } from './scenes/registry.ts';
 
 type AssetState = { phase: 'loading' | 'ready' | 'error'; message: string };
@@ -15,7 +16,9 @@ const CHARACTER_ASSETS = Object.freeze({
   dragon: { label: 'European dragon', credit: 'Dragon sample by afk.ai. CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/ . Source: https://afk.ai/auto-rig/dragon' },
 } satisfies Partial<Record<Parameters<typeof createCharacter>[2], { label: string; credit: string }>>);
 type CharacterAsset = keyof typeof CHARACTER_ASSETS;
-const CHARACTER_IDS = Object.keys(CHARACTER_ASSETS) as CharacterAsset[];
+type StageAsset = CharacterAsset | 'brain';
+const ASSET_IDS: readonly StageAsset[] = [...Object.keys(CHARACTER_ASSETS) as CharacterAsset[], 'brain'];
+const assetLabel = (id: StageAsset) => id === 'brain' ? 'anatomical brain' : CHARACTER_ASSETS[id].label;
 
 export interface Stage {
   update(input: SceneFrame): void;
@@ -28,6 +31,7 @@ export interface Stage {
   setImported(root: THREE.Group | null, clips: THREE.AnimationClip[]): void;
   setImportedClips(clips: THREE.AnimationClip[]): void;
   whenReady(): Promise<void>;
+  brainRegions(count?: number): BrainRegion[];
   diagnostics(): Readonly<{
     drawCalls: number;
     triangles: number;
@@ -35,7 +39,7 @@ export interface Stage {
     textures: number;
     programs: number;
     contextLost: boolean;
-    assets: Readonly<Record<CharacterAsset, Readonly<AssetState>>>;
+    assets: Readonly<Record<StageAsset, Readonly<AssetState>>>;
   }>;
 }
 
@@ -79,8 +83,8 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
   let disposed = false;
   let contextLost = false;
   let runnerVariant: 0 | 1 | 2 = 0;
-  const assets = {} as Record<CharacterAsset, AssetState>;
-  for (const id of CHARACTER_IDS) assets[id] = { phase: 'loading', message: `Loading ${CHARACTER_ASSETS[id].label}…` };
+  const assets = {} as Record<StageAsset, AssetState>;
+  for (const id of ASSET_IDS) assets[id] = { phase: 'loading', message: `Loading ${assetLabel(id)}…` };
   const pending = new Set<AbortController>();
   function frameCamera() {
     const subject = subjects.get('imported');
@@ -122,7 +126,6 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
     attach('star', createStar());
     attach('baby-dragon', createBabyDragon());
     attach('runner', createRunner());
-    attach('brain', createBrain());
   } catch (error) {
     for (const subject of subjects.values()) subject.dispose();
     disposeObject(world);
@@ -133,7 +136,7 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
     throw error;
   }
 
-  async function load(id: CharacterAsset) {
+  async function load(id: StageAsset) {
     const controller = new AbortController();
     pending.add(controller);
     const timeout = setTimeout(() => controller.abort(), 15_000);
@@ -147,21 +150,22 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
       const gltf = await new GLTFLoader().parseAsync(data, './models/');
       loaded = gltf.scene;
       if (disposed) { disposeObject(loaded); loaded = null; return; }
-      setAssetCopyright(loaded, CHARACTER_ASSETS[id].credit);
-      const subject = createCharacter(loaded, gltf.animations, id);
+      setAssetCopyright(loaded, id === 'brain' ? gltf.asset?.copyright : CHARACTER_ASSETS[id].credit);
+      if (!getAssetCopyright(loaded)) throw new Error('Asset credit missing');
+      const subject = id === 'brain' ? createAnatomicalBrain(loaded) : createCharacter(loaded, gltf.animations, id);
       loaded = null;
       attach(id, subject);
       assets[id] = { phase: 'ready', message: '' };
     } catch {
       if (loaded) disposeObject(loaded);
-      assets[id] = { phase: 'error', message: `Could not load ${CHARACTER_ASSETS[id].label}. Choose another scene or reload the studio.` };
+      assets[id] = { phase: 'error', message: `Could not load ${assetLabel(id)}. Choose another scene or reload the studio.` };
     } finally {
       clearTimeout(timeout);
       pending.delete(controller);
     }
   }
 
-  const ready = Promise.all(CHARACTER_IDS.map(load)).then(() => undefined);
+  const ready = Promise.all(ASSET_IDS.map(load)).then(() => undefined);
   return {
     update(input) {
       if (disposed || contextLost) return;
@@ -219,12 +223,16 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
       subject.setClips(clips);
     },
     whenReady: () => ready,
+    brainRegions(count = 3) {
+      const brain = subjects.get('brain') as BrainSubject | undefined;
+      return brain?.topRegions ? brain.topRegions(count) : [];
+    },
     diagnostics() {
       return Object.freeze({
         drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles,
         geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures,
         programs: renderer.info.programs?.length ?? 0, contextLost,
-        assets: Object.freeze(Object.fromEntries(CHARACTER_IDS.map(id => [id, Object.freeze({ ...assets[id] })])) as Record<CharacterAsset, Readonly<AssetState>>),
+        assets: Object.freeze(Object.fromEntries(ASSET_IDS.map(id => [id, Object.freeze({ ...assets[id] })])) as Record<StageAsset, Readonly<AssetState>>),
       });
     },
     dispose() {

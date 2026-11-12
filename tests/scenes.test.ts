@@ -7,7 +7,7 @@ import { rehearsalFrame } from '../src/rehearsal.ts';
 import { FACE_SHAPES, SIGNAL_STALE_MS, type Channel, type FaceShape, type SceneFrame, type Signal, type TrackingFrame } from '../src/contracts.ts';
 import type { SceneSubject } from '../src/scenes/types.ts';
 import { createCharacter } from '../src/scenes/character.ts';
-import { createBabyDragon, createBrain, createBubbles, createRunner, createStar } from '../src/scenes/procedural.ts';
+import { createBabyDragon, createBubbles, createRunner, createStar } from '../src/scenes/procedural.ts';
 import { sceneDynamics, signalValue } from '../src/scenes/dynamics.ts';
 import { disposeObject, fitModel } from '../src/scenes/resources.ts';
 
@@ -101,7 +101,7 @@ test('scene signals become neutral for invalid, future and stale input', () => {
 });
 
 test('procedural subjects seek deterministically and reduced motion removes time-dependent transforms', () => {
-  for (const factory of [createBabyDragon, createBrain, createBubbles, createRunner, createStar]) {
+  for (const factory of [createBabyDragon, createBubbles, createRunner, createStar]) {
     const subject = factory();
     subject.update(input(1000));
     const before = transforms(subject.root);
@@ -684,4 +684,167 @@ test('Snow arms follow tracked directions overhead without a clamp or axis snap'
     assert.ok(direction(arm, forearm).angleTo(new THREE.Vector3(x, 0.3, z).normalize()) < 1e-3, `${x} ${z}`);
   }
   subject.dispose();
+});
+
+import { BRAIN_MAPPED_REGIONS, BRAIN_RULE_IDS, brainRegionActivity, createAnatomicalBrain, topBrainRegions } from '../src/scenes/brain.ts';
+
+type Pose = NonNullable<TrackingFrame['body']>;
+const BRAIN_REST: Pose = {
+  leftShoulder: [0.2, 1.4, 0, 1], rightShoulder: [-0.2, 1.4, 0, 1], leftElbow: [0.22, 1.1, 0, 1], rightElbow: [-0.22, 1.1, 0, 1],
+  leftWrist: [0.22, 0.8, 0, 1], rightWrist: [-0.22, 0.8, 0, 1], leftHip: [0.12, 0.9, 0, 1], rightHip: [-0.12, 0.9, 0, 1],
+  leftKnee: [0.12, 0.48, 0, 1], rightKnee: [-0.12, 0.48, 0, 1], leftAnkle: [0.12, 0.06, 0, 1], rightAnkle: [-0.12, 0.06, 0, 1],
+};
+
+function brainPose(changes: Partial<Pose> = {}, movement = 0, timeMs = 1000): SceneFrame {
+  const body = Object.fromEntries(Object.entries({ ...BRAIN_REST, ...changes }).map(([joint, point]) => [joint, [...point!]])) as Pose;
+  return trackedInput(timeMs, { body, movement });
+}
+
+const lit = (activity: Map<string, number>) => new Map([...activity].filter(([, value]) => value > 0));
+const RAISED_LEFT_ARM: Partial<Pose> = { leftElbow: [0.5, 1.45, 0, 1], leftWrist: [0.8, 1.5, 0, 1] };
+const RAISED_RIGHT_ARM: Partial<Pose> = { rightElbow: [-0.5, 1.45, 0, 1], rightWrist: [-0.8, 1.5, 0, 1] };
+const RAISED_LEFT_KNEE: Partial<Pose> = { leftKnee: [0.12, 0.85, 0.42, 1], leftAnkle: [0.12, 0.45, 0.45, 1] };
+const SEATED: Partial<Pose> = { ...RAISED_LEFT_KNEE, rightKnee: [-0.12, 0.85, 0.42, 1], rightAnkle: [-0.12, 0.45, 0.45, 1] };
+
+function loadBrain() {
+  const bytes = readFileSync(new URL('../public/models/brain.glb', import.meta.url));
+  return new GLTFLoader().parseAsync(new Uint8Array(bytes).buffer, '');
+}
+
+test('brain mapping lateralizes each arm to the opposite precentral and postcentral regions with bilateral support', () => {
+  assert.equal(lit(brainRegionActivity(brainPose())).size, 0);
+  const left = brainRegionActivity(brainPose(RAISED_LEFT_ARM));
+  assert.ok(left.get('ctx-rh-precentral')! > 0.9);
+  assert.ok(left.get('ctx-rh-precentral')! > left.get('ctx-lh-precentral')! && left.get('ctx-lh-precentral')! > 0);
+  assert.ok(left.get('ctx-rh-postcentral')! > (left.get('ctx-lh-postcentral') ?? 0));
+  assert.ok(left.get('Left-Cerebellum-Cortex')! > (left.get('Right-Cerebellum-Cortex') ?? 0));
+  const right = brainRegionActivity(brainPose(RAISED_RIGHT_ARM));
+  assert.ok(right.get('ctx-lh-precentral')! > right.get('ctx-rh-precentral')!);
+  assert.deepEqual(topBrainRegions(brainPose(RAISED_LEFT_ARM), 1).map(({ region, label, rule }) => [region, label, rule]), [['ctx-rh-precentral', 'Right precentral', 'M1']]);
+});
+
+test('brain mapping places leg flexion medially and less lateralized than arm movement, ignoring still sitting', () => {
+  const arm = brainRegionActivity(brainPose(RAISED_LEFT_ARM));
+  const leg = brainRegionActivity(brainPose(RAISED_LEFT_KNEE));
+  assert.equal(arm.get('ctx-rh-paracentral') ?? 0, 0);
+  assert.equal(topBrainRegions(brainPose(RAISED_LEFT_KNEE), 1)[0].region, 'ctx-rh-paracentral');
+  assert.ok(leg.get('ctx-rh-paracentral')! > leg.get('ctx-lh-paracentral')!);
+  assert.ok(leg.get('ctx-rh-paracentral')! > (leg.get('ctx-rh-precentral') ?? 0));
+  assert.ok(leg.get('ctx-lh-paracentral')! / leg.get('ctx-rh-paracentral')! > arm.get('ctx-lh-precentral')! / arm.get('ctx-rh-precentral')!);
+  assert.equal(lit(brainRegionActivity(brainPose(SEATED))).size, 0);
+  const moving = brainRegionActivity(brainPose(SEATED, 1));
+  assert.ok(moving.get('ctx-lh-paracentral')! > 0.9 && moving.get('ctx-lh-paracentral') === moving.get('ctx-rh-paracentral'));
+});
+
+test('brain face and head rules need a fresh face and stay bilateral', () => {
+  const weights = Object.fromEntries(FACE_SHAPES.map(name => [name, 0])) as Record<FaceShape, number>;
+  const frame = trackedInput(1000, { face: { weights, rotation: [0, Math.sin(0.2), 0, Math.cos(0.2)] }, body: null });
+  const turned = brainRegionActivity(frame);
+  assert.ok(turned.get('ctx-lh-insula')! > 0.2 && turned.get('ctx-lh-insula') === turned.get('ctx-rh-insula'));
+  assert.ok(turned.get('Left-Putamen')! > 0);
+  frame.frame!.tracking!.face!.rotation = null;
+  assert.equal(lit(brainRegionActivity(frame)).size, 0);
+  Object.assign(weights, { mouthSmileLeft: 0.8, mouthSmileRight: 0.8 });
+  assert.deepEqual(new Set(topBrainRegions(frame, 8).map(entry => entry.rule)), new Set(['F1']));
+  frame.frame!.tracking!.face!.sampledAtMs = 1000 - 300;
+  assert.equal(lit(brainRegionActivity(frame)).size, 0);
+});
+
+test('brain signal rules fire only for valid, fresh, non-replayed samples and never map physiology to regions', async () => {
+  const blink = lit(brainRegionActivity(signalFrame(1000, { blink: 1 })));
+  assert.deepEqual([...blink.keys()].sort(), ['ctx-lh-caudalmiddlefrontal', 'ctx-lh-superiorfrontal', 'ctx-rh-caudalmiddlefrontal', 'ctx-rh-superiorfrontal']);
+  assert.equal(topBrainRegions(signalFrame(1000, { talking: 1 }), 1)[0].rule, 'S6');
+  for (const channel of ['blink', 'talking'] as const) {
+    assert.equal(lit(brainRegionActivity(signalFrame(1000, { [channel]: 1 }, SIGNAL_STALE_MS))).size, 0, channel);
+    const unstable = signalFrame(1000, { [channel]: 1 });
+    unstable.frame!.signals[channel].quality = 'unstable';
+    assert.equal(lit(brainRegionActivity(unstable)).size, 0, channel);
+    const replayed = signalFrame(1000, { [channel]: 1 });
+    replayed.frame!.signals[channel].provenance = 'replayed';
+    assert.equal(lit(brainRegionActivity(replayed)).size, 0, channel);
+  }
+  for (const channel of ['breath', 'breathingRate', 'pulseRate'] as const) assert.equal(lit(brainRegionActivity(signalFrame(1000, { [channel]: SIGNAL_SAMPLES[channel] }))).size, 0, channel);
+  const subject = createAnatomicalBrain((await loadBrain()).scene);
+  const capture = (frame: SceneFrame) => { subject.update(frame); return transforms(subject.root); };
+  const absent = capture(signalFrame(1000));
+  for (const channel of ['breath', 'breathingRate', 'pulseRate'] as const) {
+    assert.ok(difference(capture(signalFrame(1000, { [channel]: SIGNAL_SAMPLES[channel] })), absent) > 1e-3, channel);
+    assert.deepEqual(capture(signalFrame(1000, { [channel]: SIGNAL_SAMPLES[channel] }, SIGNAL_STALE_MS)), absent, channel);
+  }
+  subject.dispose();
+});
+
+test('missing, stale, low-confidence or reduced-motion input leaves the brain at its neutral baseline', async () => {
+  const missing: SceneFrame[] = [{ ...input(1000), frame: null }, trackedInput(1000), signalFrame(1000)];
+  const stale = brainPose(RAISED_LEFT_ARM);
+  stale.frame!.tracking!.sampledAtMs = 1000 - 300;
+  const doubtful = brainPose({ leftShoulder: [0.2, 1.4, 0, 0.4], leftElbow: [0.5, 1.45, 0, 0.4], leftWrist: [0.8, 1.5, 0, 0.4] });
+  const reduced = brainPose(RAISED_LEFT_ARM);
+  reduced.reducedMotion = true;
+  for (const frame of [...missing, stale, doubtful, reduced]) {
+    assert.equal(lit(brainRegionActivity(frame)).size, 0);
+    assert.deepEqual(topBrainRegions(frame), []);
+  }
+  const subject = createAnatomicalBrain((await loadBrain()).scene);
+  const glow = () => {
+    const values = new Set<number>();
+    subject.root.traverse(object => { if (object instanceof THREE.Mesh && object.name.startsWith('ctx-')) values.add((object.material as THREE.MeshStandardMaterial).emissiveIntensity); });
+    return [...values];
+  };
+  subject.update(brainPose(RAISED_LEFT_ARM));
+  assert.ok(glow().length > 1);
+  assert.equal(subject.topRegions(1)[0].region, 'ctx-rh-precentral');
+  subject.update(stale);
+  const baseline = glow();
+  assert.equal(baseline.length, 1);
+  assert.ok(baseline[0] > 0);
+  assert.deepEqual(subject.topRegions(), []);
+  subject.dispose();
+});
+
+test('brain subject seeks deterministically, freezes under reduced motion and disposes once', async () => {
+  const frame = brainPose(RAISED_LEFT_KNEE, 0.4);
+  assert.deepEqual(brainRegionActivity(frame), brainRegionActivity(structuredClone(frame)));
+  const subject = createAnatomicalBrain((await loadBrain()).scene);
+  subject.update(input(1000));
+  const before = transforms(subject.root);
+  const activity = subject.topRegions(8);
+  subject.update(input(7000));
+  assert.notDeepEqual(transforms(subject.root), before);
+  subject.update(input(1000));
+  assert.deepEqual(transforms(subject.root), before);
+  assert.deepEqual(subject.topRegions(8), activity);
+  subject.update(input(0, true));
+  const still = transforms(subject.root);
+  subject.update(input(8000, true));
+  assert.deepEqual(transforms(subject.root), still);
+  expectDisposed(subject);
+});
+
+test('brain asset keeps anatomical axes, mapped DK regions and its CC BY-SA credit', async () => {
+  const gltf = await loadBrain();
+  assert.match(gltf.asset.copyright ?? '', /CC BY-SA 3\.0/);
+  const centers = new Map<string, THREE.Vector3>();
+  const left = new THREE.Box3(), right = new THREE.Box3();
+  gltf.scene.updateWorldMatrix(true, true);
+  gltf.scene.traverse(object => {
+    if (!(object instanceof THREE.Mesh)) return;
+    const bounds = new THREE.Box3().setFromObject(object);
+    centers.set(object.name, bounds.getCenter(new THREE.Vector3()));
+    if (object.name.startsWith('ctx-lh-')) left.union(bounds);
+    if (object.name.startsWith('ctx-rh-')) right.union(bounds);
+  });
+  for (const region of BRAIN_MAPPED_REGIONS) assert.ok(centers.has(region), region);
+  assert.ok(left.getCenter(new THREE.Vector3()).x > 0 && right.getCenter(new THREE.Vector3()).x < 0);
+  for (const side of ['lh', 'rh']) {
+    assert.ok(centers.get(`ctx-${side}-frontalpole`)!.z > centers.get(`ctx-${side}-lateraloccipital`)!.z, side);
+    assert.ok(centers.get(`ctx-${side}-paracentral`)!.y > centers.get(`ctx-${side}-inferiortemporal`)!.y, side);
+  }
+  assert.ok(centers.get('Left-Cerebellum-Cortex')!.x > 0 && centers.get('Left-Cerebellum-Cortex')!.z < centers.get('ctx-lh-precentral')!.z);
+  disposeObject(gltf.scene);
+});
+
+test('every brain mapping rule cites a row in BRAIN-EVIDENCE.md', () => {
+  const evidence = readFileSync(new URL('../docs/BRAIN-EVIDENCE.md', import.meta.url), 'utf8');
+  for (const id of BRAIN_RULE_IDS) assert.match(evidence, new RegExp(`^\\| ${id} \\|`, 'm'), id);
 });
