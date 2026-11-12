@@ -14,19 +14,19 @@ The [Presage challenge](https://dev.to/challenges/presage-2026-11-04) requires a
 
 The independent repository is `/Volumes/A/idlewild`; the original Rust project remains at `/Volumes/A/vivid-id`. Its prior research is in `docs/READINESS.md` and `docs/ACQUISITION.md` there. Do not build or modify the original Rust workspace for this app.
 
-The application uses Electron, Vite, TypeScript, Three.js, and `@smartspectra/node-sdk` 3.5.0. Resolve exact versions from `package.json` and `package-lock.json`. Dependency lifecycle scripts were reviewed; the documented `npm ci --ignore-scripts` path and require-only native loading passed on macOS arm64. No SDK instance, camera or metered session has run.
+The application uses Electron, Vite, TypeScript, Three.js, `@smartspectra/node-sdk` 3.5.0 and MediaPipe Tasks Vision 1.2.3. Resolve versions from the manifests. Dependency lifecycle scripts were reviewed; the documented `npm ci --ignore-scripts` path and require-only native loading passed on macOS arm64. No physical camera, SmartSpectra instance or metered session has run; local face/body inference uses public image fixtures during verification.
 
 Robot and dragon downloads and the adapted Snow character have SHA-256 receipts and documented redistribution licenses. All seven requested scenes and the imported-character workflow run locally. Detailed verification is recorded below; older dated assessments describe the state before implementation.
 
 | Completion gate | Current evidence and limit |
 | --- | --- |
-| Live capture | Implemented and covered with fake adapters; David authorized one bounded live benchmark on November 11. Actual in-app setup and live validation remain pending. |
-| Creative controls | Motion, sensitivity, sound and supported facial mapping verified with synthetic input; live response remains unmeasured. |
+| Live capture | Key-free face/body tracking passes actual model inference with image fixtures. Physical-camera validation remains pending. David's one authorized SmartSpectra benchmark remains unused. |
+| Creative controls | Motion, sensitivity, sound and facial/body mapping verified with synthetic and local image input; actual-camera accuracy remains unmeasured. |
 | Reusable takes | Record/replay/scrub/trim/loop/delete, deterministic mapping and limits passed unit and Electron checks. |
 | Exports | Control JSON, decoded WAV/WebM and meaningful baked GLB export/reimport passed; measured timing and format limits are below. |
 | Scenes | Seven distinct scenes plus Snow passed local rendering/export checks with documented rights and cleanup. |
 | Robustness | Local lifecycle, input boundaries, cancellation, keyboard, reduced motion, viewport and resource checks passed; actual camera failure/recovery and other platforms remain unverified. |
-| Reproducible setup | Separate clean-checkout install/build/start passed; manifests are unchanged and the latest committed source/asset build and Electron checks also passed. |
+| Reproducible setup | Separate clean-checkout install/build/start passed before the MediaPipe dependency; updated clean-checkout verification is pending. |
 
 David explicitly authorized the proposed single live benchmark, up to 60 seconds and two credits. This supersedes the earlier unanswered request; no further paid run is authorized. It still requires his session-only key entry and separate in-app camera/measurement consent. Public release awaits end-user/privacy terms, distribution/signing qualification and explicit publication authorization; no production-ready claim is made.
 
@@ -158,3 +158,17 @@ After the arm correction, TypeScript/Vite and `node scripts/check-character.mjs`
 `scripts/live-benchmark.mjs --authorized` opens the real application with `--live-benchmark`, leaving key entry and both consent controls to David. The main process permits one start attempt, initiates shutdown at 55 seconds and prevents restarting that process's allowance. A separate harness watchdog terminates its own Electron child at 58 seconds if shutdown has not been confirmed. These bounds include SDK startup; they leave time inside the authorized 60-second maximum. Credit cost remains based on David's stated 30-seconds-per-credit rate, not a locally measured account debit. An interrupted or failed paid attempt must not be restarted automatically.
 
 Preparation used no SDK instance or camera. Twenty focused guard/capture tests, TypeScript/Vite and the non-metered `node --experimental-strip-types scripts/live-benchmark.mjs --check` passed (`artifacts/benchmark-tests.log`, `benchmark-build.log`, `benchmark-prepare.log`). The live harness retains bounded control data and a stage-only image under ignored `.local/live-benchmarks/`, with no key or camera image logging. Preparation is not live-validation evidence.
+
+The waiting harness was closed when David requested key-free tracking. Its terminal result and `.local/live-benchmarks/2026-11-12T00-28-32.539Z/report.json` confirm `started: false`, no recording and only idle statuses. No paid attempt occurred; the single-run authorization remains available, subject to in-app key entry and consent.
+
+### Key-free face and body tracking — 2026-11-11
+
+David explicitly requested on-device camera animation and body tracking. MediaPipe Face Landmarker and Pose Landmarker Lite run in one CPU worker, with one bitmap in flight at up to 15 Hz and 640×480. Models and module WebAssembly are bundled with Apache-2.0 license evidence, hashes and origins in `public/tracking/`; no CDN is needed at runtime. Camera preview requires explicit consent and requests video only. SmartSpectra remains a separate optional, metered input.
+
+The installed MediaPipe 1.2.3 runtime unconditionally creates a telemetry logger with no public disable option. An integration check caught its shutdown upload attempt. The worker now confines fetches to exact local assets before transport, with a separate worker-response CSP restricting network access to the app origin. Actual initialization, both inference paths, restart and shutdown pass with all external requests blocked and zero attempted outbound requests. No native SmartSpectra module loads in this mode.
+
+Recordings retain 13 facial coefficients, head rotation and up to 12 visible body joints as estimates, never fabricated physiological channels. Capture time and result-delivery time remain distinct and survive trim/replay. Tracking expires at 300 ms; lower-cadence frame hold uses that same bound. Compatible Snow/Mixamo/common bones and morphs receive bounded rotations/weights; missing input restores authored motion. Movement drives procedural sound and scenes. No finger tracking, foot locking, root translation, gaze, emotion or microexpression accuracy is claimed. Single-camera depth and occluded joints remain approximate.
+
+Final `npm run check` passed 101/101 tests, TypeScript/Vite and the Electron studio workflow. The stalled-video watchdog now marks input stale after 300 ms and stops after 3 seconds; tests cover initial absence, freezing after inference, exact boundaries, cancellation and restart. The separate local-tracking check passed actual model inference using hash-pinned public images, visible Snow poses, control/WAV/baked-GLB export and reimport, worker/stream release, consent revocation and 760×620 viewport fit. On this host its 67 retained frames had 19.6 ms median / 26 ms p95 snapshot-to-result age; render-frame spacing was 16.7 ms median / 17.6 ms p95. These short fixture observations do not establish physical-camera accuracy or hardware sensor latency.
+
+Independent media decoding, Snow expressions/clip loops/resource cleanup and seven-scene GLB round trips also passed after integration. The synthetic 1.5-second export had exact PCM duration, waveform correlation 0.99970 and 6.5 ms best-match audio lag; this is export timing, not camera latency. Logs: `artifacts/local-tracking-{final-check,ui,media,character,scenes}.log`; local inference images/report: `artifacts/local-tracking/`. Vite retains its pre-existing large main-chunk advisory; no performance improvement is inferred from bundle size.

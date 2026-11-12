@@ -2,7 +2,7 @@
 
 A desktop creative studio built with Electron, TypeScript and Three.js: record a control performance, replay it across characters and procedural scenes, then export animation and sound.
 
-Scenes include a robot, bubbles, star, European dragon, original baby dragon, three runner variants and an educational body–brain illustration. Rehearsal is visibly synthetic and needs no account or camera. The SmartSpectra desktop integration still requires consented live validation; see [verification evidence and remaining limits](docs/CONTEXT.md).
+Use consented, on-device face and body tracking without an API key, account or credits, or try visibly synthetic rehearsal without a camera. Scenes include a robot, bubbles, star, European dragon, original baby dragon, three runner variants and an educational body–brain illustration. Optional SmartSpectra signals require separate credentials and consent; that desktop integration still requires live validation. See [verification evidence and remaining limits](docs/CONTEXT.md).
 
 ## Run locally
 
@@ -24,13 +24,17 @@ After a successful build, launch the existing output without rebuilding:
 ./node_modules/.bin/electron .
 ```
 
-For browser rehearsal, run `npm run dev` and open `http://127.0.0.1:5173`. Live SmartSpectra measurement is available only through Electron. `npm test` runs the unit tests alone; `npm run test:ui` requires an existing build and a graphical desktop.
+For browser rehearsal or local camera tracking, run `npm run dev` and open `http://127.0.0.1:5173`; camera access requires browser permission. SmartSpectra measurement is available only through Electron. `npm test` runs the unit tests alone; `npm run test:ui` requires an existing build and a graphical desktop.
+
+Local tracking loads bundled MediaPipe models and WebAssembly from `public/tracking/`; it needs no CDN or cloud inference after setup. Keep those files with the app. The tracking worker allows only bundled-asset fetches, including during shutdown, and blocks the SDK's telemetry uploads. [Tracking asset licenses and receipts](public/tracking/ATTRIBUTION.md) document the pinned files.
+
+After building, `node scripts/check-local-tracking.mjs --prepare-fixtures` downloads two hash-pinned public sample images into ignored `.local/` and verifies real face/body inference, recording, exports, restart and consent revocation in Electron with external requests blocked. It uses a canvas camera fixture, never a physical camera or paid service. Omit the flag to reuse the downloaded fixtures offline.
 
 A require-only native SDK probe succeeded on macOS arm64 with Node 26.8.1 and SDK 3.5.0; it created no SDK instance or measurement session. The installed SDK declares macOS arm64, Linux x64/arm64 with glibc ≥2.35, and Windows x64 support. Other platforms and packaged distribution remain unverified. There are no installers, signing or notarization artifacts.
 
 ## Make a take
 
-1. Choose **Start rehearsal**, select a scene and adjust Motion and Sensitivity. **Enable sound** starts procedural audio; Sound controls its level.
+1. Choose **Use camera**, consent, open preview and select **Start face & body tracking**, or choose **Start rehearsal**. Select a scene and adjust Motion and Sensitivity. **Enable sound** starts procedural audio; local body movement shapes its level, and Sound sets its volume.
 2. Choose **Record take**, perform, then **Finish take**. Input stops and your take is ready to play. Recording stops automatically at its limit: three minutes, at most 3,600 stored samples, six takes in the workspace.
 3. Play, scrub or loop the selected take on another scene. **Takes** opens the take library; **Edit** opens trim and delete. Trim uses seconds and replaces that in-memory take; export the original first if you need both versions.
 4. **Export** opens choices for **Control data**, **WAV sound**, **Video preview** and **Baked GLB** using the current scene and controls. Keep the window visible during video export; Cancel stops an unfinished export.
@@ -39,19 +43,21 @@ Takes and imported characters are held in memory. Export before closing. **Guide
 
 Open **Import** for a self-contained GLB or embedded-resource glTF. Static models support creative root movement; compatible named bones and morphs receive additional controls. Import an animation-only file after its matching character and choose its animation clip in the import dialog. See [formats, rig mapping and reuse](docs/FORMATS.md) for limits and supported features.
 
-Choose **Import → Try Snow** for the included detailed Blender Studio character. **Close view** brings its face forward; choose Idle, Soft smile or Brow motion in the import dialog. Rehearsal or a saved take can drive its blinks and mouth movement. These authored expressions do not measure microexpressions or emotions. Snow permits commercial reuse under CC BY 4.0; retain its [credit and modification notice](public/models/ATTRIBUTION.md#snow) with shared exports.
+Choose **Import → Try Snow** for the included detailed Blender Studio character. Local tracking drives supported face morphs, head orientation and body bones; **Close view** brings its face forward. Choose Idle, Soft smile or Brow motion as the underlying authored clip. Missing joints or facial input preserve that animation. Other rigs need compatible bone and morph names; static models receive creative root movement. Tracking estimates visible movement, not microexpressions or emotions. Snow permits commercial reuse under CC BY 4.0; retain its [credit and modification notice](public/models/ATTRIBUTION.md#snow) with shared exports.
 
 ## Camera, keys and data
 
-Startup does not request camera or microphone access. Open **Use camera**, check camera-preview consent, choose a system camera and select **Open preview**. Preview alone does not initialize SmartSpectra or consume measurement credits. An iPhone is selectable only when the operating system exposes it as a webcam; device compatibility has not been verified locally.
+Startup does not request camera or microphone access. Open **Use camera**, check consent for preview and on-device tracking, choose a system camera and select **Open preview**, then **Start face & body tracking**. Keep your face and upper body visible; step back for leg tracking. Closing camera settings leaves input running; **Stop input** releases the camera. An iPhone is selectable only when the operating system exposes it as a webcam; device compatibility has not been verified locally.
 
-For an explicitly authorized live session, expand **Live measurement**, enter your own Presage API key, select **Use key**, read the vendor-processing disclosure, check the separate metered-measurement consent and select **Start live measurement**. Keys stay in main-process memory for the session; the input field is cleared after submission. Setting a key does not start capture. **Clear key** clears it and stops input; **Stop input** releases capture resources.
+Local mode processes one face and body on this device, without SmartSpectra, a key or paid processing. Its facial coefficients, head rotation, body positions and movement amount are estimates. Poor light, occlusion, distance and fast motion reduce quality; missing or stale input does not invent replacement tracking. Local mode does not supply breathing, pulse, arterial traces or speech detection. Face-only tracking produces no movement sound until body movement is available.
 
-Live measurement uses vendor networking and may consume account credits. Telemetry is disabled and the app does not request insights, but automatic vitals insights may upload data; vendor retention is unverified. Telemetry-off does not mean offline processing. Do not use paid measurement for development, smoke checks or tuning without the required explicit exception.
+For an explicitly authorized SmartSpectra session, expand **SmartSpectra · optional API key**, enter your own Presage API key, select **Use key**, read the vendor-processing disclosure, check the separate metered-measurement consent and select **Start live measurement**. Keys stay in main-process memory for the session; the input field is cleared after submission. Setting a key does not start capture. **Clear key** clears it and stops input.
 
-Creative exports exclude camera images and API keys. No microphone is requested or recorded: WAV and preview audio are synthesized. Control exports from live sessions still contain personal signal data; keep them outside the repository or under ignored `.local/`. Deleting in-memory data is not a guarantee of physical memory erasure.
+SmartSpectra measurement uses vendor networking and may consume account credits. Its telemetry setting is disabled and the app does not request insights, but automatic vitals insights may upload data; vendor retention is unverified. Telemetry-off does not mean offline processing. Do not use paid measurement for development, smoke checks or tuning without the required explicit exception.
 
-Signal quality and provenance remain visible. Optional breathing-animation continuity replays a bounded quiet-period cache during detected speech and labels it **CACHED BREATH**; it is not a new measurement. Relative traces do not measure airflow or calibrated blood pressure. Averaged pulse rate does not establish beat timing. The brain scene is an illustration, not measured neural activity, a diagnosis or a personalized activation map. Gaze matching and detailed lip movement are not implemented. Live measurement is for adults 18 or older under [Presage's SDK terms](https://presagetech.com/legal/terms-of-service).
+Creative exports exclude camera images and API keys. No microphone is requested or recorded: WAV and preview audio are synthesized. Local-camera exports preserve estimated movement and their source; camera-derived control data is still personal data. Keep it outside the repository or under ignored `.local/`. Takes remain in memory until exported; deleting them is not a guarantee of physical memory erasure.
+
+Source and input availability remain visible. For SmartSpectra/rehearsal signals, optional breathing-animation continuity replays a bounded quiet-period cache during detected speech and labels it **CACHED BREATH**; it is not a new measurement. Relative traces do not measure airflow or calibrated blood pressure. Averaged pulse rate does not establish beat timing. The brain scene is an illustration, not measured neural activity, a diagnosis or a personalized activation map. Local mouth controls approximate shape, without speech audio, phonemes or gaze matching. SmartSpectra measurement is for adults 18 or older under [Presage's SDK terms](https://presagetech.com/legal/terms-of-service).
 
 ## Troubleshooting
 
@@ -60,9 +66,10 @@ Signal quality and provenance remain visible. Optional breathing-animation conti
 | Desktop cannot start or an asset is missing | Run `npm ci --ignore-scripts`, then `npm run build`, and launch from the repository root. Confirm `public/models/robot.glb`, `dragon.glb` and `snow.glb` are present; model receipts and provenance are below. |
 | Blank stage or graphics lost | Use a WebGL-capable desktop session, close other GPU-heavy applications, then reopen Idlewild. Export takes before restarting when possible. |
 | Camera denied or disconnected | Stop input, allow camera access in system privacy settings, reconnect the intended device, select Refresh, and explicitly reopen preview. Close another application if it owns the camera. |
+| Local models fail to load or tracking falls behind | Confirm both `.task` models and the `wasm/` files in `public/tracking/` are present, rebuild, then reopen preview and start tracking. Improve lighting, keep the intended joints visible and close other CPU-heavy applications. Signals shows face/body availability; inference speed depends on the device. |
 | Authentication or unavailable signals | Clear and re-enter the key; verify account entitlements and network access. Missing/stale channels are not replaced with synthetic live signals. |
 | Capture cleanup failed | Stop again before retrying. If cleanup still fails, close and reopen the app; do not start overlapping sessions. |
-| Silent playback or export | Enable sound for monitoring; raise Sound and check for valid breath input. WAV/preview generation uses the selected Sound setting independently of monitor mute. Missing input and gaps become silence. |
+| Silent playback or export | Enable sound for monitoring; raise Sound and Sensitivity. Local mode needs visible body movement; other sources need valid breath input. WAV/preview generation uses the selected Sound setting independently of monitor mute. Missing input and gaps become silence. |
 | Video encoding stalls or is unsupported | Use Electron, keep the window visible and try a shorter take. WAV, control JSON and baked GLB are separate export choices. |
 | Character or clip rejected | Follow the reported limit; export one self-contained scene with supported textures and dense geometry. Clip node names and morph widths must match the loaded character. See [format limits](docs/FORMATS.md). |
 

@@ -1,6 +1,7 @@
 import type { SceneFrame, SceneId, Take, SceneControls } from './contracts.ts';
 import { SIGNAL_STALE_MS, TAKE_LIMITS } from './contracts.ts';
 import { validateTake } from './validation.ts';
+import { trackingAt } from './tracking-frame.ts';
 
 const pitches: Record<SceneId, number> = { robot: 110, bubbles: 220, star: 261.6256, dragon: 73.4162, 'baby-dragon': 196, runner: 146.8324, brain: 130.8128, imported: 164.8138 };
 const FADE_SECONDS = 0.01;
@@ -9,6 +10,7 @@ const clamp = (value: number) => Number.isFinite(value) ? Math.max(0, Math.min(1
 
 export function audioLevel(input: SceneFrame): number {
   const frame = input.frame;
+  if (frame?.source === 'local-camera') return clamp(input.controls.sound) * clamp(trackingAt(input)?.movement ?? 0) * clamp(input.controls.sensitivity) * MAX_LEVEL;
   const signal = frame?.signals.breath;
   if (!frame || !signal || signal.unit !== 'relative' || signal.value === null || !Number.isFinite(signal.value) || signal.quality !== 'valid' ||
       !Number.isFinite(input.timeMs) || !Number.isFinite(signal.sampledAtMs) || signal.sampledAtMs > frame.timeMs || input.timeMs < frame.timeMs) return 0;

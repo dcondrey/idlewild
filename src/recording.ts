@@ -1,4 +1,4 @@
-import { TAKE_LIMITS } from './contracts.ts';
+import { TAKE_LIMITS, TRACKING_STALE_MS } from './contracts.ts';
 import type { ControlFrame, Source, Take } from './contracts.ts';
 import { validateFrame, validateTake } from './validation.ts';
 
@@ -7,7 +7,11 @@ const SAMPLE_MS = 1000 / TAKE_LIMITS.samplesPerSecond;
 const MAX_SAMPLES = TAKE_LIMITS.seconds * TAKE_LIMITS.samplesPerSecond;
 
 function copyFrame(frame: ControlFrame, offset = 0): ControlFrame {
-  return { ...frame, timeMs: frame.timeMs - offset, signals: Object.fromEntries(Object.entries(frame.signals).map(([key, value]) => [key, { ...value, sampledAtMs: value.sampledAtMs - offset }])) as ControlFrame['signals'] };
+  const copy = validateFrame(frame);
+  copy.timeMs -= offset;
+  for (const signal of Object.values(copy.signals)) signal.sampledAtMs -= offset;
+  if (copy.tracking) copy.tracking.sampledAtMs -= offset;
+  return copy;
 }
 
 export class TakeRecorder {
@@ -79,7 +83,7 @@ export function frameAt(take: Take, timeMs: number, options: { loop?: boolean } 
     else high = middle;
   }
   const frame = take.samples[low - 1];
-  return frame && target - frame.timeMs < SAMPLE_MS ? copyFrame(frame) : null;
+  return frame && target - frame.timeMs < (take.source === 'local-camera' ? TRACKING_STALE_MS : SAMPLE_MS) ? copyFrame(frame) : null;
 }
 
 export function addTake(takes: readonly Take[], take: Take): Take[] {

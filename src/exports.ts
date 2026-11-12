@@ -7,6 +7,7 @@ import { frameAt } from './recording.ts';
 import { MAX_TAKE_JSON_BYTES, validateTake } from './validation.ts';
 import { renderWav } from './audio.ts';
 import { getAssetCopyright } from './asset-credits.ts';
+import { trackingAt } from './tracking-frame.ts';
 
 const MAX_EXPORT_BYTES = 64 * 1024 * 1024;
 const MAX_NODES = 512;
@@ -161,6 +162,18 @@ export async function bakeAnimation(take: Take, stage: ExportStage, controls: Sc
         if (previous?.source === source && previous.quality === quality) previous.endMs = Math.min(timeMs + SAMPLE_MS, take.durationMs);
         else segments.push({ startMs: timeMs, endMs: Math.min(timeMs + SAMPLE_MS, take.durationMs), source, quality });
       }
+      if (take.source === 'local-camera') {
+        const tracking = trackingAt(input);
+        for (const channel of ['face', 'body'] as const) {
+          const available = tracking && tracking[channel] !== null;
+          const segments = provenance[channel] ??= [];
+          const source = available ? 'local-camera-estimate' : 'missing';
+          const quality = available ? 'tracked' : 'missing';
+          const previous = segments.at(-1);
+          if (previous?.source === source) previous.endMs = Math.min(timeMs + SAMPLE_MS, take.durationMs);
+          else segments.push({ startMs: timeMs, endMs: Math.min(timeMs + SAMPLE_MS, take.durationMs), source, quality });
+        }
+      }
     }
   }
   options.signal?.throwIfAborted();
@@ -292,7 +305,7 @@ export async function exportPreview(options: ExportOptions & {
     const render = (timeMs: number) => {
       options.update(inputAt(take, timeMs, controls, options.reducedMotion ?? false));
       drawing.drawImage(canvas, 0, 0, output.width, output.height);
-      const label = `${take.source === 'rehearsal' ? 'SYNTHETIC REHEARSAL' : 'LIVE CONTROL RECORDING'} · ${options.scene === 'brain' ? 'Educational illustration — not brain activity' : options.scene}`;
+      const label = `${take.source === 'rehearsal' ? 'SYNTHETIC REHEARSAL' : take.source === 'local-camera' ? 'LOCAL CAMERA TRACKING' : 'LIVE CONTROL RECORDING'} · ${options.scene === 'brain' ? 'Educational illustration — not brain activity' : options.scene}`;
       const font = Math.max(10, Math.min(16, output.width / 55));
       drawing.fillStyle = 'rgba(8, 15, 28, 0.9)';
       drawing.fillRect(0, output.height - font * 2.5, output.width, font * 2.5);

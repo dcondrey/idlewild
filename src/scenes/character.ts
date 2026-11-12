@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { sceneDynamics, signalValue } from './dynamics.ts';
 import { disposeObject, fitModel } from './resources.ts';
+import { createTracking, type CharacterMorph } from './tracking.ts';
 import type { SceneSubject } from './types.ts';
 
 export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[], kind: 'robot' | 'dragon' | 'imported'): SceneSubject {
@@ -25,22 +26,22 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
   root.add(framing);
   root.updateMatrixWorld(true);
   const bones: THREE.Bone[] = [];
-  const morphs: { mesh: THREE.Mesh; index: number; kind: 'blink' | 'talking'; initial: number }[] = [];
+  const morphs: (CharacterMorph & { kind: 'blink' | 'talking' | null; initial: number })[] = [];
   model.traverse(object => {
     if (object instanceof THREE.Bone) bones.push(object);
     if (object instanceof THREE.Mesh && object.morphTargetDictionary && object.morphTargetInfluences) {
       for (const [name, index] of Object.entries(object.morphTargetDictionary)) {
         const normalized = name.toLowerCase().replace(/[^a-z]/g, '');
-        if (['blink', 'blinkleft', 'blinkright', 'eyeblinkleft', 'eyeblinkright'].includes(normalized)) morphs.push({ mesh: object, index, kind: 'blink', initial: object.morphTargetInfluences[index] });
-        if (['jawopen', 'mouthopen'].includes(normalized)) morphs.push({ mesh: object, index, kind: 'talking', initial: object.morphTargetInfluences[index] });
+        const kind = ['blink', 'blinkleft', 'blinkright', 'eyeblinkleft', 'eyeblinkright'].includes(normalized) ? 'blink' : ['jawopen', 'mouthopen'].includes(normalized) ? 'talking' : null;
+        morphs.push({ mesh: object, index, name, kind, initial: object.morphTargetInfluences[index] });
       }
     }
   });
   const findBone = (...names: string[]) => bones.find(bone => names.includes(bone.name.toLowerCase().replace(/[^a-z0-9]/g, '')));
   const chest = kind === 'robot' ? findBone('abdomen', 'torso') : kind === 'dragon' ? findBone('spine1', 'stomach') : findBone('chest', 'spine1', 'spine2', 'mixamorigspine1', 'mixamorigspine2');
   const jaw = kind === 'dragon' ? findBone('mouthlower') : findBone('jaw', 'mixamorigjaw');
-  const alteredBones = [chest, jaw].filter((bone): bone is THREE.Bone => bone !== undefined);
-  const animationPose = alteredBones.map(bone => ({ bone, quaternion: bone.quaternion.clone(), scale: bone.scale.clone() }));
+  const animationPose = bones.map(bone => ({ bone, quaternion: bone.quaternion.clone(), scale: bone.scale.clone() }));
+  const applyTracking = createTracking(model, bones, morphs);
   let disposed = false;
   function restoreAnimationPose() {
     for (const transform of animationPose) {
@@ -77,11 +78,14 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
         chest.scale.x *= 1 + breath * 0.025;
         chest.scale.z *= 1 + breath * 0.04;
       } else root.scale.set(1 + breath * 0.012, 1, 1 + breath * 0.025);
-      if (jaw) jaw.rotation.x += talking * 0.08;
-      for (const morph of morphs) {
-        if (signalValue(input, morph.kind) !== null) morph.mesh.morphTargetInfluences![morph.index] = morph.kind === 'blink' ? blink : talking * 0.65;
+      if (input.frame?.source !== 'local-camera') {
+        if (jaw) jaw.rotation.x += talking * 0.08;
+        for (const morph of morphs) {
+          if (morph.kind && signalValue(input, morph.kind) !== null) morph.mesh.morphTargetInfluences![morph.index] = morph.kind === 'blink' ? blink : talking * 0.65;
+        }
       }
       root.rotation.z = breath * 0.015;
+      applyTracking(input);
       root.updateMatrixWorld(true);
     },
     dispose() {

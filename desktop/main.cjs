@@ -4,7 +4,7 @@ const { app, BrowserWindow, ipcMain, Menu, net, protocol, session } = require('e
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { randomUUID } = require('node:crypto');
-const { ENTRY_URL, trustedURL, assetPath, validKey } = require('./security.cjs');
+const { ENTRY_URL, WORKER_CSP, trustedURL, assetPath, validKey } = require('./security.cjs');
 const { createCaptureController } = require('./capture.cjs');
 const { createBenchmarkLimit } = require('./benchmark-limit.cjs');
 
@@ -69,10 +69,15 @@ handle('studio:frame', payload => {
 
 app.whenReady().then(async () => {
   const isolated = session.fromPartition('idlewild');
-  isolated.protocol.handle('idlewild', request => {
+  isolated.protocol.handle('idlewild', async request => {
     try {
       if (request.method !== 'GET') return new Response('', { status: 405 });
-      return net.fetch(pathToFileURL(assetPath(request.url, path.join(__dirname, '../dist'))).href);
+      const file = assetPath(request.url, path.join(__dirname, '../dist'));
+      const response = await net.fetch(pathToFileURL(file).href);
+      if (!file.endsWith('.js')) return response;
+      const headers = new Headers(response.headers);
+      headers.set('Content-Security-Policy', WORKER_CSP);
+      return new Response(response.body, { status: response.status, headers });
     } catch { return new Response('', { status: 404 }); }
   });
   isolated.setPermissionCheckHandler((contents, permission, _origin, details) =>

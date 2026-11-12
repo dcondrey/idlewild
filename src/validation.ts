@@ -1,5 +1,5 @@
-import { TAKE_LIMITS } from './contracts.ts';
-import type { Channel, ControlFrame, Signal, Source, Take, Unit } from './contracts.ts';
+import { BODY_JOINTS, FACE_SHAPES, TAKE_LIMITS } from './contracts.ts';
+import type { Channel, ControlFrame, Signal, Source, Take, TrackingFrame, TrackingPoint, Unit } from './contracts.ts';
 
 export const MAX_TAKE_JSON_BYTES = 8 * 1024 * 1024;
 
@@ -24,7 +24,7 @@ function identity(value: unknown, name: string): string {
 }
 
 function source(value: unknown): Source {
-  if (value !== 'live' && value !== 'rehearsal') throw new Error('Invalid source');
+  if (value !== 'live' && value !== 'rehearsal' && value !== 'local-camera') throw new Error('Invalid source');
   return value;
 }
 
@@ -43,10 +43,44 @@ function signal(value: unknown, channel: Channel, frameTime: number, frameSource
   if (quality === 'missing' && measured !== null) throw new Error(`Unexpected ${channel} value`);
   const confidence = input.confidence === null ? null : number(input.confidence, 0, 1, `${channel} confidence`);
   const sampledAtMs = number(input.sampledAtMs, frameTime - Number.MAX_SAFE_INTEGER, frameTime, `${channel} sample time`);
-  const provenance = input.provenance === undefined ? (frameSource === 'live' ? 'measured' : 'synthetic') : input.provenance;
+  const provenance = input.provenance === undefined ? (frameSource === 'rehearsal' ? 'synthetic' : 'measured') : input.provenance;
   if (provenance !== 'measured' && provenance !== 'synthetic' && provenance !== 'replayed') throw new Error(`Invalid ${channel} provenance`);
-  if ((frameSource === 'live' && provenance === 'synthetic') || (frameSource === 'rehearsal' && provenance === 'measured')) throw new Error(`Conflicting ${channel} provenance`);
+  if ((frameSource !== 'rehearsal' && provenance === 'synthetic') || (frameSource === 'rehearsal' && provenance === 'measured')) throw new Error(`Conflicting ${channel} provenance`);
+  if (frameSource === 'local-camera' && measured !== null) throw new Error('Local tracking does not supply physiological or speech-detection signals');
   return { value: measured, quality, confidence, sampledAtMs, unit, provenance };
+}
+
+function tracking(value: unknown, frameTime: number): TrackingFrame {
+  const input = record(value, 'tracking');
+  const sampledAtMs = number(input.sampledAtMs, frameTime - Number.MAX_SAFE_INTEGER, frameTime, 'tracking sample time');
+  let face: TrackingFrame['face'] = null;
+  let body: TrackingFrame['body'] = null;
+  if (input.face !== null) {
+    const value = record(input.face, 'tracked face');
+    const sourceWeights = record(value.weights, 'face weights');
+    const weights = Object.fromEntries(FACE_SHAPES.map(name => [name, number(sourceWeights[name], 0, 1, name)])) as NonNullable<TrackingFrame['face']>['weights'];
+    let rotation: NonNullable<TrackingFrame['face']>['rotation'] = null;
+    if (value.rotation !== null) {
+      if (!Array.isArray(value.rotation) || value.rotation.length !== 4) throw new Error('Invalid head rotation');
+      rotation = value.rotation.map(value => number(value, -1, 1, 'head rotation')) as [number, number, number, number];
+      if (Math.abs(Math.hypot(...rotation) - 1) > 0.01) throw new Error('Head rotation must be normalized');
+    }
+    face = { weights, rotation };
+  }
+  if (input.body !== null) {
+    const points = record(input.body, 'tracked body');
+    body = {};
+    for (const name of BODY_JOINTS) {
+      if (points[name] === undefined) continue;
+      const point = points[name];
+      if (!Array.isArray(point) || point.length !== 4) throw new Error('Invalid body landmark');
+      body[name] = point.map((value, index) => number(value, index === 3 ? 0 : -5, index === 3 ? 1 : 5, 'body landmark')) as TrackingPoint;
+    }
+    if (!Object.keys(body).length) throw new Error('An unavailable body must be null');
+  }
+  const movement = input.movement === null ? null : number(input.movement, 0, 1, 'body movement');
+  if (!body && movement !== null) throw new Error('Body movement requires tracked landmarks');
+  return { sampledAtMs, face, body, movement };
 }
 
 export function validateFrame(value: unknown): ControlFrame {
@@ -57,7 +91,8 @@ export function validateFrame(value: unknown): ControlFrame {
   const inputs = record(input.signals, 'signals');
   const signals = {} as Record<Channel, Signal>;
   for (const channel of Object.keys(CHANNEL_UNITS) as Channel[]) signals[channel] = signal(inputs[channel], channel, timeMs, frameSource);
-  return { sessionId, source: frameSource, timeMs, signals };
+  if (input.tracking !== undefined && frameSource !== 'local-camera') throw new Error('Tracking must retain its local-camera source');
+  return { sessionId, source: frameSource, timeMs, signals, ...(frameSource === 'local-camera' ? { tracking: tracking(input.tracking, timeMs) } : {}) };
 }
 
 export function validateTake(value: unknown): Take {

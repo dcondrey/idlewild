@@ -1,9 +1,80 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TAKE_LIMITS } from '../src/contracts.ts';
+import { BODY_JOINTS, FACE_SHAPES, TAKE_LIMITS, type ControlFrame } from '../src/contracts.ts';
 import { createRehearsalSource, rehearsalFrame } from '../src/rehearsal.ts';
 import { addTake, frameAt, TakeRecorder, trimTake } from '../src/recording.ts';
 import { validateFrame, validateTake } from '../src/validation.ts';
+
+function localFrame(timeMs = 1000): ControlFrame {
+  const frame = rehearsalFrame(1, 'local-test', timeMs);
+  frame.source = 'local-camera';
+  for (const signal of Object.values(frame.signals)) Object.assign(signal, { value: null, quality: 'missing', confidence: null, provenance: 'measured' });
+  frame.tracking = {
+    sampledAtMs: timeMs - 25,
+    face: { weights: Object.fromEntries(FACE_SHAPES.map(name => [name, 0.25])) as NonNullable<NonNullable<ControlFrame['tracking']>['face']>['weights'], rotation: [0, 0, 0, 1] },
+    body: { leftShoulder: [0.25, 0.5, 0, 0.9], rightShoulder: [-0.25, 0.5, 0, 0.9] }, movement: 0.5,
+  };
+  return frame;
+}
+
+test('local tracking recordings copy nested data and preserve acquisition age through trim and loop', () => {
+  const recorder = new TakeRecorder('local-take', 'local-camera', 'local-test', 1);
+  for (const time of [1000, 1050, 1100]) {
+    const frame = localFrame(time);
+    recorder.append(frame);
+    frame.tracking!.body!.leftShoulder![0] = 4;
+    frame.tracking!.face!.weights.jawOpen = 1;
+  }
+  const take = recorder.finish();
+  assert.equal(take.samples[0].tracking!.body!.leftShoulder![0], 0.25);
+  assert.equal(take.samples[0].tracking!.face!.weights.jawOpen, 0.25);
+  const trimmed = trimTake(take, 50, 150);
+  assert.deepEqual(trimmed.samples.map(frame => frame.timeMs - frame.tracking!.sampledAtMs), [25, 25]);
+  const looped = frameAt(trimmed, 100, { loop: true })!;
+  looped.tracking!.body!.leftShoulder![0] = 3;
+  assert.equal(trimmed.samples[0].tracking!.body!.leftShoulder![0], 0.25);
+  assert.deepEqual(validateTake(trimmed), trimmed);
+});
+
+test('local input rejects fabricated physiology, malformed geometry and source laundering', () => {
+  const check = (mutate: (frame: ControlFrame) => void) => { const frame = localFrame(); mutate(frame); assert.throws(() => validateFrame(frame)); };
+  check(frame => { frame.signals.breath.value = 0.5; frame.signals.breath.quality = 'valid'; });
+  check(frame => { frame.source = 'live'; });
+  check(frame => { delete frame.tracking; });
+  check(frame => { frame.tracking!.sampledAtMs = 1001; });
+  check(frame => { frame.tracking!.face!.rotation = [0, 0, 0, 0]; });
+  check(frame => { frame.tracking!.body!.leftShoulder![0] = NaN; });
+  check(frame => { frame.tracking!.body = null; });
+  for (const value of [-5, -4.999, 4.999, 5]) { const frame = localFrame(); frame.tracking!.body!.leftShoulder![0] = value; assert.doesNotThrow(() => validateFrame(frame)); }
+  for (const value of [-5.001, 5.001]) check(frame => { frame.tracking!.body!.leftShoulder![0] = value; });
+  for (const value of [0, 0.999, 1]) { const frame = localFrame(); frame.tracking!.face!.weights.jawOpen = value; assert.doesNotThrow(() => validateFrame(frame)); }
+  for (const value of [-0.001, 1.001]) check(frame => { frame.tracking!.face!.weights.jawOpen = value; });
+  const absent = localFrame(); absent.tracking = { sampledAtMs: 1000, face: null, body: null, movement: null };
+  assert.deepEqual(validateFrame(absent), absent);
+});
+
+test('a full local tracking take fits the documented JSON budget', () => {
+  const recorder = new TakeRecorder('local-take', 'local-camera', 'local-test', 1);
+  for (let time = 0; time < 180000; time += 50) {
+    const frame = localFrame(time + 0.123456789);
+    frame.tracking!.body = Object.fromEntries(BODY_JOINTS.map(name => [name, [0.12345, -1.23456, 0.23456, 0.98765]]));
+    for (const name of FACE_SHAPES) frame.tracking!.face!.weights[name] = 0.12345;
+    frame.tracking!.face!.rotation = [0.12345, -0.23456, 0.34567, 0.89966];
+    recorder.append(frame);
+  }
+  assert.ok(new TextEncoder().encode(JSON.stringify(recorder.finish())).byteLength < 8 * 1024 * 1024);
+});
+
+test('local tracking replay bridges its camera cadence but preserves longer gaps', () => {
+  const recorder = new TakeRecorder('local-take', 'local-camera', 'local-test', 1);
+  for (const time of [1000, 1067, 1400]) recorder.append(localFrame(time));
+  const take = recorder.finish();
+  assert.ok(frameAt(take, 66));
+  assert.ok(frameAt(take, 366));
+  assert.equal(frameAt(take, 367), null);
+  assert.equal(frameAt(take, 368), null);
+  assert.ok(frameAt(take, 400));
+});
 
 test('synthetic frames are seeded, deterministic and explicitly identified', () => {
   const frame = rehearsalFrame(10, 'session', 500);

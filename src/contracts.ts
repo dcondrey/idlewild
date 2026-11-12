@@ -1,7 +1,7 @@
 export const TAKE_LIMITS = Object.freeze({ seconds: 180, samplesPerSecond: 20, takes: 6 });
 export const SIGNAL_STALE_MS = 1500;
 
-export type Source = 'live' | 'rehearsal';
+export type Source = 'live' | 'rehearsal' | 'local-camera';
 export type Quality = 'valid' | 'unstable' | 'missing' | 'stale';
 export type Channel = 'breath' | 'breathingRate' | 'pulseRate' | 'arterialTrace' | 'blink' | 'talking';
 export type Unit = 'relative' | 'breaths/min' | 'beats/min' | 'boolean';
@@ -17,11 +17,26 @@ export interface Signal {
   provenance?: Provenance;
 }
 
+export const FACE_SHAPES = ['eyeBlinkLeft', 'eyeBlinkRight', 'jawOpen', 'mouthSmileLeft', 'mouthSmileRight', 'browDownLeft', 'browDownRight', 'browInnerUp', 'mouthFunnel', 'mouthPucker', 'mouthClose', 'mouthPressLeft', 'mouthPressRight'] as const;
+export type FaceShape = typeof FACE_SHAPES[number];
+export const BODY_JOINTS = ['leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftWrist', 'rightWrist', 'leftHip', 'rightHip', 'leftKnee', 'rightKnee', 'leftAnkle', 'rightAnkle'] as const;
+export type BodyJoint = typeof BODY_JOINTS[number];
+export type TrackingPoint = [number, number, number, number];
+export const TRACKING_STALE_MS = 300;
+
+export interface TrackingFrame {
+  sampledAtMs: number;
+  face: { weights: Record<FaceShape, number>; rotation: [number, number, number, number] | null } | null;
+  body: Partial<Record<BodyJoint, TrackingPoint>> | null;
+  movement: number | null;
+}
+
 export interface ControlFrame {
   sessionId: string;
   source: Source;
   timeMs: number;
   signals: Record<Channel, Signal>;
+  tracking?: TrackingFrame;
 }
 
 export type CapturePhase = 'idle' | 'starting' | 'warming' | 'ready' | 'poor-signal' | 'stopping' | 'error';

@@ -1,8 +1,10 @@
 import './style.css';
-import type { CaptureSource, ControlFrame, SceneControls, SceneFrame, SceneId, Take } from './contracts';
+import type { CaptureSource, ControlFrame, SceneControls, SceneFrame, SceneId, Source, Take } from './contracts';
 import { TAKE_LIMITS, SIGNAL_STALE_MS } from './contracts';
 import { createStage } from './stage';
 import { createRehearsalSource } from './rehearsal';
+import { createLocalTrackingSource } from './tracking/source';
+import { trackingAt } from './tracking-frame';
 import { addTake, frameAt, TakeRecorder, trimTake } from './recording';
 import { validateFrame, validateTake, MAX_TAKE_JSON_BYTES } from './validation';
 import { createBreathContinuity } from './continuity';
@@ -34,7 +36,7 @@ const scenes: { id: SceneId; label: string; title: string; caption: string }[] =
 let stage: Awaited<ReturnType<typeof createStage>> | null = null;
 let scene: SceneId = 'robot';
 let source: CaptureSource | null = null;
-let sourceKind: 'rehearsal' | 'live' | null = null;
+let sourceKind: Source | null = null;
 let latest: ControlFrame | null = null;
 let latestArrival = 0;
 let takes: Take[] = [];
@@ -90,6 +92,7 @@ function refreshActions() {
   input('timeline').disabled = !selected || recorder !== null || sourceKind !== null || exporting !== null;
   button('preview').disabled = busy || exporting !== null || cleanupFailed || !input('camera-consent').checked;
   button('live').disabled = !window.idlewild || busy || exporting !== null || sourceKind !== null || !camera.active || !keySet || !input('live-consent').checked;
+  button('local-tracking').disabled = busy || exporting !== null || sourceKind !== null || !camera.active || !input('camera-consent').checked;
   button('save-key').disabled = !window.idlewild || busy || sourceKind === 'live';
   button('clear-key').disabled = !window.idlewild || !keySet;
   button('enable-sound').disabled = busy || exporting !== null;
@@ -126,7 +129,7 @@ function renderTakes() {
     item.textContent = `Take ${index + 1}`;
     item.setAttribute('aria-pressed', String(selected?.id === take.id));
     const detail = document.createElement('span');
-    detail.textContent = `${take.source === 'rehearsal' ? 'SYNTHETIC' : 'LIVE'} · ${clockLabel(take.durationMs)}`;
+    detail.textContent = `${take.source === 'rehearsal' ? 'SYNTHETIC' : take.source === 'local-camera' ? 'LOCAL CAMERA' : 'SMARTSPECTRA'} · ${clockLabel(take.durationMs)}`;
     item.append(detail);
     item.addEventListener('click', () => { void run(async () => { await stopInput(); selectTake(take); element<HTMLDialogElement>('takes-dialog').close(); }); });
     element('takes').append(item);
@@ -226,7 +229,7 @@ function animate(now: number) {
     if (!recorder) input('timeline').value = String(position);
     const origin = data.frame?.source;
     const provenance = data.frame?.signals.breath.provenance;
-    const badge = origin === 'rehearsal' ? 'SYNTHETIC REHEARSAL' : origin === 'live' ? sourceKind === 'live' ? 'LIVE · UNVERIFIED TIMING' : 'RECORDED LIVE' : 'NO INPUT';
+    const badge = origin === 'rehearsal' ? 'SYNTHETIC REHEARSAL' : origin === 'local-camera' ? 'LOCAL CAMERA' : origin === 'live' ? sourceKind === 'live' ? 'LIVE · UNVERIFIED TIMING' : 'RECORDED LIVE' : 'NO INPUT';
     element('input-watermark').textContent = provenance === 'replayed' ? `${badge} · CACHED BREATH` : badge;
     element('source-badge').textContent = badge;
     if (now - lastSignalPaint > 200) {
@@ -236,6 +239,10 @@ function animate(now: number) {
       const asset = scene === 'robot' || scene === 'dragon' ? diagnostics.assets[scene] : null;
       element('stage-state').textContent = diagnostics.contextLost ? 'GRAPHICS LOST' : asset?.phase === 'loading' ? 'LOADING' : asset?.phase === 'error' ? 'ASSET UNAVAILABLE' : 'READY';
       if (asset?.phase === 'error') message(asset.message, true);
+      element('tracking-details').hidden = origin !== 'local-camera';
+      element('physiology-details').hidden = origin === 'local-camera';
+      const tracking = trackingAt(data);
+      if (origin === 'local-camera') element('tracking-summary').textContent = `${tracking?.face ? 'Face tracked' : 'Face unavailable'} · ${tracking?.body ? `${Object.keys(tracking.body).length} body joints tracked` : 'Body unavailable'}`;
       for (const channel of Object.keys(signalNames) as (keyof typeof signalNames)[]) {
         const signal = data.frame?.signals[channel];
         const quality = signal && data.timeMs - signal.sampledAtMs >= SIGNAL_STALE_MS ? 'stale' : signal?.quality ?? 'missing';
@@ -326,7 +333,7 @@ on('save-key', async () => {
 });
 element('clear-key').addEventListener('click', () => {
   inputIntent++; keySet = false; input('api-key').value = ''; element('key-status').textContent = 'Key cleared.'; refreshActions();
-  void Promise.allSettled([window.idlewild?.clearKey(), stopInput()]).then(results => {
+  void Promise.allSettled([window.idlewild?.clearKey(), sourceKind === 'live' ? stopInput() : Promise.resolve()]).then(results => {
     if (results.some(result => result.status === 'rejected')) message('Key clear requested; capture cleanup failed. Stop again before retrying.', true);
   });
 });
@@ -352,9 +359,24 @@ on('preview', async () => {
   await camera.start(input('camera').value || null); await refreshCameras();
   if (intent !== inputIntent || !camera.active) return;
   element('status').textContent = 'Camera preview only. No SDK measurement is running.';
-  message('Preview active. Check framing before starting a separately consented live measurement.');
+  message('Preview ready. Start face and body tracking without a key.');
 });
 input('camera').addEventListener('change', () => { void run(async () => { await stopInput(); message('Camera changed. Open a new preview explicitly.'); }); });
+on('local-tracking', async () => {
+  if (!input('camera-consent').checked || !camera.active || sourceKind !== null) throw new Error('Open a consented camera preview before starting local tracking.');
+  sourceKind = 'local-camera'; latest = null; continuity.reset(); playing = false;
+  source = createLocalTrackingSource(element<HTMLVideoElement>('camera-preview'));
+  try {
+    await source.start(receiveFrame, status => {
+      element('status').textContent = status.message;
+      if (status.phase === 'error') void stopInput().then(() => message(status.message, true)).catch(() => message('Local tracking cleanup failed. Stop again before retrying.', true));
+    });
+    if (camera.active && sourceKind === 'local-camera') {
+      element<HTMLDialogElement>('camera-dialog').close();
+      message('Local tracking is running. Move naturally, then record a take.');
+    }
+  } catch (error) { await stopInput(); throw error; }
+});
 on('live', async () => {
   if (!input('camera-consent').checked || !input('live-consent').checked || !keySet) throw new Error('Preview consent, vendor-processing consent and a key are required.');
   sourceKind = 'live'; latest = null; continuity.reset(); playing = false;

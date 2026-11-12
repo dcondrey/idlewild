@@ -68,6 +68,20 @@ test('audio separates valid zero from missing, unstable, stale and malformed sig
   assert.equal(audioLevel(input), 0);
 });
 
+test('local movement controls sound without inventing breath and expires at the tracking limit', () => {
+  const frame = rehearsalFrame(1, 'local', 1000);
+  frame.source = 'local-camera';
+  frame.signals.breath.value = null;
+  frame.tracking = { sampledAtMs: 1000, face: null, body: { leftWrist: [0, 1, 0, 1] }, movement: 0.8 };
+  const input = { frame, timeMs: 1000, seed: 1, controls, reducedMotion: false };
+  assert.ok(audioLevel(input) > 0);
+  input.timeMs = 1299; assert.ok(audioLevel(input) > 0);
+  input.timeMs = 1300; assert.equal(audioLevel(input), 0);
+  input.timeMs = 1301; assert.equal(audioLevel(input), 0);
+  input.timeMs = 1000; frame.tracking.movement = 0; assert.equal(audioLevel(input), 0);
+  frame.tracking.movement = null; assert.equal(audioLevel(input), 0);
+});
+
 test('WAV decodes to bounded deterministic PCM with the shared pitch and amplitude model', async () => {
   const source = take();
   const result = await renderWav(source, 'robot', controls);

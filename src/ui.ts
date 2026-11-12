@@ -7,7 +7,7 @@ export function mountStudio(root: HTMLElement) {
     <main id="main" class="workspace">
       <aside class="panel input-panel" aria-label="Performance input">
         <span class="eyebrow">YOUR NEXT STEP</span><h1 id="flow-title">Start here.</h1>
-        <p id="next-step" class="next-step">Explore with a rehearsal, or connect your camera.</p>
+        <p id="next-step" class="next-step">Animate with your camera, or try a rehearsal. No key needed.</p>
         <div id="input-actions" class="input-actions"><button id="rehearse" class="primary wide">Start rehearsal</button><button id="open-camera" class="wide quiet">Use camera</button></div>
         <p id="rehearsal-note" class="fine">Rehearsal is synthetic. No camera, account or credits.</p>
         <div class="acquisition"><span id="source-badge" class="tag">NO INPUT</span><p id="status" role="status" aria-live="polite">Ready for a rehearsal.</p><button id="stop-input" class="wide danger" title="Stop input and release the camera" hidden>Stop input</button><button id="open-signals" class="text-button" hidden>View signal details</button></div>
@@ -34,13 +34,14 @@ export function mountStudio(root: HTMLElement) {
 
     <dialog id="camera-dialog" aria-labelledby="camera-title">
       <button class="close" data-close aria-label="Close camera settings">×</button><span class="eyebrow">PERFORMANCE INPUT</span><h2 id="camera-title">Your camera, your choice.</h2>
-      <p>Preview uses your selected camera. No microphone is requested, and camera images never enter creative exports.</p>
-      <label class="check consent"><input id="camera-consent" type="checkbox"> I consent to camera preview.</label>
+      <p>Animate your face and body on this device. No API key, account or credits needed.</p>
+      <label class="check consent"><input id="camera-consent" type="checkbox"> I consent to camera preview and on-device face and body tracking.</label>
       <label for="camera">System camera</label><select id="camera"><option value="">System default (first preview)</option></select>
       <div class="row"><button id="refresh-cameras">Refresh cameras</button><button id="preview" class="primary">Open preview</button></div>
       <div id="camera-view" hidden><video id="camera-preview" muted playsinline aria-label="Camera preview"></video><p class="fine">Preview remains active when you close this panel. Use Stop input to release the camera.</p></div>
       <p class="fine">An iPhone appears here when your operating system makes it available as a webcam.</p>
-      <details id="measurement-settings"><summary>Live measurement</summary>
+      <button id="local-tracking" class="wide primary" disabled>Start face & body tracking</button><p class="fine">Open preview first. Keep your face and upper body visible; step back to track your legs. Camera images stay on this device in local mode. No microphone is used.</p>
+      <details id="measurement-settings"><summary>SmartSpectra · optional API key</summary>
         <p class="fine">Open a preview first. Live measurement uses account credits and vendor network processing. Automatic vitals insights may upload data; retention is unverified. Telemetry is disabled. This integration awaits consented live validation.</p>
         <label for="api-key">Presage API key · this session only</label><input id="api-key" type="password" autocomplete="off" spellcheck="false" maxlength="512" placeholder="Enter your own key">
         <div class="row"><button id="save-key">Use key</button><button id="clear-key">Clear key</button></div><p id="key-status" class="fine">No key set.</p>
@@ -50,8 +51,8 @@ export function mountStudio(root: HTMLElement) {
     </dialog>
     <dialog id="signals-dialog" aria-labelledby="signals-title">
       <button class="close" data-close aria-label="Close signal details">×</button><span class="eyebrow">INPUT DETAILS</span><h2 id="signals-title">What drives the scene.</h2>
-      <p>Each channel keeps its own quality. Missing input stays missing; synthetic rehearsal is always labeled.</p><div id="signals" class="signals" aria-label="Signal quality"></div>
-      <label class="check consent"><input id="continuity" type="checkbox"> Keep breathing animation continuous during speech</label><p class="fine">Optional cached breath is labeled when replayed. It is animation continuity, never a new measurement.</p>
+      <p>Each input keeps its source and quality. Missing input stays missing.</p><div id="tracking-details" hidden><p id="tracking-summary"></p><p class="fine">Face and body positions are on-device estimates. Hidden joints return to the character’s authored animation. These controls do not measure breathing, pulse or emotions.</p></div><div id="physiology-details"><div id="signals" class="signals" aria-label="Signal quality"></div>
+      <label class="check consent"><input id="continuity" type="checkbox"> Keep breathing animation continuous during speech</label><p class="fine">Optional cached breath is labeled when replayed. It is animation continuity, never a new measurement.</p></div>
       <p class="dialog-message message" role="status" aria-live="polite"></p><div class="dialog-actions"><button data-close>Done</button></div>
     </dialog>
     <dialog id="import-dialog" aria-labelledby="import-title">
@@ -124,7 +125,7 @@ export function updateStudioFlow(state: { hasInput: boolean; cameraActive: boole
   document.getElementById('open-camera')!.classList.toggle('primary', state.cameraActive && !state.hasInput && !state.hasTake);
   document.getElementById('stop-input')!.textContent = state.cameraActive && !state.hasInput ? 'Stop camera' : 'Stop input';
   const title = state.exporting ? 'Saving…' : state.recording ? 'On record.' : state.playing ? 'Your replay.' : state.hasInput ? 'You’re ready.' : state.hasTake ? 'Your take.' : state.cameraActive ? 'Preview on.' : 'Start here.';
-  const hint = state.exporting ? 'Keep the studio visible while your export finishes.' : state.recording ? 'Finish your take when you have the performance you want.' : state.playing ? 'One performance can bring every scene to life.' : state.hasInput ? 'Shape the scene, then record a take.' : state.hasTake ? 'Play your take, explore another scene, or export it.' : state.cameraActive ? 'Open camera settings to start live measurement.' : 'Explore with a rehearsal, or connect your camera.';
+  const hint = state.exporting ? 'Keep the studio visible while your export finishes.' : state.recording ? 'Finish your take when you have the performance you want.' : state.playing ? 'One performance can bring every scene to life.' : state.hasInput ? 'Shape the scene, then record a take.' : state.hasTake ? 'Play your take, explore another scene, or export it.' : state.cameraActive ? 'Open camera settings to start face and body tracking.' : 'Animate with your camera, or try a rehearsal. No key needed.';
   document.getElementById('flow-title')!.textContent = title;
   document.getElementById('next-step')!.textContent = state.busy && !state.exporting ? 'Preparing your studio…' : hint;
 }
@@ -133,8 +134,8 @@ export function setupGuide() {
   const dialog = document.querySelector<HTMLDialogElement>('#guide')!;
   const steps = [
     ['Start with a rehearsal', 'Choose Start rehearsal for clearly labeled synthetic input. It needs no camera, account or credits. Controls appear when your input is running.'],
-    ['Your camera, your decision', 'Use camera opens preview settings. Preview requires consent and a separate action. Live measurement additionally requires the desktop app, a session-only API key and consent to metered vendor processing. Stop input releases the camera.'],
-    ['Give it a character', 'Switch scenes and adjust Motion and Sensitivity. Enable sound to hear the performance. Supported blink and talking states drive movement; lip detail and gaze are unavailable. The brain scene is educational, not measured activity.'],
+    ['Your camera, your decision', 'Use camera opens consented preview. Start face & body tracking runs on this device without a key or credits. Keep your face and upper body visible; step back for your legs. Optional SmartSpectra signals require a separate key and metered-processing consent. Stop input releases the camera.'],
+    ['Give it a character', 'Try Snow in Import for face and body animation, or use a compatible rig. Local movement also shapes procedural scenes and sound. Switch scenes and adjust Motion and Sensitivity. Face expressions are geometric estimates, not emotions; gaze is unavailable. The brain scene is educational.'],
     ['Record once, play anywhere', 'Start an input, then Record take. Finish your take to keep up to three minutes of controls. Play, scrub and loop it on another scene. Edit opens trim and delete; Takes opens your saved performances.'],
     ['Bring your own character', 'Import accepts a saved JSON take, a self-contained GLB, or embedded glTF. Animation clips need matching named nodes and morph targets. Oversized assets, external resources and unsupported compression are rejected with an explanation.'],
     ['Keep your performance', 'Export offers rendered WebM, procedural WAV, reusable baked GLB animation and control JSON. Camera images and keys are excluded. Takes live in memory, so export before closing. Replay this guide any time.'],

@@ -14,6 +14,7 @@
     "check": "npm test && npm run build && npm run test:ui"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "1.2.3",
     "@smartspectra/node-sdk": "3.5.0",
     "three": "0.187.0"
   },

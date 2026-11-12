@@ -1,4 +1,5 @@
 import { SIGNAL_STALE_MS, type Channel, type SceneFrame } from '../contracts.ts';
+import { trackingAt } from '../tracking-frame.ts';
 
 export const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
 
@@ -27,7 +28,7 @@ export function sceneDynamics(input: SceneFrame) {
   return {
     time: motion === 0 ? 0 : Math.max(0, Number.isFinite(input.timeMs) ? input.timeMs : 0) / 1000,
     motion,
-    breath: motion === 0 ? 0 : clamp(signalValue(input, 'breath') ?? 0, -1, 1) * sensitivity * motion,
+    breath: motion === 0 ? 0 : clamp(input.frame?.source === 'local-camera' ? trackingAt(input)?.movement ?? 0 : signalValue(input, 'breath') ?? 0, -1, 1) * sensitivity * motion,
     blink: clamp(signalValue(input, 'blink') ?? 0) * motion,
     talking: clamp(signalValue(input, 'talking') ?? 0) * motion,
   };
