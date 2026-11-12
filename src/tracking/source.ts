@@ -180,7 +180,7 @@ export function createLocalTrackingSource(video: HTMLVideoElement, dependencies:
         if (!session.active) return;
         const lagging = receivedAt - frame.tracking.sampledAtMs >= TRACKING_STALE_MS;
         const observed = frame.tracking.face !== null || frame.tracking.body !== null;
-        notify(session, !lagging && observed ? 'ready' : 'poor-signal', lagging ? 'Local tracking is falling behind the camera' : observed ? 'Local face and body estimates · no cloud processing' : 'No clear face or body landmarks');
+        notify(session, !lagging && observed ? 'ready' : 'poor-signal', lagging ? 'Local tracking is falling behind the camera' : observed ? 'Face & body estimates stay local' : 'No clear face or body landmarks');
         schedule(session);
       } else if (data.type === 'error') fail(session, session.ready ? 'Local tracking could not process a camera frame' : 'Local tracking could not load its models');
     } catch { fail(session, 'Local camera tracking stopped after an invalid result'); }
