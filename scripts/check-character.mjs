@@ -5,8 +5,13 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const model = path.resolve(process.argv[2] ?? path.join(root, 'public/models/snow.glb'));
-const output = path.join(root, 'artifacts/character');
+const modelFlag = process.argv.indexOf('--model');
+const modelId = modelFlag >= 0 ? process.argv[modelFlag + 1] : process.argv[2] ? null : 'snow';
+if (modelId !== null && !/^[a-z0-9-]{1,32}$/.test(modelId ?? '')) throw new Error('Usage: check-character.mjs [--model <id> | <path.glb>]');
+const model = modelId ? path.join(root, 'public/models', `${modelId}.glb`) : path.resolve(process.argv[2]);
+const bundled = modelId !== null;
+const snow = modelId === 'snow';
+const output = path.join(root, 'artifacts/character', modelId ?? path.basename(model, '.glb'));
 await mkdir(output, { recursive: true });
 const prior = JSON.parse(await readFile(path.join(root, 'artifacts/ui/report.json'), 'utf8'));
 const template = JSON.parse(await readFile(prior.exports.control.path, 'utf8'));
@@ -14,13 +19,21 @@ const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
 const app = await electron.launch({ args: [root], cwd: root, env });
 const errors = [];
 const report = { model, poses: [], exports: [] };
+let expressionClips = snow ? ['Soft smile', 'Brow motion'] : [];
 try {
-  if (model === path.join(root, 'public/models/snow.glb')) {
+  if (bundled) {
     const bytes = await readFile(model);
     const jsonLength = bytes.readUInt32LE(12);
     const gltf = JSON.parse(bytes.subarray(20, 20 + jsonLength).toString('utf8'));
     const binaryOffset = 28 + jsonLength;
-    assert.deepEqual(gltf.animations.map(clip => clip.name), ['Idle', 'Soft smile', 'Brow motion']);
+    const names = gltf.animations.map(clip => clip.name);
+    if (snow) assert.deepEqual(names, ['Idle', 'Soft smile', 'Brow motion']);
+    else {
+      assert.ok(names.includes('Idle'), 'Bundled characters need an Idle clip');
+      expressionClips = names.filter(name => name !== 'Idle');
+      assert.ok(expressionClips.length >= 2, 'Bundled characters need at least two expression clips');
+    }
+    assert.ok(typeof gltf.asset.copyright === 'string' && gltf.asset.copyright.length > 0, 'Bundled characters need asset.copyright');
     for (const clip of gltf.animations) for (const sampler of clip.samplers) {
       const accessor = gltf.accessors[sampler.output];
       const view = gltf.bufferViews[accessor.bufferView];
@@ -56,13 +69,13 @@ try {
     });
   }, output);
   await page.locator('#open-import').click();
-  if (model === path.join(root, 'public/models/snow.glb')) await page.locator('#try-snow').click();
+  if (snow) await page.locator('#try-snow').click();
   else await page.locator('#import-model').setInputFiles(model);
   await expect(page.locator('#message')).toContainText('Import ready', { timeout: 20_000 });
   await page.locator('[data-scene="imported"]').click();
   await page.locator('#reduced-motion').uncheck();
   let neutral;
-  for (const [name, blink, talking] of [['neutral', 0, 0], ['blink', 1, 0], ['jaw', 0, 1], ['combined', 1, 1], ['Soft smile', 0, 0], ['Brow motion', 0, 0]]) {
+  for (const [name, blink, talking] of [['neutral', 0, 0], ['blink', 1, 0], ['jaw', 0, 1], ['combined', 1, 1], ...expressionClips.map(clip => [clip, 0, 0])]) {
     const slug = name.toLowerCase().replaceAll(' ', '-');
     const take = structuredClone(template);
     take.id = `character-${slug}`;
@@ -80,7 +93,7 @@ try {
     await page.locator('#open-import').click();
     await page.locator('#import-data').setInputFiles(fixture);
     await expect(page.locator('#message')).toContainText('Control take imported');
-    if (name === 'Soft smile' || name === 'Brow motion') {
+    if (expressionClips.includes(name)) {
       await page.locator('#open-import').click();
       await page.locator('#imported-clip').selectOption({ label: name });
       await page.keyboard.press('Escape');
