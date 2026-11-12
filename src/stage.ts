@@ -19,6 +19,8 @@ type CharacterAsset = keyof typeof CHARACTER_ASSETS;
 type StageAsset = CharacterAsset | 'brain';
 const ASSET_IDS: readonly StageAsset[] = [...Object.keys(CHARACTER_ASSETS) as CharacterAsset[], 'brain'];
 export const DETAIL_SCENES: ReadonlySet<SceneId> = new Set(['rex', 'imported']);
+const FITTED_SCENES: ReadonlySet<SceneId> = new Set(['rex', 'runner', 'brain', 'imported']);
+const FIT_MARGIN: Partial<Record<SceneId, number>> = { brain: 1.55 };
 const ASSET_MAX_BYTES: Partial<Record<StageAsset, number>> = { runner: 12 * 1024 * 1024 };
 const assetLabel = (id: StageAsset) => id === 'brain' ? 'anatomical brain' : CHARACTER_ASSETS[id].label;
 
@@ -110,6 +112,19 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
       camera.lookAt(target);
       return;
     }
+    if (subject && FITTED_SCENES.has(selected)) {
+      const bounds = new THREE.Box3().setFromObject(subject.root, true);
+      if (!bounds.isEmpty()) {
+        const size = bounds.getSize(new THREE.Vector3());
+        const center = bounds.getCenter(new THREE.Vector3());
+        const tangent = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+        const margin = FIT_MARGIN[selected] ?? 1.12;
+        const distance = Math.max(size.y * margin / 2 / tangent, size.x * margin / 2 / (tangent * camera.aspect)) + size.z / 2;
+        camera.position.set(center.x, center.y, center.z + distance);
+        camera.lookAt(center);
+        return;
+      }
+    }
     const distance = Math.max(8.1, 2.8 / (Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect) + 1.2);
     camera.position.set(0, 2.5, distance);
     camera.lookAt(0, 1.6, 0);
@@ -126,6 +141,7 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
     subjects.set(id, subject);
     world.add(subject.root);
     if (previous && previous !== subject) previous.dispose();
+    if (id === selected) frameCamera();
   }
 
   try {
