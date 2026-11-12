@@ -34,13 +34,14 @@ try {
   await page.locator('#import-data').setInputFiles(fixture);
   await expect(page.locator('#take-count')).toHaveText('1 / 6');
   await page.locator('#reduced-motion').uncheck();
+  let extraDownloads = 0;
   for (const scene of ['robot', 'bubbles', 'star', 'dragon', 'baby-dragon', 'runner', 'brain']) {
     await page.locator('#character-button').click();
     await page.locator(`[data-scene="${scene}"]`).click();
     if (scene === 'brain') await expect(page.locator('#brain-caption')).toContainText('not your measured brain activity');
     await page.locator('#open-export').click();
     await page.locator('#export-glb').click();
-    await expect.poll(async () => (await app.evaluate(() => globalThis.__exports)).length, { timeout: 30_000 }).toBe(results.length + 1);
+    await expect.poll(async () => (await app.evaluate(() => globalThis.__exports)).length, { timeout: 30_000 }).toBe(results.length + extraDownloads + 1);
     const saved = (await app.evaluate(() => globalThis.__exports)).at(-1);
     assert.equal(saved.state, 'completed');
     const bytes = await readFile(saved.path);
@@ -49,6 +50,18 @@ try {
     if (scene === 'robot' || scene === 'dragon') assert.match(json.asset.copyright, /CC0 1.0/);
     if (scene === 'brain') assert.match(json.asset.copyright, /CC BY-SA 3\.0/);
     if (scene === 'runner') assert.match(json.asset.copyright, /CC BY 4\.0/);
+    if (scene === 'brain' || scene === 'runner') {
+      const before = (await app.evaluate(() => globalThis.__exports)).length;
+      await page.locator('#open-export').click();
+      await page.locator('#export-video').click();
+      await expect.poll(async () => (await app.evaluate(() => globalThis.__exports)).length, { timeout: 60_000 }).toBe(before + 2);
+      const files = (await app.evaluate(() => globalThis.__exports)).slice(before);
+      assert.ok(files.every(file => file.state === 'completed'));
+      const credits = files.find(file => file.path.endsWith('-credits.txt'));
+      assert.ok(credits && files.some(file => file.path.endsWith('.webm')), `${scene} video export saves a WebM and a credits file`);
+      assert.match(await readFile(credits.path, 'utf8'), scene === 'brain' ? /CC BY-SA 3\.0/ : /CC BY 4\.0/);
+      extraDownloads += 2;
+    }
     await page.locator('#open-import').click();
     await page.locator('#import-model').setInputFiles(saved.path);
     await expect(page.locator('#message')).toContainText('Import ready', { timeout: 15_000 });

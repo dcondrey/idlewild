@@ -52,6 +52,13 @@ function render(problems) {
     if (!existsSync(path.join(root, file))) { problems.push(`${file}: missing`); continue; }
     out.push(`--- ${title} ---`, '', read(path.join(root, file)), '');
   }
+  out.push(rule, 'ELECTRON AND CHROMIUM RUNTIME', rule, '',
+    'The desktop app embeds the Electron runtime (MIT) and Chromium. Packaged builds ship Electron\'s license as',
+    'Contents/Resources/LICENSE.electron.txt and the Chromium third-party licenses as',
+    'Contents/Resources/LICENSES.chromium.html inside Idlewild.app.', '');
+  const electronLicense = path.join(root, 'node_modules', 'electron', 'LICENSE');
+  if (existsSync(electronLicense)) out.push(`--- Electron ${JSON.parse(readFileSync(path.join(root, 'node_modules', 'electron', 'package.json'), 'utf8')).version} (MIT) ---`, '', read(electronLicense), '');
+  else problems.push('node_modules/electron/LICENSE: missing');
   out.push(rule, 'SMARTSPECTRA SDK (OPTIONAL, PROPRIETARY)', rule, '',
     'The @smartspectra/node-sdk packages are proprietary software of Presage Technologies, distributed under',
     "Presage's Terms of Service: https://presagetech.com/legal/terms-of-service",
