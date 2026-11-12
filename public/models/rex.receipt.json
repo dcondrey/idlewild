@@ -11,8 +11,8 @@
   "copyright": "Rex Rig (CC) Blender Foundation | studio.blender.org; https://studio.blender.org/characters/rex/v1/; CC BY 4.0 https://creativecommons.org/licenses/by/4.0/; Modified for Idlewild: evaluated facial morphs, reduced deformation rig, relaxed arm pose, mesh hair in place of particle hair, watch removed, authored idle and subtle expression clips, simplified flat materials.",
   "retrieved": "2026-11-12",
   "derivation": "scripts/prepare-character.py --profile rex, Blender 4.5.9 LTS, scripts disabled",
-  "sha256": "35d4e1e58d1d3703676f1c92c248bb95c152d97287b1c5cdffd547e9269cd61d",
-  "bytes": 5350104,
+  "sha256": "8b39a0a08e78a372ff2036e41240ceee77a31996ab4314a605f33718ef695d50",
+  "bytes": 5755204,
   "vertices": 44093,
   "triangles": 73874,
   "joints": 71,
@@ -22,6 +22,10 @@
     "browInnerUp",
     "eyeBlinkLeft",
     "eyeBlinkRight",
+    "eyeSquintLeft",
+    "eyeSquintRight",
+    "eyeWideLeft",
+    "eyeWideRight",
     "jawOpen",
     "mouthClose",
     "mouthFunnel",
@@ -45,26 +49,5 @@
     "Chin_Main.Chin Resists Jaw"
   ],
   "maxDiscardedSkinWeight": 0.09957644340220417,
-  "skippedMorphs": [
-    {
-      "morph": "eyeWideLeft",
-      "optional": true,
-      "reason": "no candidate moves as expected: {\"candidates\": [{\"meanShift\": [0.0, 0.0, 0.0], \"movedVertices\": 0, \"scoredShift\": 0.0, \"value\": 0.012}, {\"meanShift\": [0.0, 0.0, 0.0], \"movedVertices\": 0, \"scoredShift\": 0.0, \"value\": -0.012}], \"expect\": {\"axis\": 2, \"mesh\": \"GEO-rex_head\", \"sign\": 1}, \"leftX\": 1.0, \"part\": \"ACT-Eyelid_Upper.L\", \"subset\": \"left\"}"
-    },
-    {
-      "morph": "eyeSquintLeft",
-      "optional": true,
-      "reason": "no candidate moves as expected: {\"candidates\": [{\"meanShift\": [0.0, 0.0, 0.0], \"movedVertices\": 0, \"scoredShift\": 0.0, \"value\": 0.008}, {\"meanShift\": [0.0, 0.0, 0.0], \"movedVertices\": 0, \"scoredShift\": 0.0, \"value\": -0.008}], \"expect\": {\"axis\": 2, \"mesh\": \"GEO-rex_head\", \"sign\": 1}, \"leftX\": 1.0, \"part\": \"ACT-Eyelid_Lower.L\", \"subset\": \"left\"}"
-    },
-    {
-      "morph": "eyeWideRight",
-      "optional": true,
-      "reason": "no candidate moves as expected: {\"candidates\": [{\"meanShift\": [0.0, 0.0, 0.0], \"movedVertices\": 0, \"scoredShift\": 0.0, \"value\": 0.012}, {\"meanShift\": [0.0, 0.0, 0.0], \"movedVertices\": 0, \"scoredShift\": 0.0, \"value\": -0.012}], \"expect\": {\"axis\": 2, \"mesh\": \"GEO-rex_head\", \"sign\": 1}, \"leftX\": 1.0, \"part\": \"ACT-Eyelid_Upper.R\", \"subset\": \"right\"}"
-    },
-    {
-      "morph": "eyeSquintRight",
-      "optional": true,
-      "reason": "no candidate moves as expected: {\"candidates\": [{\"meanShift\": [0.0, 0.0, 0.0], \"movedVertices\": 0, \"scoredShift\": 0.0, \"value\": 0.008}, {\"meanShift\": [0.0, 0.0, 0.0], \"movedVertices\": 0, \"scoredShift\": 0.0, \"value\": -0.008}], \"expect\": {\"axis\": 2, \"mesh\": \"GEO-rex_head\", \"sign\": 1}, \"leftX\": 1.0, \"part\": \"ACT-Eyelid_Lower.R\", \"subset\": \"right\"}"
-    }
-  ]
+  "skippedMorphs": []
 }

@@ -459,8 +459,8 @@ def rex_morphs():
             {"name": f"browDown{suffix}", "parts": [control("MSTR-Eyebrow", [0.015, -0.015], brows, 2, -1)]},
             {"name": f"mouthPress{suffix}", "parts": [control("ACT-MouthCorner", [0.03, -0.03], head, 0, -1, lateral=True)]},
             {"name": f"mouthStretch{suffix}", "parts": [control("ACT-MouthCorner", [0.04, -0.04], head, 0, 1, lateral=True)], "optional": True},
-            {"name": f"eyeWide{suffix}", "parts": [control("ACT-Eyelid_Upper", [0.012, -0.012], head, 2, 1)], "optional": True},
-            {"name": f"eyeSquint{suffix}", "parts": [control("ACT-Eyelid_Lower", [0.008, -0.008], head, 2, 1)], "optional": True},
+            {"name": f"eyeWide{suffix}", "parts": [control("ACT-Eyelid_Upper", [0.012, -0.012], head, 2, 1, index=1)]},
+            {"name": f"eyeSquint{suffix}", "parts": [control("ACT-Eyelid_Lower", [0.012, -0.012], head, 2, 1, index=1)]},
         ]
     morphs += [
         {"name": "jawOpen", "parts": [{"bone": "Jaw", "prop": "rotation_euler", "index": 0, "values": [0.3, -0.3], "expect": {"mesh": head, "axis": 2, "sign": -1}}]},
@@ -520,7 +520,7 @@ PROFILES["rex"] = {
     "stale_bone_patterns": [],
     "stale_properties": {("Chin_Main", "Chin Resists Jaw")},
     "morphs": rex_morphs(),
-    "min_morphs": 13,
+    "min_morphs": 17,
     "max_triangles": 90_000,
     "textures": {
         "mode": "auto", "material_prefix": "rex.", "roughness": {"rex.eyes": 0.2, "rex.pupils": 0.2, "rex.teeth": 0.35, "rex.belt_buckle": 0.35},
@@ -540,7 +540,7 @@ PROFILES["rex"] = {
     "forward": (0, -1, 0),
     "arm_angle": None,
     "clips": ("Idle",),
-    "expressions": (("Soft smile", ("mouthSmileLeft", "mouthSmileRight"), 0.18), ("Brow motion", ("browInnerUp",), 0.15)),
+    "expressions": (("Soft smile", ("mouthSmileLeft", "mouthSmileRight"), 0.5), ("Brow motion", ("browInnerUp",), 0.15)),
     "derivation": "scripts/prepare-character.py --profile rex, Blender 4.5.9 LTS, scripts disabled",
     "arm_note": "relaxed upper-arm rotations measured from the source pose",
 }
@@ -810,6 +810,21 @@ def build_skeleton(source_rig, profile):
             runtime[bone.name] = target
             fallbacks[target] = fallbacks.get(target, 0) + 1
     return {"parents": parents, "sources": {value: key for key, value in runtime.items() if key in names}, "runtime": runtime, "fallback": None, "fallbacks": fallbacks}
+
+
+def masked_vertices(source):
+    removed = set()
+    for modifier in source.modifiers:
+        if modifier.type != "MASK" or not modifier.show_render or modifier.mode != "VERTEX_GROUP":
+            continue
+        group = source.vertex_groups.get(modifier.vertex_group)
+        if group is None:
+            continue
+        for vertex in source.data.vertices:
+            weight = next((m.weight for m in vertex.groups if m.group == group.index), 0.0)
+            if (weight > modifier.threshold) == modifier.invert_vertex_group:
+                removed.add(vertex.index)
+    return removed
 
 
 def preflight_profile(profile, skeleton, source_rig, sources):
@@ -1611,7 +1626,8 @@ def collect_preconditions(profile, source_path, source_rig, sources, skeleton):
             continue
         names = {group.index: group.name for group in source.vertex_groups}
         rigid = source.name in profile["rigid_meshes"]
-        bare = sum(1 for vertex in source.data.vertices if not rigid and not any(names.get(m.group) in deform and m.weight > 1e-8 for m in vertex.groups))
+        masked = masked_vertices(source)
+        bare = sum(1 for vertex in source.data.vertices if not rigid and vertex.index not in masked and not any(names.get(m.group) in deform and m.weight > 1e-8 for m in vertex.groups))
         if bare:
             errors.append(f"{source.name}: {bare} vertices have no deform weight and no rigid_meshes fallback")
         textured = [material.name for material in materials if material.name.startswith(skin_prefix or "\0") or material.name in spec.get("materials", {})]
