@@ -27,16 +27,26 @@ export function randomFor(seed: number, index: number): number {
   return ((value ^ (value >>> 15)) >>> 0) / 0x100000000;
 }
 
-export function signalValue(input: SceneFrame, channel: Channel): number | null {
+function signalWeight(input: SceneFrame, channel: Channel): number {
   const frame = input.frame;
   const signal = frame?.signals[channel];
   if (!frame || !signal || signal.quality !== 'valid' || signal.value === null || !Number.isFinite(signal.value) ||
-      !Number.isFinite(signal.sampledAtMs) || signal.sampledAtMs > frame.timeMs) return null;
+      !Number.isFinite(signal.sampledAtMs) || signal.sampledAtMs > frame.timeMs) return 0;
   const unit = channel === 'pulseRate' ? 'beats/min' : channel === 'breathingRate' ? 'breaths/min' : channel === 'blink' || channel === 'talking' ? 'boolean' : 'relative';
-  if (signal.unit !== unit) return null;
+  if (signal.unit !== unit) return 0;
   const age = Math.max(input.timeMs, frame.timeMs) - signal.sampledAtMs;
-  if (age >= SIGNAL_STALE_MS) return null;
-  return signal.value * clamp((SIGNAL_STALE_MS - age) / 500);
+  if (!(age < SIGNAL_STALE_MS)) return 0;
+  return clamp((SIGNAL_STALE_MS - age) / 500);
+}
+
+export function signalValue(input: SceneFrame, channel: Channel): number | null {
+  const weight = signalWeight(input, channel);
+  return weight > 0 ? input.frame!.signals[channel].value! * weight : null;
+}
+
+function ratePace(input: SceneFrame, channel: 'breathingRate' | 'pulseRate', low: number, high: number): number {
+  const weight = signalWeight(input, channel);
+  return weight > 0 ? clamp((input.frame!.signals[channel].value! - low) / (high - low)) * weight : 0;
 }
 
 export function sceneDynamics(input: SceneFrame) {
@@ -85,6 +95,8 @@ export function sceneDynamics(input: SceneFrame) {
     time: motion === 0 ? 0 : Math.max(0, Number.isFinite(input.timeMs) ? input.timeMs : 0) / 1000,
     motion,
     breath: local ? 0 : clamp(signalValue(input, 'breath') ?? 0, -1, 1) * sensitivity * motion,
+    breathingPace: local ? 0 : ratePace(input, 'breathingRate', 6, 30) * sensitivity * motion,
+    pulsePace: local ? 0 : ratePace(input, 'pulseRate', 45, 135) * sensitivity * motion,
     blink,
     talking: clamp(signalValue(input, 'talking') ?? 0) * motion,
     jaw, smile, brow, movement, armSpread, armLift, lean, turn,

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { sceneDynamics, signalValue } from './dynamics.ts';
 import { disposeObject, fitModel } from './resources.ts';
-import { createRunnerMotion, createTracking, type CharacterMorph } from './tracking.ts';
+import { BONE_ALIASES, boneFinder, createRunnerMotion, createTracking, type CharacterMorph } from './tracking.ts';
 import type { SceneSubject } from './types.ts';
 
 export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[], kind: 'robot' | 'dragon' | 'imported' | 'runner'): SceneSubject {
@@ -36,9 +36,14 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
       }
     }
   });
-  const findBone = (...names: string[]) => bones.find(bone => names.includes(bone.name.toLowerCase().replace(/[^a-z0-9]/g, '')));
-  const chest = kind === 'robot' ? findBone('abdomen', 'torso') : kind === 'dragon' ? findBone('spine1', 'stomach') : findBone('chest', 'spine1', 'spine2', 'mixamorigspine1', 'mixamorigspine2');
-  const jaw = kind === 'dragon' ? findBone('mouthlower') : findBone('jaw', 'mixamorigjaw');
+  const findBone = boneFinder(bones);
+  const chest = findBone(BONE_ALIASES.chest);
+  const jaw = findBone(BONE_ALIASES.jaw);
+  const head = findBone(BONE_ALIASES.head) ?? findBone(BONE_ALIASES.neck);
+  const blinkMorphs = morphs.some(morph => morph.kind === 'blink');
+  const jawMorphs = morphs.some(morph => morph.kind === 'talking');
+  const pitch = new THREE.Vector3(1, 0, 0), roll = new THREE.Vector3(0, 0, 1), offset = new THREE.Quaternion();
+  const tilt = (bone: THREE.Bone, axis: THREE.Vector3, angle: number) => { if (angle !== 0) bone.quaternion.multiply(offset.setFromAxisAngle(axis, angle)); };
   const animationPose = bones.map(bone => ({ bone, quaternion: bone.quaternion.clone(), scale: bone.scale.clone() }));
   const applyTracking = createTracking(model, bones, morphs);
   const run = kind === 'runner' ? createRunnerMotion(model, bones) : null;
@@ -75,11 +80,15 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
     },
     update(input) {
       if (disposed) return;
-      const { time, motion, breath, blink, talking } = sceneDynamics(input);
+      const { time, motion, breath, breathingPace, pulsePace, blink, talking } = sceneDynamics(input);
+      const signals = motion > 0 && input.frame?.source !== 'local-camera';
       restoreAnimationPose();
       mixer.setTime(time * motion);
       rememberAnimationPose();
-      root.rotation.z = breath * 0.015;
+      const headPitch = -pulsePace * 0.05 + (signals && !blinkMorphs ? blink * 0.06 : 0);
+      const headRoll = signals && !jaw && !jawMorphs ? talking * 0.05 : 0;
+      root.rotation.set((chest ? 0 : -breathingPace * 0.03) + (head ? 0 : headPitch * 0.4), 0, breath * 0.015 + (head ? 0 : headRoll * 0.4));
+      if (!chest) root.scale.set(1 + breath * 0.012, 1, 1 + breath * 0.025);
       if (run) {
         root.position.y = 0;
         root.position.y = run(input, runnerVariant);
@@ -87,9 +96,14 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
       if (chest) {
         chest.scale.x *= 1 + breath * 0.025;
         chest.scale.z *= 1 + breath * 0.04;
-      } else root.scale.set(1 + breath * 0.012, 1, 1 + breath * 0.025);
-      if (input.frame?.source !== 'local-camera') {
-        if (jaw) jaw.rotation.x += talking * 0.08;
+        tilt(chest, pitch, -breathingPace * 0.05);
+      }
+      if (head) {
+        tilt(head, pitch, headPitch);
+        tilt(head, roll, headRoll);
+      }
+      if (signals) {
+        if (jaw) tilt(jaw, pitch, talking * 0.08);
         for (const morph of morphs) {
           if (morph.kind && signalValue(input, morph.kind) !== null) morph.mesh.morphTargetInfluences![morph.index] = morph.kind === 'blink' ? blink : talking * 0.65;
         }

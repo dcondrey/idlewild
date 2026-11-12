@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { rehearsalFrame } from '../src/rehearsal.ts';
-import { FACE_SHAPES, type FaceShape, type SceneFrame, type TrackingFrame } from '../src/contracts.ts';
+import { FACE_SHAPES, SIGNAL_STALE_MS, type Channel, type FaceShape, type SceneFrame, type Signal, type TrackingFrame } from '../src/contracts.ts';
+import type { SceneSubject } from '../src/scenes/types.ts';
 import { createCharacter } from '../src/scenes/character.ts';
 import { createBabyDragon, createBrain, createBubbles, createRunner, createStar } from '../src/scenes/procedural.ts';
 import { sceneDynamics, signalValue } from '../src/scenes/dynamics.ts';
@@ -14,7 +17,62 @@ function input(timeMs: number, reducedMotion = false): SceneFrame {
 
 function transforms(root: THREE.Object3D) {
   const result: number[][] = [];
-  root.traverse(object => result.push([...object.position.toArray(), ...object.quaternion.toArray(), ...object.scale.toArray()]));
+  root.traverse(object => result.push([...object.position.toArray(), ...object.quaternion.toArray(), ...object.scale.toArray(),
+    ...(object instanceof THREE.Mesh && object.morphTargetInfluences ? object.morphTargetInfluences : [])]));
+  return result;
+}
+
+function difference(a: number[][], b: number[][]) {
+  assert.equal(a.length, b.length);
+  let largest = 0;
+  a.forEach((values, index) => {
+    assert.equal(values.length, b[index].length);
+    values.forEach((value, part) => { largest = Math.max(largest, Math.abs(value - b[index][part])); });
+  });
+  return largest;
+}
+
+function loadModel(name: 'robot' | 'dragon' | 'snow') {
+  const bytes = readFileSync(new URL(`../public/models/${name}.glb`, import.meta.url));
+  const loader = new GLTFLoader().register(() => ({ name: 'idlewild_test_untextured', loadTexture: () => Promise.resolve(new THREE.Texture()) }));
+  return loader.parseAsync(new Uint8Array(bytes).buffer, '');
+}
+
+function expectDisposed(subject: SceneSubject) {
+  const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>(), textures = new Set<THREE.Texture>();
+  subject.root.traverse(object => {
+    if (!(object instanceof THREE.Mesh)) return;
+    geometries.add(object.geometry);
+    for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+      materials.add(material);
+      for (const value of Object.values(material)) if (value instanceof THREE.Texture) textures.add(value);
+    }
+  });
+  const counts = new Map<object, number>();
+  const count = (key: object) => () => { counts.set(key, (counts.get(key) ?? 0) + 1); };
+  for (const geometry of geometries) geometry.addEventListener('dispose', count(geometry));
+  for (const material of materials) material.addEventListener('dispose', count(material));
+  for (const texture of textures) texture.addEventListener('dispose', count(texture));
+  subject.dispose();
+  subject.dispose();
+  assert.ok(geometries.size > 0 && materials.size > 0);
+  for (const resource of [...geometries, ...materials, ...textures]) assert.equal(counts.get(resource), 1);
+}
+
+const SIGNAL_SAMPLES = { breath: 0.8, breathingRate: 24, pulseRate: 96, blink: 1, talking: 1 } as const;
+
+function signalFrame(timeMs: number, valid: Partial<Record<Channel, number>> = {}, ageMs = 0): SceneFrame {
+  const result = input(timeMs);
+  for (const [channel, signal] of Object.entries(result.frame!.signals) as [Channel, Signal][]) {
+    const value = valid[channel];
+    if (value === undefined) {
+      signal.quality = 'missing';
+      signal.value = null;
+    } else {
+      signal.value = value;
+      signal.sampledAtMs = timeMs - ageMs;
+    }
+  }
   return result;
 }
 
@@ -395,14 +453,14 @@ test('bubbles and star react distinctly to facial expressions and posture at the
     Object.assign(face.frame!.tracking!.face!.weights, { jawOpen: 0.9, mouthSmileLeft: 0.8, mouthSmileRight: 0.8, eyeBlinkLeft: 0.7, eyeBlinkRight: 0.7 });
     subject.update(face);
     const expressive = transforms(subject.root);
-    assert.notDeepEqual(expressive, rest);
+    assert.ok(difference(expressive, rest) > 0.05);
     const body = structuredClone(frame);
     body.frame!.tracking!.body!.leftWrist = [0.85, 1.1, 0, 1];
     body.frame!.tracking!.body!.rightWrist = [-0.85, 1.1, 0, 1];
     subject.update(body);
     const pose = transforms(subject.root);
-    assert.notDeepEqual(pose, rest);
-    assert.notDeepEqual(pose, expressive);
+    assert.ok(difference(pose, rest) > 0.05);
+    assert.ok(difference(pose, expressive) > 0.05);
     subject.update(face);
     assert.deepEqual(transforms(subject.root), expressive);
     subject.update(frame);
@@ -481,4 +539,149 @@ test('dragon framing keeps forward orientation and uniform proportions consisten
     subject.dispose();
   }
   assert.deepEqual(results[0], results[1]);
+});
+
+test('every scene responds to each SDK signal only while it is valid and fresh', async () => {
+  const [robot, dragon, snow] = await Promise.all((['robot', 'dragon', 'snow'] as const).map(loadModel));
+  const subjects: [string, SceneSubject][] = [
+    ['robot', createCharacter(robot.scene, robot.animations, 'robot')],
+    ['dragon', createCharacter(dragon.scene, dragon.animations, 'dragon')],
+    ['snow', createCharacter(snow.scene, snow.animations, 'imported')],
+    ['runner character', trackingRig('runner').subject],
+    ['bubbles', createBubbles()], ['star', createStar()], ['baby dragon', createBabyDragon()], ['runner', createRunner()],
+  ];
+  for (const [name, subject] of subjects) {
+    const capture = (frame: SceneFrame) => { subject.update(frame); return transforms(subject.root); };
+    const absent = capture(signalFrame(1000));
+    assert.deepEqual(capture({ ...signalFrame(1000), frame: null }), absent, name);
+    for (const [channel, value] of Object.entries(SIGNAL_SAMPLES)) {
+      assert.ok(difference(capture(signalFrame(1000, { [channel]: value })), absent) > 1e-3, `${name} ignores ${channel}`);
+      assert.deepEqual(capture(signalFrame(1000, { [channel]: value }, SIGNAL_STALE_MS)), absent, `${name} uses stale ${channel}`);
+    }
+    const all = capture(signalFrame(1000, SIGNAL_SAMPLES));
+    capture(signalFrame(4200, SIGNAL_SAMPLES));
+    assert.deepEqual(capture(signalFrame(1000, SIGNAL_SAMPLES)), all, `${name} seek`);
+    const still = signalFrame(0);
+    still.reducedMotion = true;
+    const frozen = capture(still);
+    for (const timeMs of [1000, 6000]) {
+      const reduced = signalFrame(timeMs, SIGNAL_SAMPLES);
+      reduced.reducedMotion = true;
+      assert.deepEqual(capture(reduced), frozen, `${name} reduced motion`);
+    }
+    expectDisposed(subject);
+  }
+});
+
+test('blink is a subtle uniform response that keeps bubbles round', () => {
+  const bubbles = createBubbles();
+  bubbles.update(signalFrame(1000, { blink: 0 }));
+  const open = bubbles.root.children.map(child => child.scale.clone());
+  bubbles.update(signalFrame(1000, { blink: 1 }));
+  bubbles.root.children.forEach((child, index) => {
+    assert.ok(Math.abs(child.scale.x - child.scale.y) < 1e-12 && Math.abs(child.scale.z - child.scale.y) < 1e-12);
+    const ratio = child.scale.y / open[index].y;
+    assert.ok(ratio > 0.9 && ratio < 0.97);
+  });
+  bubbles.dispose();
+  const star = createStar();
+  const core = star.root.getObjectByName('StarCore')!;
+  star.update(signalFrame(1000, { blink: 0 }));
+  const shape = core.scale.y / core.scale.x;
+  star.update(signalFrame(1000, { blink: 1 }));
+  assert.ok(Math.abs(core.scale.y / core.scale.x - shape) < 1e-12);
+  star.dispose();
+});
+
+test('runner pace stays bounded and faster or deeper breathing earns no extra stride', () => {
+  const procedural = createRunner();
+  const { subject: character } = trackingRig('runner');
+  const cases: [SceneSubject, string[]][] = [
+    [procedural, ['Hip_L', 'Knee_L', 'Shoulder_R', 'Pelvis']],
+    [character, ['DEF-Thigh_1.L', 'DEF-Knee_1.L', 'DEF-UpperArm_1.R']],
+  ];
+  for (const [subject, names] of cases) {
+    for (let timeMs = 0; timeMs <= 1000; timeMs += 125) {
+      subject.update(signalFrame(timeMs, { breath: 0, breathingRate: 8 }));
+      const calm = names.map(name => subject.root.getObjectByName(name)!.quaternion.clone());
+      const height = subject.root.getObjectByName(names[0])!.getWorldPosition(new THREE.Vector3()).y;
+      subject.update(signalFrame(timeMs, { breath: 1, breathingRate: 30 }));
+      names.forEach((name, index) => assert.ok(subject.root.getObjectByName(name)!.quaternion.angleTo(calm[index]) < 1e-6, name));
+      if (subject === procedural) {
+        assert.ok(Math.abs(subject.root.getObjectByName('Hip_L')!.rotation.x) <= 0.4 + 1e-9);
+        assert.ok(Math.abs(subject.root.getObjectByName(names[0])!.getWorldPosition(new THREE.Vector3()).y - height) < 1e-9);
+      }
+    }
+    subject.dispose();
+  }
+});
+
+test('tracked limbs layer over authored idle motion on untracked joints', () => {
+  const { subject, bones } = trackingRig();
+  const rest = bones['DEF-Spine'].quaternion.clone();
+  const bent = rest.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.3));
+  subject.setClips!([new THREE.AnimationClip('Idle', 2, [new THREE.QuaternionKeyframeTrack('DEF-Spine.quaternion', [0, 1, 2], [...rest.toArray(), ...bent.toArray(), ...rest.toArray()])])]);
+  const body: TrackingFrame['body'] = { leftShoulder: [0.25, 1, 0, 1], leftElbow: [0.25, 0.6, 0, 1] };
+  for (const [timeMs, authored] of [[0, rest], [1000, bent]] as const) {
+    subject.update(trackedInput(timeMs, { body }));
+    assert.ok(bones['DEF-Spine'].quaternion.angleTo(authored) < 1e-6);
+    assert.ok(direction(bones['DEF-UpperArm_1.L'], bones['DEF-Forearm_1.L']).y < -0.9999);
+  }
+  subject.dispose();
+});
+
+test('elbow aim clamps to an anatomical range without snapping near a folded pose', () => {
+  const { subject, bones } = trackingRig();
+  let previous: THREE.Vector3 | null = null;
+  for (const angle of [2, 2.5, 2.55, 2.6, 2.65, 2.8, 3, 3.1, 3.13]) {
+    subject.update(trackedInput(500, { body: {
+      leftShoulder: [0.25, 1, 0, 1], leftElbow: [0.25, 0.6, 0, 1],
+      leftWrist: [0.25 + Math.sin(angle) * 0.3, 0.6 - Math.cos(angle) * 0.3, 0, 1],
+    } }));
+    const forearm = direction(bones['DEF-Forearm_1.L'], bones['DEF-Wrist.L']);
+    const flexion = direction(bones['DEF-UpperArm_1.L'], bones['DEF-Forearm_1.L']).angleTo(forearm);
+    assert.ok(Math.abs(flexion - Math.min(angle, 2.6)) < 1e-4, String(angle));
+    if (previous) assert.ok(previous.angleTo(forearm) <= 0.5 + 1e-6);
+    previous = forearm;
+  }
+  subject.dispose();
+});
+
+test('dragon, robot and Snow face forward and share the same uniform fitting rule', async t => {
+  const forward = new Map<string, THREE.Vector3>();
+  for (const [name, kind, back, front] of [['robot', 'robot', null, null], ['dragon', 'dragon', 'hips', 'mouth_upper_tip'], ['snow', 'imported', 'DEF-FootL', 'DEF-ToesL']] as const) {
+    const gltf = await loadModel(name);
+    const subject = createCharacter(gltf.scene, gltf.animations, kind);
+    subject.update(input(0, true));
+    const framing = gltf.scene.parent!;
+    assert.ok(Math.abs(framing.scale.x - framing.scale.y) < 1e-12 && Math.abs(framing.scale.z - framing.scale.y) < 1e-12, name);
+    assert.ok(new THREE.Vector3(0, 0, 1).transformDirection(gltf.scene.matrixWorld).z > 0.9999, name);
+    const bounds = new THREE.Box3().setFromObject(subject.root);
+    const size = bounds.getSize(new THREE.Vector3());
+    const footprint = Math.max(size.x, size.z);
+    assert.ok(Math.abs(bounds.min.y) < 1e-6 && Math.abs(bounds.getCenter(new THREE.Vector3()).x) < 1e-6, name);
+    assert.ok(size.y <= 2.7 + 1e-6 && footprint <= 5.2 + 1e-6, name);
+    assert.ok(Math.abs(size.y - 2.7) < 1e-6 || Math.abs(footprint - 5.2) < 1e-6, name);
+    if (name === 'dragon') assert.ok(Math.abs(footprint - 5.2) < 1e-6);
+    t.diagnostic(`${name} fitted size ${size.toArray().map(value => value.toFixed(3)).join(' x ')}`);
+    if (back && front) {
+      const vector = subject.root.getObjectByName(front)!.getWorldPosition(new THREE.Vector3()).sub(subject.root.getObjectByName(back)!.getWorldPosition(new THREE.Vector3()));
+      vector.y = 0;
+      forward.set(name, vector.normalize());
+    }
+    expectDisposed(subject);
+  }
+  assert.ok(forward.get('dragon')!.z > 0.95 && forward.get('snow')!.z > 0.95);
+  assert.ok(forward.get('dragon')!.dot(forward.get('snow')!) > 0.95);
+});
+
+test('Snow arms follow tracked directions overhead without a clamp or axis snap', async () => {
+  const gltf = await loadModel('snow');
+  const subject = createCharacter(gltf.scene, gltf.animations, 'imported');
+  const arm = subject.root.getObjectByName('DEF-UpperArm_1L')!, forearm = subject.root.getObjectByName('DEF-Forearm_1L')!;
+  for (const [x, z] of [[0, 0], [0.01, 0], [-0.01, 0], [0, 0.01], [0, -0.01]]) {
+    subject.update(trackedInput(500, { body: { leftShoulder: [0.2, 1.4, 0, 1], leftElbow: [0.2 + x, 1.7, z, 1] } }));
+    assert.ok(direction(arm, forearm).angleTo(new THREE.Vector3(x, 0.3, z).normalize()) < 1e-3, `${x} ${z}`);
+  }
+  subject.dispose();
 });

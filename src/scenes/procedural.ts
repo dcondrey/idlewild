@@ -41,22 +41,23 @@ export function createBubbles(): SceneSubject {
   return {
     root,
     update(input) {
-      const { time, motion, breath, jaw, smile, brow, blink, movement, armSpread, armLift, lean, turn } = sceneDynamics(input);
+      const { time, motion, breath, breathingPace, pulsePace, jaw, smile, brow, blink, movement, armSpread, armLift, lean, turn } = sceneDynamics(input);
       root.position.x = lean * 0.7;
       root.rotation.set(0, turn * 0.3, -lean * 0.12);
       for (const surface of surfaces) {
-        surface.emissiveIntensity = 0.045 + smile * 0.22 + jaw * 0.12;
+        surface.emissiveIntensity = 0.045 + smile * 0.22 + jaw * 0.12 + pulsePace * 0.08;
         surface.opacity = 0.52 + brow * 0.16;
       }
+      const sway = 0.17 * motion + movement * 0.24 + pulsePace * 0.12;
+      const drift = 0.18 * motion + breathingPace * 0.14;
       for (let i = 0; i < bubbles.length; i++) {
         const phase = randomFor(input.seed, i + 200) * Math.PI * 2;
         bubbles[i].position.set(
-          (randomFor(input.seed, i * 4) * 5.2 - 2.6) * (1 + armSpread * 0.35 + smile * 0.12) + Math.sin(time * 0.33 + phase) * (0.17 * motion + movement * 0.24),
-          randomFor(input.seed, i * 4 + 1) * 2.9 + 0.65 + Math.sin(time * 0.48 + phase) * 0.18 * motion + breath * 0.22 + armLift * 0.7 + movement * 0.25,
+          (randomFor(input.seed, i * 4) * 5.2 - 2.6) * (1 + armSpread * 0.35 + smile * 0.12) + Math.sin(time * 0.33 + phase) * sway,
+          randomFor(input.seed, i * 4 + 1) * 2.9 + 0.65 + Math.sin(time * 0.48 + phase) * drift + breath * 0.22 + armLift * 0.7 + movement * 0.25 + brow * 0.12,
           (randomFor(input.seed, i * 4 + 2) * 2.2 - 1.1) * (1 + armSpread * 0.35),
         );
-        const size = (0.16 + randomFor(input.seed, i * 4 + 3) * 0.38) * (1 + breath * 0.18 + jaw * 0.4 + smile * 0.2);
-        bubbles[i].scale.set(size * (1 + blink * 0.18), size * (1 - blink * 0.5 + brow * 0.15), size);
+        bubbles[i].scale.setScalar((0.16 + randomFor(input.seed, i * 4 + 3) * 0.38) * (1 + breath * 0.18 + jaw * 0.4 + smile * 0.2 - blink * 0.07));
       }
     },
     dispose: () => disposeObject(root),
@@ -90,22 +91,22 @@ export function createStar(): SceneSubject {
   return {
     root,
     update(input) {
-      const { time, motion, breath, jaw, smile, brow, blink, movement, armSpread, armLift, lean, turn } = sceneDynamics(input);
-      const expansion = 1 + breath * 0.12 + smile * 0.2 + jaw * 0.22;
-      core.scale.set(expansion * (1 + armSpread * 0.12 + blink * 0.12), expansion * (1 - blink * 0.35 + brow * 0.15), expansion);
-      core.rotation.y = Math.sin(time * 0.3) * 0.22 * motion + turn * 0.65;
+      const { time, motion, breath, breathingPace, pulsePace, jaw, smile, brow, blink, movement, armSpread, armLift, lean, turn } = sceneDynamics(input);
+      const expansion = (1 + breath * 0.12 + smile * 0.2 + jaw * 0.22) * (1 - blink * 0.06);
+      core.scale.set(expansion * (1 + armSpread * 0.12), expansion * (1 + brow * 0.15), expansion);
+      core.rotation.y = Math.sin(time * 0.3) * (0.22 * motion + pulsePace * 0.12) + turn * 0.65;
       core.rotation.z = Math.sin(time * 0.22) * 0.08 * motion - lean * 0.3;
-      core.position.set(lean * 0.7, 1.9 + Math.sin(time * 0.6) * 0.08 * motion + armLift * 0.55 + movement * 0.2, 0);
+      core.position.set(lean * 0.7, 1.9 + Math.sin(time * 0.6) * (0.08 * motion + breathingPace * 0.08) + armLift * 0.55 + movement * 0.2, 0);
       rings[0].rotation.z = time * 0.12 * motion;
       rings[1].rotation.z = 1.2 - time * 0.09 * motion;
       rings[0].scale.setScalar(1 + armSpread * 0.18 + brow * 0.12);
       rings[1].scale.setScalar(1 + movement * 0.2 + smile * 0.12);
-      starMaterial.emissiveIntensity = 0.45 + Math.max(0, breath) * 0.5 + smile * 0.55 + jaw * 0.25;
+      starMaterial.emissiveIntensity = 0.45 + Math.max(0, breath) * 0.5 + smile * 0.55 + jaw * 0.25 + pulsePace * 0.2;
       for (let i = 0; i < dust.length; i++) {
         const angle = randomFor(input.seed, i * 2) * Math.PI * 2 + time * 0.05 * motion;
-        const radius = (1.9 + randomFor(input.seed, i * 2 + 1) * 0.6) * (1 + armSpread * 0.2 + movement * 0.15);
+        const radius = (1.9 + randomFor(input.seed, i * 2 + 1) * 0.6) * (1 + armSpread * 0.2 + movement * 0.15 + pulsePace * 0.08);
         dust[i].position.set(Math.cos(angle) * radius + lean * 0.7, 1.9 + Math.sin(angle) * radius * 0.7 + armLift * 0.55, Math.sin(angle * 3) * 0.6);
-        dust[i].scale.setScalar(1 + jaw * 1.2 + brow * 0.5);
+        dust[i].scale.setScalar(1 + jaw * 1.2 + brow * 0.5 + blink * 0.6);
       }
     },
     dispose: () => disposeObject(root),
@@ -182,20 +183,21 @@ export function createBabyDragon(): SceneSubject {
   return {
     root,
     update(input) {
-      const { time, motion, breath, movement, blink, jaw: mouth } = sceneDynamics(input);
+      const { time, motion, breath, breathingPace, pulsePace, movement, blink, jaw: mouth } = sceneDynamics(input);
       const body = breath + movement;
       chest.scale.set(1 + body * 0.08, 1 + body * 0.045, 1 + body * 0.13);
       head.rotation.z = Math.sin(time * 0.55) * 0.055 * motion;
-      head.rotation.x = body * 0.04;
+      head.rotation.x = body * 0.04 - pulsePace * 0.06;
       jaw.rotation.x = mouth * 0.16;
       for (const eye of eyeNodes) eye.scale.y = 1 - blink * 0.88;
       for (let i = 0; i < wings.length; i++) {
         const side = i ? 1 : -1;
-        wings[i].rotation.y = side * (0.35 + body * 0.2 + Math.sin(time * 0.7) * 0.08 * motion);
+        wings[i].rotation.y = side * (0.35 + body * 0.2 + breathingPace * 0.12 + Math.sin(time * 0.7) * 0.08 * motion);
         arms[i].rotation.x = body * 0.08;
         legs[i].rotation.x = body * 0.025;
       }
-      for (let i = 0; i < tailJoints.length; i++) tailJoints[i].rotation.y = Math.sin(time * 0.65 + i * 0.55) * 0.1 * motion;
+      const tailSway = 0.1 * motion + pulsePace * 0.08;
+      for (let i = 0; i < tailJoints.length; i++) tailJoints[i].rotation.y = Math.sin(time * 0.65 + i * 0.55) * tailSway;
     },
     dispose: () => disposeObject(root),
   };
@@ -255,13 +257,15 @@ export function createRunner(): SceneSubject {
       root.scale.set(palette.width, palette.height, palette.width);
     },
     update(input) {
-      const { time, motion, breath, movement } = sceneDynamics(input);
+      const { time, motion, breath, breathingPace, pulsePace, blink, talking, movement } = sceneDynamics(input);
       const response = breath + movement;
       const phase = time * 7.5;
-      const stride = motion * (0.5 + Math.max(0, response) * 0.12);
+      const stride = motion * 0.5;
       body.position.y = 1.18 + Math.abs(Math.cos(phase)) * 0.055 * motion;
       body.rotation.x = 0.08 * motion;
       torso.scale.set(1 + response * 0.035, 1, 1 + response * 0.08);
+      torso.rotation.x = -breathingPace * 0.06;
+      head.rotation.set(blink * 0.06 - pulsePace * 0.06, 0, talking * 0.05);
       for (let i = 0; i < hips.length; i++) {
         const cycle = Math.sin(phase + i * Math.PI);
         hips[i].rotation.x = cycle * stride;

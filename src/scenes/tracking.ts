@@ -8,6 +8,38 @@ type PointSource = BodyJoint | readonly [BodyJoint, BodyJoint];
 interface Segment { bone: THREE.Bone; end: THREE.Object3D; from: PointSource; to: PointSource; limit: number; direction: THREE.Vector3; rotation: THREE.Quaternion }
 const normalize = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
 
+export const BONE_ALIASES = Object.freeze({
+  spine: ['defspine', 'mixamorigspine', 'spine', 'spine01', 'abdomen'],
+  chest: ['chest', 'defchest', 'defribcage', 'defspine003', 'mixamorigspine2', 'spine2', 'spine03', 'upperchest', 'torso', 'mixamorigspine1', 'spine1', 'spine02', 'stomach'],
+  neck: ['defneck', 'mixamorigneck', 'neck', 'neck01'],
+  head: ['defhead', 'mixamorighead', 'head'],
+  jaw: ['defjaw', 'jaw', 'mixamorigjaw', 'mouthlower', 'lowerjaw'],
+});
+
+function limbAliases(side: 'left' | 'right', s: 'l' | 'r') {
+  return {
+    shoulder: [`defshoulder${s}`, `mixamorig${side}shoulder`, `${side}shoulder`, `shoulder${s}`, `clavicle${s}`],
+    arm: [`defupperarm1${s}`, `defupperarm${s}`, `mixamorig${side}arm`, `${side}upperarm`, `${side}arm`, `upperarm${s}`],
+    forearm: [`defforearm1${s}`, `defforearm${s}`, `mixamorig${side}forearm`, `${side}forearm`, `${side}lowerarm`, `lowerarm${s}`, `forearm${s}`],
+    hand: [`defwrist${s}`, `defhand${s}`, `mixamorig${side}hand`, `${side}hand`, `wrist${s}`, `palm2${s}`, `hand${s}`],
+    thigh: [`defthigh1${s}`, `defthigh${s}`, `mixamorig${side}upleg`, `${side}upleg`, `${side}upperleg`, `upperleg${s}`, `thigh${s}`],
+    shin: [`defknee1${s}`, `defshin${s}`, `mixamorig${side}leg`, `${side}leg`, `${side}lowerleg`, `lowerleg${s}`, `calf${s}`, `shin${s}`],
+    foot: [`deffoot${s}`, `mixamorig${side}foot`, `${side}foot`, `foot${s}`],
+  };
+}
+
+export function boneFinder(bones: readonly THREE.Bone[]) {
+  const byName = new Map<string, THREE.Bone>();
+  for (const bone of bones) if (!byName.has(normalize(bone.name))) byName.set(normalize(bone.name), bone);
+  return (aliases: readonly string[]) => {
+    for (const alias of aliases) {
+      const bone = byName.get(alias);
+      if (bone) return bone;
+    }
+    return undefined;
+  };
+}
+
 function descendant(object: THREE.Object3D, ancestor: THREE.Object3D): boolean {
   for (let parent = object.parent; parent; parent = parent.parent) if (parent === ancestor) return true;
   return false;
@@ -29,35 +61,32 @@ function faceSources(name: string, available: Set<string>): readonly FaceShape[]
   }
 }
 
+const LIMITS = Object.freeze({ arm: Math.PI, elbow: 2.6, hip: 2.1, knee: 2.6, head: Math.PI / 2 });
+
 function bodyRig(model: THREE.Object3D, bones: readonly THREE.Bone[]) {
-  const byName = new Map(bones.map(bone => [normalize(bone.name), bone]));
-  const find = (...names: string[]) => names.map(name => byName.get(name)).find(bone => bone !== undefined);
+  const find = boneFinder(bones);
   const objects = new Map<string, THREE.Object3D>();
   model.traverse(object => { if (!objects.has(normalize(object.name))) objects.set(normalize(object.name), object); });
   const segments: Segment[] = [];
-  function add(bone: THREE.Bone | undefined, end: THREE.Object3D | undefined, from: PointSource, to: PointSource, limit = Math.PI) {
+  function add(bone: THREE.Bone | undefined, end: THREE.Object3D | undefined, from: PointSource, to: PointSource, limit: number) {
     if (!bone || !end || !descendant(end, bone)) return;
     const direction = end.getWorldPosition(new THREE.Vector3()).sub(bone.getWorldPosition(new THREE.Vector3()));
     if (!Number.isFinite(direction.lengthSq()) || direction.lengthSq() < 1e-10) return;
     if (bone.parent) direction.applyQuaternion(bone.parent.getWorldQuaternion(new THREE.Quaternion()).invert());
     segments.push({ bone, end, from, to, limit, direction: direction.normalize(), rotation: bone.quaternion.clone() });
   }
-  add(find('defspine', 'mixamorigspine', 'spine', 'abdomen'),
-    find('chest', 'defchest', 'mixamorigspine2', 'spine2', 'torso', 'defneck', 'mixamorigneck', 'neck'),
+  const spine = find(BONE_ALIASES.spine);
+  add(spine, [...BONE_ALIASES.chest, ...BONE_ALIASES.neck].map(name => find([name])).find(end => end && spine && descendant(end, spine)),
     ['leftHip', 'rightHip'], ['leftShoulder', 'rightShoulder'], Math.PI / 3);
   for (const [side, suffix] of [['left', 'l'], ['right', 'r']] as const) {
-    const shoulder = find(`defshoulder${suffix}`, `mixamorig${side}shoulder`, `${side}shoulder`, `shoulder${suffix}`);
-    const arm = find(`defupperarm1${suffix}`, `mixamorig${side}arm`, `${side}arm`, `upperarm${suffix}`);
-    const forearm = find(`defforearm1${suffix}`, `mixamorig${side}forearm`, `${side}forearm`, `lowerarm${suffix}`, `forearm${suffix}`);
-    const hand = find(`defwrist${suffix}`, `mixamorig${side}hand`, `${side}hand`, `wrist${suffix}`, `palm2${suffix}`, `hand${suffix}`);
-    const thigh = find(`defthigh1${suffix}`, `mixamorig${side}upleg`, `${side}upleg`, `upperleg${suffix}`, `thigh${suffix}`);
-    const shin = find(`defknee1${suffix}`, `mixamorig${side}leg`, `${side}leg`, `lowerleg${suffix}`, `calf${suffix}`);
-    const foot = find(`deffoot${suffix}`, `mixamorig${side}foot`, `${side}foot`, `foot${suffix}`);
+    const names = limbAliases(side, suffix);
+    const shoulder = find(names.shoulder), arm = find(names.arm), forearm = find(names.forearm), hand = find(names.hand);
+    const thigh = find(names.thigh), shin = find(names.shin), foot = find(names.foot);
     add(shoulder, arm, ['leftShoulder', 'rightShoulder'], `${side}Shoulder`, Math.PI / 3);
-    add(arm, forearm, `${side}Shoulder`, `${side}Elbow`);
-    add(forearm, hand, `${side}Elbow`, `${side}Wrist`);
-    add(thigh, shin, `${side}Hip`, `${side}Knee`);
-    add(shin, foot && shin && descendant(foot, shin) ? foot : objects.get(`lowerleg${suffix}end`), `${side}Knee`, `${side}Ankle`);
+    add(arm, forearm, `${side}Shoulder`, `${side}Elbow`, LIMITS.arm);
+    add(forearm, hand, `${side}Elbow`, `${side}Wrist`, LIMITS.elbow);
+    add(thigh, shin, `${side}Hip`, `${side}Knee`, LIMITS.hip);
+    add(shin, foot && shin && descendant(foot, shin) ? foot : objects.get(`lowerleg${suffix}end`), `${side}Knee`, `${side}Ankle`, LIMITS.knee);
   }
   const depth = (bone: THREE.Bone) => { let value = 0; for (let parent = bone.parent; parent; parent = parent.parent) value++; return value; };
   segments.sort((a, b) => depth(a.bone) - depth(b.bone));
@@ -65,16 +94,17 @@ function bodyRig(model: THREE.Object3D, bones: readonly THREE.Bone[]) {
 }
 
 function createAim() {
-  const parent = new THREE.Quaternion(), rotation = new THREE.Quaternion(), delta = new THREE.Quaternion(), identity = new THREE.Quaternion();
-  const from = new THREE.Vector3(), to = new THREE.Vector3();
+  const parent = new THREE.Quaternion(), rotation = new THREE.Quaternion(), delta = new THREE.Quaternion();
+  const from = new THREE.Vector3(), to = new THREE.Vector3(), axis = new THREE.Vector3();
   return (segment: Segment, direction: THREE.Vector3, amount: number) => {
     if (amount <= 0 || !Number.isFinite(direction.lengthSq()) || direction.lengthSq() < 1e-8) return;
     if (segment.bone.parent) segment.bone.parent.getWorldQuaternion(parent); else parent.identity();
     from.copy(segment.direction).applyQuaternion(parent).normalize();
     to.copy(direction).normalize();
-    delta.setFromUnitVectors(from, to);
-    const angle = identity.angleTo(delta);
-    if (angle > segment.limit) delta.slerp(identity, 1 - segment.limit / angle);
+    axis.crossVectors(from, to);
+    if (axis.lengthSq() < 1e-6) axis.set(1, 0, 0).applyQuaternion(parent).cross(from);
+    if (axis.lengthSq() < 1e-6) axis.set(0, 0, 1).applyQuaternion(parent).cross(from);
+    delta.setFromAxisAngle(axis.normalize(), Math.min(from.angleTo(to), segment.limit));
     rotation.copy(delta).multiply(parent).multiply(segment.rotation).premultiply(parent.invert());
     if (![rotation.x, rotation.y, rotation.z, rotation.w].every(Number.isFinite) || rotation.lengthSq() < 1e-8) return;
     segment.bone.quaternion.slerp(rotation.normalize(), amount).normalize();
@@ -89,12 +119,15 @@ export function createTracking(model: THREE.Object3D, bones: readonly THREE.Bone
     const name = normalize(morph.name), sources = faceSources(name, available);
     return sources ? [{ ...morph, sources, maximum: name === 'mouthfunnel' }] : [];
   });
-  const head = find('defhead', 'mixamorighead', 'head');
-  const headBasis = new THREE.Quaternion();
-  const parentRotation = new THREE.Quaternion(), rotation = new THREE.Quaternion(), delta = new THREE.Quaternion();
+  const head = find(BONE_ALIASES.head);
+  const found = find(BONE_ALIASES.neck);
+  const neck = head && found && descendant(head, found) ? found : undefined;
+  const headBasis = new THREE.Quaternion(), neckBasis = new THREE.Quaternion();
+  const parentRotation = new THREE.Quaternion(), rotation = new THREE.Quaternion(), delta = new THREE.Quaternion(), share = new THREE.Quaternion();
   const identity = new THREE.Quaternion();
   const from = new THREE.Vector3(), to = new THREE.Vector3(), observed = new THREE.Vector3();
   if (head) headBasis.copy(model.getWorldQuaternion(parentRotation).invert()).multiply(head.getWorldQuaternion(rotation));
+  if (neck) neckBasis.copy(model.getWorldQuaternion(parentRotation).invert()).multiply(neck.getWorldQuaternion(rotation));
 
   function read(body: NonNullable<TrackingFrame['body']>, source: PointSource, target: THREE.Vector3): number | null {
     if (typeof source === 'string') {
@@ -129,12 +162,18 @@ export function createTracking(model: THREE.Object3D, bones: readonly THREE.Bone
     }
     if (!tracking.face) return;
     const faceAmount = trackingStrength(input, tracking.face.sampledAtMs);
+    const observedWeights = tracking.face.weights;
     for (const morph of faces) {
-      const values = morph.sources.map(source => tracking.face!.weights[source]);
-      if (!values.every((value): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1)) continue;
-      const value = morph.maximum ? Math.max(...values) : values.reduce((sum, current) => sum + current, 0) / values.length;
+      let total = 0, maximum = 0, valid = true;
+      for (const source of morph.sources) {
+        const weight = observedWeights[source];
+        if (typeof weight !== 'number' || !Number.isFinite(weight) || weight < 0 || weight > 1) { valid = false; break; }
+        total += weight;
+        maximum = Math.max(maximum, weight);
+      }
+      if (!valid) continue;
       const weights = morph.mesh.morphTargetInfluences!;
-      weights[morph.index] = THREE.MathUtils.lerp(weights[morph.index], value, faceAmount);
+      weights[morph.index] = THREE.MathUtils.lerp(weights[morph.index], morph.maximum ? maximum : total / morph.sources.length, faceAmount);
     }
     const orientation = tracking.face.rotation;
     if (head && Array.isArray(orientation) && orientation.length === 4 && orientation.every(Number.isFinite)) {
@@ -142,7 +181,12 @@ export function createTracking(model: THREE.Object3D, bones: readonly THREE.Bone
       if (delta.lengthSq() < 0.99 || delta.lengthSq() > 1.01) return;
       delta.normalize();
       const angle = identity.angleTo(delta);
-      if (angle > Math.PI / 2) delta.slerp(identity, 1 - Math.PI / 2 / angle);
+      if (angle > LIMITS.head) delta.slerp(identity, 1 - LIMITS.head / angle);
+      if (neck) {
+        share.copy(identity).slerp(delta, 0.5);
+        rotation.copy(share).multiply(model.getWorldQuaternion(parentRotation)).multiply(neckBasis);
+        applyWorld(neck, rotation, faceAmount);
+      }
       rotation.copy(delta).multiply(model.getWorldQuaternion(parentRotation)).multiply(headBasis);
       applyWorld(head, rotation, faceAmount);
     }
@@ -156,7 +200,12 @@ export function createRunnerMotion(model: THREE.Object3D, bones: readonly THREE.
   const spine = segments.find(segment => Array.isArray(segment.from) && segment.from[0] === 'leftHip');
   const feet = limbs.filter(segment => typeof segment.from === 'string' && segment.from.endsWith('Knee')).map(segment => segment.end);
   const position = new THREE.Vector3(), direction = new THREE.Vector3(), orientation = new THREE.Quaternion();
-  const ground = Math.min(...feet.map(foot => foot.getWorldPosition(position).y));
+  const lowestFoot = () => {
+    let lowest = Infinity;
+    for (const foot of feet) lowest = Math.min(lowest, foot.getWorldPosition(position).y);
+    return lowest;
+  };
+  const ground = lowestFoot();
   const aim = createAim();
   const profiles = [{ cadence: 5.5, stride: 0.38 }, { cadence: 7, stride: 0.55 }, { cadence: 8.5, stride: 0.72 }];
   return (input: SceneFrame, variant: 0 | 1 | 2) => {
@@ -178,7 +227,6 @@ export function createRunnerMotion(model: THREE.Object3D, bones: readonly THREE.
       }
       aim(segment, direction.set(outward, -Math.cos(angle), Math.sin(angle)).applyQuaternion(orientation), motion);
     }
-    const lowest = Math.min(...feet.map(foot => foot.getWorldPosition(position).y));
-    return Math.max(0, ground - lowest) + Math.sin(phase) ** 2 * 0.035 * clamp(motion);
+    return Math.max(0, ground - lowestFoot()) + Math.sin(phase) ** 2 * 0.035 * clamp(motion);
   };
 }

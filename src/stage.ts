@@ -10,6 +10,13 @@ import { SCENE_IDS } from './scenes/registry.ts';
 
 type AssetState = { phase: 'loading' | 'ready' | 'error'; message: string };
 
+const CHARACTER_ASSETS = Object.freeze({
+  robot: { label: 'robot', credit: 'RobotExpressive by Tomas Laulhe (Quaternius), adapted by Don McCurdy. CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/ . Source: https://github.com/mrdoob/three.js/tree/eba30de865cfbf31ac736f792defd9a60ff28d57/examples/models/gltf/RobotExpressive' },
+  dragon: { label: 'European dragon', credit: 'Dragon sample by afk.ai. CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/ . Source: https://afk.ai/auto-rig/dragon' },
+} satisfies Partial<Record<Parameters<typeof createCharacter>[2], { label: string; credit: string }>>);
+type CharacterAsset = keyof typeof CHARACTER_ASSETS;
+const CHARACTER_IDS = Object.keys(CHARACTER_ASSETS) as CharacterAsset[];
+
 export interface Stage {
   update(input: SceneFrame): void;
   resize(width: number, height: number): void;
@@ -28,7 +35,7 @@ export interface Stage {
     textures: number;
     programs: number;
     contextLost: boolean;
-    assets: Readonly<Record<'robot' | 'dragon', Readonly<AssetState>>>;
+    assets: Readonly<Record<CharacterAsset, Readonly<AssetState>>>;
   }>;
 }
 
@@ -71,10 +78,9 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
   let detailView = false;
   let disposed = false;
   let contextLost = false;
-  const assets: Record<'robot' | 'dragon', AssetState> = {
-    robot: { phase: 'loading', message: 'Loading robot…' },
-    dragon: { phase: 'loading', message: 'Loading European dragon…' },
-  };
+  let runnerVariant: 0 | 1 | 2 = 0;
+  const assets = {} as Record<CharacterAsset, AssetState>;
+  for (const id of CHARACTER_IDS) assets[id] = { phase: 'loading', message: `Loading ${CHARACTER_ASSETS[id].label}…` };
   const pending = new Set<AbortController>();
   function frameCamera() {
     const subject = subjects.get('imported');
@@ -103,9 +109,12 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
   canvas.addEventListener('webglcontextrestored', restored);
 
   function attach(id: SceneId, subject: SceneSubject) {
+    const previous = subjects.get(id);
     subject.root.visible = selected === id;
+    if (id === 'runner') subject.setVariant?.(runnerVariant);
     subjects.set(id, subject);
     world.add(subject.root);
+    if (previous && previous !== subject) previous.dispose();
   }
 
   try {
@@ -124,7 +133,7 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
     throw error;
   }
 
-  async function load(id: 'robot' | 'dragon') {
+  async function load(id: CharacterAsset) {
     const controller = new AbortController();
     pending.add(controller);
     const timeout = setTimeout(() => controller.abort(), 15_000);
@@ -138,23 +147,21 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
       const gltf = await new GLTFLoader().parseAsync(data, './models/');
       loaded = gltf.scene;
       if (disposed) { disposeObject(loaded); loaded = null; return; }
-      setAssetCopyright(loaded, id === 'robot'
-        ? 'RobotExpressive by Tomas Laulhe (Quaternius), adapted by Don McCurdy. CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/ . Source: https://github.com/mrdoob/three.js/tree/eba30de865cfbf31ac736f792defd9a60ff28d57/examples/models/gltf/RobotExpressive'
-        : 'Dragon sample by afk.ai. CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/ . Source: https://afk.ai/auto-rig/dragon');
+      setAssetCopyright(loaded, CHARACTER_ASSETS[id].credit);
       const subject = createCharacter(loaded, gltf.animations, id);
       loaded = null;
       attach(id, subject);
       assets[id] = { phase: 'ready', message: '' };
     } catch {
       if (loaded) disposeObject(loaded);
-      assets[id] = { phase: 'error', message: `Could not load ${id === 'dragon' ? 'European dragon' : 'robot'}. Choose another scene or reload the studio.` };
+      assets[id] = { phase: 'error', message: `Could not load ${CHARACTER_ASSETS[id].label}. Choose another scene or reload the studio.` };
     } finally {
       clearTimeout(timeout);
       pending.delete(controller);
     }
   }
 
-  const ready = Promise.all([load('robot'), load('dragon')]).then(() => undefined);
+  const ready = Promise.all(CHARACTER_IDS.map(load)).then(() => undefined);
   return {
     update(input) {
       if (disposed || contextLost) return;
@@ -188,6 +195,7 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
     },
     setRunnerVariant(variant) {
       if (!Number.isInteger(variant) || variant < 0 || variant > 2) throw new Error('Unknown runner');
+      runnerVariant = variant;
       subjects.get('runner')?.setVariant?.(variant);
     },
     getExportRoot() {
@@ -216,7 +224,7 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
         drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles,
         geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures,
         programs: renderer.info.programs?.length ?? 0, contextLost,
-        assets: Object.freeze({ robot: Object.freeze({ ...assets.robot }), dragon: Object.freeze({ ...assets.dragon }) }),
+        assets: Object.freeze(Object.fromEntries(CHARACTER_IDS.map(id => [id, Object.freeze({ ...assets[id] })])) as Record<CharacterAsset, Readonly<AssetState>>),
       });
     },
     dispose() {

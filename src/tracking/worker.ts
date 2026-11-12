@@ -20,6 +20,7 @@ let stopped = false;
 let previousTimestamp = -1;
 let cachedFace: FaceLandmarkerResult | null = null;
 let cachedFaceTime = -1;
+let faceInputTime = -1;
 
 function release() {
   const previousFace = face;
@@ -29,6 +30,7 @@ function release() {
   map = null;
   cachedFace = null;
   cachedFaceTime = -1;
+  faceInputTime = -1;
   try { previousFace?.close(); } finally { previousPose?.close(); }
 }
 
@@ -73,7 +75,7 @@ scope.onmessage = ({ data }) => {
   } else if (data.type === 'frame') {
     const bitmap = data.bitmap;
     const separateFace = Object.hasOwn(data, 'faceBitmap');
-    const faceBitmap = separateFace ? data.faceBitmap : bitmap;
+    const faceBitmap = separateFace ? data.faceBitmap : null;
     let result: ReturnType<PoseLandmarker['detectForVideo']> | null = null;
     try {
       if (stopped || !face || !pose || !map) return;
@@ -81,18 +83,20 @@ scope.onmessage = ({ data }) => {
         || !Number.isSafeInteger(data.id) || data.id < 1 || !Number.isFinite(data.timeMs)
         || data.timeMs <= previousTimestamp || data.timeMs < 0 || data.timeMs > Number.MAX_SAFE_INTEGER) throw new Error('Invalid tracking frame');
       if (faceBitmap !== null && (!(faceBitmap instanceof ImageBitmap) || faceBitmap.width < 1 || faceBitmap.height < 1 || faceBitmap.width > 960 || faceBitmap.height > 720)) throw new Error('Invalid face frame');
-      const faceTime = separateFace ? data.faceTimeMs : data.timeMs;
+      const faceTime = separateFace ? data.faceTimeMs : null;
       if (faceTime !== null && (!Number.isFinite(faceTime) || faceTime < 0 || faceTime > data.timeMs)) throw new Error('Invalid face time');
       if (faceBitmap && faceTime === null) throw new Error('Missing face time');
       previousTimestamp = data.timeMs;
       if (faceBitmap) {
-        if (faceTime <= cachedFaceTime) throw new Error('Face frame time must advance');
+        if (faceTime <= faceInputTime) throw new Error('Face frame time must advance');
         cachedFace = face.detectForVideo(faceBitmap, faceTime);
-        cachedFaceTime = faceTime;
+        cachedFaceTime = faceInputTime = faceTime;
       }
-      const faceResult = faceTime === cachedFaceTime && data.timeMs - cachedFaceTime < TRACKING_STALE_MS ? cachedFace : null;
+      const fromFaceCamera = faceTime !== null && faceTime === cachedFaceTime && cachedFaceTime === faceInputTime && data.timeMs - cachedFaceTime < TRACKING_STALE_MS;
+      const faceResult = fromFaceCamera ? cachedFace : face.detectForVideo(bitmap, data.timeMs);
+      if (!fromFaceCamera) faceInputTime = data.timeMs;
       result = pose.detectForVideo(bitmap, data.timeMs);
-      scope.postMessage({ type: 'frame', id: data.id, frame: map(faceResult, result, data.timeMs, faceResult ? cachedFaceTime : data.timeMs) });
+      scope.postMessage({ type: 'frame', id: data.id, frame: map(faceResult, result, data.timeMs, fromFaceCamera ? cachedFaceTime : data.timeMs, fromFaceCamera ? 'face' : 'body') });
     } catch {
       stopped = true;
       try { release(); } finally { scope.postMessage({ type: 'error', message: 'Local tracking could not process a camera frame' }); }
