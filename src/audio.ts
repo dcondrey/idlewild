@@ -13,11 +13,17 @@ const FADE_SECONDS = 0.01;
 const LIVE_BLOCK = 1024;
 const LIVE_HORIZON_SECONDS = 0.1;
 const MAX_LIVE_SOURCES = 12;
+const RESUME_FADE_SECONDS = 0.005;
 const WAV_RATE = 48_000;
 const CONTROL_SECONDS = 0.01;
 
 // The live engine feeds short stereo AudioBuffers from the main thread rather than an AudioWorklet. The DSP and parameter
 // mapping are the same modules the WAV render uses; a worklet would need a Vite-only asset URL that the unit tests cannot load.
+/** Ramps the first samples from silence so playback resumed after a scheduling gap does not click. */
+export function fadeIn(left: Float32Array, right: Float32Array, count: number): void {
+  for (let i = 0; i < count; i++) { const gain = i / count; left[i] *= gain; right[i] *= gain; }
+}
+
 export function createSound() {
   let context: AudioContext | null = null;
   let master: GainNode | null = null;
@@ -108,10 +114,13 @@ export function createSound() {
       }
       previousTime = timeSeconds;
       const earliest = Math.ceil((now + 0.002) * rate);
-      if (nextFrame < earliest) nextFrame = earliest;
+      let resume = false;
+      if (nextFrame < earliest) { resume = true; nextFrame = earliest; }
       while (nextFrame / rate < now + LIVE_HORIZON_SECONDS && sources.size < MAX_LIVE_SOURCES) {
         const buffer = context.createBuffer(2, LIVE_BLOCK, rate);
-        engine.render(params, buffer.getChannelData(0), buffer.getChannelData(1), 0, LIVE_BLOCK);
+        const left = buffer.getChannelData(0), right = buffer.getChannelData(1);
+        engine.render(params, left, right, 0, LIVE_BLOCK);
+        if (resume) { fadeIn(left, right, Math.min(LIVE_BLOCK, Math.round(rate * RESUME_FADE_SECONDS))); resume = false; }
         const source = context.createBufferSource();
         const gain = context.createGain();
         source.buffer = buffer;

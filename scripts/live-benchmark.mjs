@@ -43,6 +43,7 @@ try {
       if (status.phase === 'starting' && !report.started) {
         report.started = true;
         startedAt = performance.now();
+        report.cueStartedAtEpochMs = Date.now();
         console.log('LIVE_STARTED: stay still and breathe normally; a short speaking cue follows at 35 seconds.');
         deadline = setTimeout(() => {
           report.watchdog = true;

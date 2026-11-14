@@ -53,7 +53,10 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
   const jaw = findBone(BONE_ALIASES.jaw);
   const head = findBone(BONE_ALIASES.head) ?? findBone(BONE_ALIASES.neck);
   const spine = findBone(BONE_ALIASES.spine);
-  const shoulders = SHOULDERS.map(name => findBone([name])).filter((bone): bone is THREE.Bone => Boolean(bone?.parent));
+  const shoulderSet = new Set(SHOULDERS.map(name => findBone([name])).filter((bone): bone is THREE.Bone => Boolean(bone?.parent)));
+  const hasLiftedAncestor = (bone: THREE.Object3D) => { for (let node = bone.parent; node; node = node.parent) if (shoulderSet.has(node as THREE.Bone)) return true; return false; };
+  // A shoulder under a lifted clavicle already rises with it.
+  const shoulders = [...shoulderSet].filter(bone => !hasLiftedAncestor(bone));
   const height = Math.max(new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3()).y, 1e-3);
   const right = new THREE.Vector3(), parentQuaternion = new THREE.Quaternion(), worldDelta = new THREE.Quaternion(), place = new THREE.Vector3();
   const pitchWorld = (bone: THREE.Bone, angle: number) => {

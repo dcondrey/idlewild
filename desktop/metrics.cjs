@@ -15,6 +15,8 @@ const EXPRESSION_NAMES = Object.freeze({ 1: 'angry', 2: 'contempt', 3: 'disgust'
 const VARIABILITY_THRESHOLD = 50;
 const TRACE_WINDOWS = Object.freeze({ breath: 20_000, arterialTrace: 6_000 });
 const MAX_TRACE_POINTS = 2048;
+const WARMUP_POINTS = 8;
+const WARMUP_FRACTION = 0.25;
 const own = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
 
 function microseconds(value) {
@@ -49,6 +51,10 @@ function createTraceNormalizer(windowMs) {
       let start = 0;
       while (start < points.length && points[start].timeMs < cutoff) start++;
       if (start || points.length > MAX_TRACE_POINTS) points = points.slice(Math.max(start, points.length - MAX_TRACE_POINTS));
+    },
+    // A scale from a few seconds of trace is unreliable; the caller reports those values as unstable.
+    ready() {
+      return points.length >= WARMUP_POINTS && points[points.length - 1].timeMs - points[0].timeMs >= windowMs * WARMUP_FRACTION;
     },
     normalize(value) {
       if (points.length < 2) return 0;
@@ -91,7 +97,7 @@ function createMetricsMapper({ sessionId, epochUs }) {
         for (const score of sample.scores) {
           const name = EXPRESSION_NAMES[score?.type];
           if (!name) continue;
-          if (typeof score.confidence !== 'number' || !Number.isFinite(score.confidence) || score.confidence < 0 || score.confidence > 100) throw new Error('Invalid expression score');
+          if (typeof score.confidence !== 'number' || !Number.isFinite(score.confidence) || score.confidence < 0 || score.confidence > 100) continue;
           scores[name] = score.confidence / 100;
         }
         expression = { scores, quality: sample.stable === true ? 'valid' : 'unstable', sampledAtMs };
@@ -102,8 +108,7 @@ function createMetricsMapper({ sessionId, epochUs }) {
       if (!Array.isArray(readings) || readings.length > MAX_CHANNEL_SAMPLES) throw new Error('Metrics sample limit exceeded');
       for (const sample of readings) {
         if (!sample || typeof sample !== 'object') throw new Error('Invalid variability sample');
-        if (typeof sample.rmssd !== 'number' || !Number.isFinite(sample.rmssd) || sample.rmssd <= 0) continue;
-        if (sample.rmssd > 1e6) throw new Error('Invalid variability sample');
+        if (typeof sample.rmssd !== 'number' || !Number.isFinite(sample.rmssd) || sample.rmssd <= 0 || sample.rmssd > 1e6) continue;
         const sampledAtMs = sampleTime(sample, timeMs);
         if (sampledAtMs === null || (variability && sampledAtMs <= variability.sampledAtMs)) continue;
         const confidence = typeof sample.confidence === 'number' && Number.isFinite(sample.confidence) && sample.confidence >= 0 && sample.confidence <= 100 ? sample.confidence : null;
@@ -113,6 +118,7 @@ function createMetricsMapper({ sessionId, epochUs }) {
   }
 
   return {
+    calibrating() { return !traces.get('breath').ready(); },
     ingest(packet, timeMs) {
       if (!packet || typeof packet !== 'object' || Array.isArray(packet)) throw new Error('Invalid metrics packet');
       if (!Number.isFinite(timeMs) || timeMs < 0 || timeMs < previousTime) throw new Error('Invalid metrics clock');
@@ -161,7 +167,10 @@ function createMetricsMapper({ sessionId, epochUs }) {
         if (trace) {
           accepted.sort((a, b) => a.sampledAtMs - b.sampledAtMs);
           for (const point of accepted) trace.add(point.sampledAtMs, point.rawValue);
-          if (newest && newest !== latest.get(channel)) newest.signal.value = trace.normalize(newest.raw);
+          if (newest && newest !== latest.get(channel)) {
+            newest.signal.value = trace.normalize(newest.raw);
+            if (!trace.ready()) newest.signal.quality = 'unstable';
+          }
         }
         if (newest) updates.set(channel, newest);
       }

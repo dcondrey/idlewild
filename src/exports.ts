@@ -58,11 +58,16 @@ export function exportControlData(take: Take): Blob {
   return blob;
 }
 
-export interface SignalReading { value: number | null; quality: Quality; confidence: number | null }
+export interface SignalReading { value: number | null; quality: Quality | 'cached'; confidence: number | null }
 
-/** Valid and unstable readings keep their value; missing, stale (by label or age) and nonfinite readings carry none. */
+/** Valid and unstable readings keep their value; missing, stale (by label or age) and nonfinite readings carry none.
+ * Breath replayed by continuity during speech keeps its value but is labelled `cached`, never as a measurement. */
 export function signalReading(frame: ControlFrame, channel: Channel): SignalReading {
   const signal = frame.signals[channel];
+  if (signal.provenance === 'replayed') {
+    const usable = signal.value !== null && Number.isFinite(signal.value) && frame.timeMs - signal.sampledAtMs < SIGNAL_STALE_MS;
+    return usable ? { value: signal.value, quality: 'cached', confidence: null } : { value: null, quality: 'missing', confidence: null };
+  }
   const aged = frame.timeMs - signal.sampledAtMs >= SIGNAL_STALE_MS;
   const quality: Quality = aged && (signal.quality === 'valid' || signal.quality === 'unstable') ? 'stale' : signal.quality;
   const usable = (quality === 'valid' || quality === 'unstable') && signal.value !== null && Number.isFinite(signal.value);
@@ -213,7 +218,7 @@ export async function bakeAnimation(take: Take, stage: ExportStage, controls: Sc
     for (const track of signalTracks) {
       const reading = input.frame ? signalReading(input.frame, track.channel) : null;
       if (reading?.value === null || !reading) continue;
-      const code = reading.quality === 'valid' ? 1 : 0.5;
+      const code = reading.quality === 'valid' ? 1 : reading.quality === 'cached' ? 0.25 : 0.5;
       track.values.set([reading.value, code, reading.confidence ?? 0], index * 3);
       track.seen = true;
     }
@@ -227,7 +232,7 @@ export async function bakeAnimation(take: Take, stage: ExportStage, controls: Sc
         if (previous?.source === source && previous.quality === quality) previous.endMs = Math.min(timeMs + SAMPLE_MS, take.durationMs);
         else segments.push({ startMs: timeMs, endMs: Math.min(timeMs + SAMPLE_MS, take.durationMs), source, quality });
       }
-      if (take.source === 'local-camera') {
+      if (take.source !== 'rehearsal') {
         const tracking = trackingAt(input);
         for (const channel of ['face', 'body'] as const) {
           const available = tracking && tracking[channel] !== null;
@@ -291,7 +296,7 @@ export async function bakeAnimation(take: Take, stage: ExportStage, controls: Sc
     if (signalNodes.length) {
       const group = new THREE.Group();
       group.name = 'IdlewildSignals';
-      group.userData = { idlewild: { encoding: 'translation = (value, quality, confidence); quality 1 valid, 0.5 unstable, 0 missing or stale (value and confidence 0); stepped interpolation', units: { breath: 'relative, about -1..1', breathing_rate: 'breaths/min', pulse_rate: 'beats/min', arterial: 'relative, uncalibrated' }, source: take.source } };
+      group.userData = { idlewild: { encoding: 'translation = (value, quality, confidence); quality 1 valid, 0.5 unstable, 0.25 cached breath replayed during speech (not measured), 0 missing or stale (value and confidence 0); stepped interpolation', units: { breath: 'relative, about -1..1', breathing_rate: 'breaths/min', pulse_rate: 'beats/min', arterial: 'relative, uncalibrated' }, source: take.source } };
       for (const track of signalNodes) {
         const node = new THREE.Object3D();
         node.name = track.name;
@@ -382,6 +387,7 @@ export async function exportPreview(options: ExportOptions & {
     output.height = Math.max(2, Math.floor(canvas.height * scale / 2) * 2);
     const drawing = output.getContext('2d');
     if (!drawing || typeof output.captureStream !== 'function') throw new Error('Canvas recording is unavailable in this runtime.');
+    const sourceLabel = take.source === 'rehearsal' ? 'SYNTHETIC REHEARSAL' : take.source === 'local-camera' ? 'LOCAL CAMERA TRACKING' : take.samples.some(sample => sample.tracking) ? 'SMARTSPECTRA + LOCAL TRACKING' : 'SMARTSPECTRA RECORDING';
     const render = (timeMs: number) => {
       options.update(inputAt(take, timeMs, controls, options.reducedMotion ?? false));
       drawing.drawImage(canvas, 0, 0, output.width, output.height);
@@ -391,7 +397,7 @@ export async function exportPreview(options: ExportOptions & {
         options.overlay(drawing, output.width, output.height - font * 2.5, timeMs);
         drawing.restore();
       }
-      const label = `${take.source === 'rehearsal' ? 'SYNTHETIC REHEARSAL' : take.source === 'local-camera' ? 'LOCAL CAMERA TRACKING' : 'LIVE CONTROL RECORDING'} · ${options.scene === 'brain' ? 'Educational simulation — not your measured brain activity' : options.scene}`;
+      const label = `${sourceLabel} · ${options.scene === 'brain' ? 'Educational simulation — not your measured brain activity' : options.scene}`;
       drawing.fillStyle = 'rgba(8, 15, 28, 0.9)';
       drawing.fillRect(0, output.height - font * 2.5, output.width, font * 2.5);
       drawing.font = `600 ${font}px sans-serif`;

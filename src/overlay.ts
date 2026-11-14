@@ -28,10 +28,10 @@ export function windowRange(frames: readonly ControlFrame[], timeMs: number, spa
   return [start, end];
 }
 
-/** A drawable value is valid, finite and fresh at its own frame. Unstable, missing and stale readings are gaps. */
+/** A drawable value is measured, valid, finite and fresh at its own frame. Cached, unstable, missing and stale readings are gaps. */
 export function drawableValue(frame: ControlFrame, channel: Channel, nowMs = frame.timeMs): number | null {
   const signal = frame.signals[channel];
-  if (signal.quality !== 'valid' || signal.value === null || !Number.isFinite(signal.value)) return null;
+  if (signal.quality !== 'valid' || signal.provenance === 'replayed' || signal.value === null || !Number.isFinite(signal.value)) return null;
   if (frame.timeMs - signal.sampledAtMs >= SIGNAL_STALE_MS || nowMs - signal.sampledAtMs >= SIGNAL_STALE_MS) return null;
   return signal.value;
 }
@@ -57,22 +57,23 @@ export function overlayHeader(view: OverlayView): string | null {
   const frame = view.frames.at(-1);
   if (!frame || frame.source === 'local-camera') return null;
   if (frame.source === 'rehearsal') return 'SYNTHETIC REHEARSAL';
-  if (view.live && frame.signals.breath.provenance !== 'replayed' && frame.signals.arterialTrace.provenance !== 'replayed') return 'SmartSpectra · LIVE';
-  return 'SmartSpectra · RECORDED TAKE';
+  return view.live ? 'SmartSpectra · LIVE' : 'SmartSpectra · RECORDED TAKE';
 }
 
 const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
-const QUALITY_COLOR: Record<Quality, string> = { valid: '#7fe3b0', unstable: '#f2c66d', stale: '#9aa7ad', missing: '#9aa7ad' };
+type Shown = Quality | 'cached';
+const QUALITY_COLOR: Record<Shown, string> = { valid: '#7fe3b0', unstable: '#f2c66d', stale: '#9aa7ad', missing: '#9aa7ad', cached: '#b7a6f0' };
 
 function percent(confidence: number | null): string {
   return confidence === null || !Number.isFinite(confidence) ? 'conf –' : `conf ${Math.round(Math.min(1, Math.max(0, confidence)) * 100)}%`;
 }
 
 function latestState(frame: ControlFrame | undefined, channel: Channel, timeMs: number) {
-  if (!frame) return { value: null as number | null, quality: 'missing' as Quality, confidence: null as number | null };
+  if (!frame) return { value: null as number | null, quality: 'missing' as Shown, confidence: null as number | null };
   const signal = frame.signals[channel];
   const value = timeMs - frame.timeMs > SIGNAL_STALE_MS ? null : drawableValue(frame, channel, timeMs);
-  const quality: Quality = value !== null ? 'valid' : signal.quality === 'unstable' && timeMs - signal.sampledAtMs < SIGNAL_STALE_MS ? 'unstable' : signal.quality === 'valid' || signal.quality === 'stale' ? 'stale' : signal.quality;
+  if (value === null && signal.provenance === 'replayed' && timeMs - frame.timeMs <= SIGNAL_STALE_MS) return { value: null, quality: 'cached' as Shown, confidence: null };
+  const quality: Shown = value !== null ? 'valid' : signal.quality === 'unstable' && timeMs - signal.sampledAtMs < SIGNAL_STALE_MS ? 'unstable' : signal.quality === 'valid' || signal.quality === 'stale' ? 'stale' : signal.quality;
   return { value, quality, confidence: signal.confidence };
 }
 
@@ -154,7 +155,7 @@ export function drawSignalOverlay(ctx: CanvasRenderingContext2D, width: number, 
   for (const [channel, label] of traces) {
     y += 14;
     const state = latestState(latest, channel, view.timeMs);
-    const detail = `${state.quality} · ${percent(state.confidence)}`;
+    const detail = state.quality === 'cached' ? 'cached animation · not measured' : `${state.quality} · ${percent(state.confidence)}`;
     ctx.font = `600 10px ${FONT}`;
     const detailWidth = ctx.measureText(detail).width;
     ctx.fillStyle = '#c9dcf0';

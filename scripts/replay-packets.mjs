@@ -15,7 +15,11 @@ if (!session) throw new Error('The packet log has no session record.');
 const packets = records.filter(record => record.kind === 'packet');
 if (!packets.length) throw new Error('The packet log has no packets.');
 
+if (records.filter(record => record.kind === 'session').length > 1) throw new Error('The packet log has more than one session; replay supports one session per log.');
 const mapper = createMetricsMapper({ sessionId: session.sessionId, epochUs: BigInt(session.epochUs) });
+const cueOffsetMs = await readFile(path.join(path.dirname(input), 'report.json'), 'utf8')
+  .then(text => { const report = JSON.parse(text); return Number.isFinite(report.cueStartedAtEpochMs) ? Number(session.epochUs) / 1000 - report.cueStartedAtEpochMs : null; })
+  .catch(() => null);
 const recorder = new TakeRecorder(`replay-${session.sessionId}`.slice(0, 128), 'live', session.sessionId, 20261111);
 const stats = { packets: packets.length, groups: {} };
 let tick = 0;
@@ -37,4 +41,5 @@ for (const packet of packets) {
 const take = recorder.finish();
 const target = output ?? path.join(path.dirname(input), 'replayed-take.json');
 await writeFile(target, JSON.stringify(take), { mode: 0o600 });
-console.log(JSON.stringify({ target, samples: take.samples.length, durationMs: take.durationMs, ...stats }, null, 2));
+// packet timeMs + cueOffsetMs = milliseconds since the benchmark cue clock started.
+console.log(JSON.stringify({ target, samples: take.samples.length, durationMs: take.durationMs, cueOffsetMs, ...stats }, null, 2));

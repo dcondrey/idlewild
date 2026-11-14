@@ -128,6 +128,7 @@ function createCaptureController({ loadSDK, onFrame, onStatus, now, metrics = 's
     if (validationCode !== null && validationCode !== 0) return;
     if (frame.signals.breath.quality === 'valid') status('ready', 'Live movement controls ready; timing remains unverified.');
     else if (Object.values(frame.signals).some(signal => signal.quality === 'stale')) status('poor-signal', 'Signal is stale. Check framing and lighting, or stop and retry.');
+    else if (frame.signals.breath.quality === 'unstable' && mapper.calibrating()) status('warming', 'Learning your breathing range. Breathe normally for a few seconds.');
     else if (frame.signals.breath.quality === 'unstable') status('poor-signal', 'Breathing movement is unstable. Settle comfortably.');
     else status('warming', 'Waiting for a breathing movement signal.');
   }

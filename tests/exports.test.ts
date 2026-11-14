@@ -204,6 +204,7 @@ test('signal CSV keeps one row per sample and never zero-fills missing, stale or
   Object.assign(input.samples[1].signals.pulseRate, { value: null, quality: 'stale' });
   Object.assign(input.samples[2].signals.breathingRate, { quality: 'unstable' });
   input.samples[3].signals.arterialTrace.sampledAtMs = 0;
+  Object.assign(input.samples[3].signals.breath, { provenance: 'replayed', quality: 'valid', confidence: null, sampledAtMs: 2000 });
   const blob = exportSignalCsv(input);
   assert.match(blob.type, /^text\/csv/);
   const lines = (await blob.text()).split('\r\n');
@@ -223,6 +224,8 @@ test('signal CSV keeps one row per sample and never zero-fills missing, stale or
   assert.equal(rows[3].arterial, '');
   assert.equal(rows[3].arterial_quality, 'stale');
   assert.equal(rows[3].time_s, '2.000');
+  assert.equal(rows[3].breath_quality, 'cached');
+  assert.notEqual(rows[3].breath, '');
   assert.equal(rows[0].source, 'rehearsal');
   assert.equal(rows[0].movement, '');
   assert.equal(rows[0].jawOpen, '');
@@ -255,6 +258,9 @@ test('overlay windows select the last ten seconds and break traces at gaps', () 
   const live = { ...frames[0], source: 'live' as const };
   assert.equal(overlayHeader({ timeMs: 0, frames: [live], live: true }), 'SmartSpectra · LIVE');
   assert.equal(overlayHeader({ timeMs: 0, frames: [live], live: false }), 'SmartSpectra · RECORDED TAKE');
+  const cached = { ...live, signals: { ...live.signals, breath: { ...live.signals.breath, provenance: 'replayed' as const } } };
+  assert.equal(overlayHeader({ timeMs: 0, frames: [cached], live: true }), 'SmartSpectra · LIVE');
+  assert.equal(drawableValue(cached, 'breath'), null);
   assert.equal(overlayHeader({ timeMs: 0, frames: [{ ...live, source: 'local-camera' }], live: true }), null);
 });
 

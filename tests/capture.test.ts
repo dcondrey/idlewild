@@ -180,7 +180,7 @@ test('protobuf samples distinguish absent from zero and preserve confidence, ins
   const frame = mapper.ingest(decoded, 10);
   assert.equal(frame.signals.breath.value, 0);
   assert.equal(frame.signals.breath.confidence, null);
-  assert.equal(frame.signals.breath.quality, 'valid');
+  assert.equal(frame.signals.breath.quality, 'unstable');
   assert.equal(frame.signals.breath.sampledAtMs, 0);
   assert.equal(frame.signals.breathingRate.quality, 'unstable');
   assert.equal(frame.signals.breathingRate.confidence, 0.44);
@@ -195,7 +195,7 @@ test('measurement arrays deduplicate and preserve acquisition age across packets
   const sample = (offset: number, value: number) => ({ value, stable: true, timestamp: EPOCH * 1000 + offset });
   assert.equal(mapper.ingest({ breathing: { upperTrace: [sample(1000, 1), sample(0, 2)] } }, 1).signals.breath.value, -1);
   assert.equal(mapper.ingest({ breathing: { upperTrace: [sample(0, 3), sample(1000, 4)] } }, 2).signals.breath.value, -1);
-  assert.equal(mapper.snapshot(1500).signals.breath.quality, 'valid');
+  assert.equal(mapper.snapshot(1500).signals.breath.quality, 'unstable');
   assert.equal(mapper.snapshot(1501).signals.breath.quality, 'stale');
   assert.equal(mapper.snapshot(1502).signals.breath.sampledAtMs, 1);
   assert.throws(() => mapper.snapshot(1501));
@@ -221,6 +221,15 @@ test('unscaled SDK traces normalize to the same bounded shape regardless of offs
   for (let step = 0; step < 5; step++) assert.equal(flat.ingest({ breathing: { upperTrace: [{ value: 7, stable: true, timestamp: EPOCH * 1000 + step * 1000 }] } }, step).signals.breath.value, 0);
 });
 
+test('normalized breath reports unstable until the trace window has warmed up', () => {
+  const mapper = createMetricsMapper({ sessionId: 's', epochUs: BigInt(EPOCH) * 1000n });
+  const quality = (timeMs: number) => mapper.ingest({ breathing: { upperTrace: [{ value: Math.sin(timeMs / 700), stable: true, timestamp: EPOCH * 1000 + timeMs * 1000 }] } }, timeMs).signals.breath.quality;
+  for (let timeMs = 0; timeMs < 5000; timeMs += 250) assert.equal(quality(timeMs), 'unstable');
+  assert.equal(mapper.calibrating(), true);
+  assert.equal(quality(5000), 'valid');
+  assert.equal(mapper.calibrating(), false);
+});
+
 test('extended SDK expression scores and variability map to bounded optional readings and expire', () => {
   const mapper = createMetricsMapper({ sessionId: 's', epochUs: BigInt(EPOCH) * 1000n });
   const decoded = decodeMetrics(Metrics.encode({
@@ -235,7 +244,7 @@ test('extended SDK expression scores and variability map to bounded optional rea
   assert.equal(mapper.snapshot(1499).extended.expression.quality, 'valid');
   assert.equal(mapper.snapshot(1500).extended.expression.quality, 'stale');
   assert.equal(createMetricsMapper({ sessionId: 's', epochUs: BigInt(EPOCH) * 1000n }).ingest({}, 1).extended, undefined);
-  assert.throws(() => createMetricsMapper({ sessionId: 's', epochUs: BigInt(EPOCH) * 1000n }).ingest({ face: { expression: [{ stable: true, timestamp: EPOCH * 1000, scores: [{ type: 5, confidence: 101 }] }] } }, 10));
+  assert.deepEqual(createMetricsMapper({ sessionId: 's', epochUs: BigInt(EPOCH) * 1000n }).ingest({ face: { expression: [{ stable: true, timestamp: EPOCH * 1000, scores: [{ type: 5, confidence: 101 }] }] }, cardio: { hrv: [{ rmssd: 2e6, stable: true, timestamp: EPOCH * 1000 }] } }, 10).extended, { expression: { scores: {}, quality: 'valid', sampledAtMs: 0 } });
 });
 
 test('unsafe, future, strict-clock, absent and oversized measurements never become valid controls', () => {
@@ -261,7 +270,8 @@ test('native metric callback uses measurement epochs, discards event timestamps 
   fake.instances[0].emit('metrics', packet(EPOCH * 1000, 0.25), 9007199254740992);
   assert.equal(fake.frames[0].timeMs, 50);
   assert.equal(fake.frames[0].signals.breath.sampledAtMs, 0);
-  assert.equal(fake.statuses.at(-1)?.phase, 'ready');
+  assert.equal(fake.statuses.at(-1)?.phase, 'warming');
+  assert.match(fake.statuses.at(-1)?.message ?? '', /breathing range/);
   fake.instances[0].emit('validationStatus', 5, 0, 'secret fixture key');
   assert.equal(fake.statuses.at(-1)?.phase, 'poor-signal');
   fake.instances[0].emit('error', 4, 'secret fixture key', false);

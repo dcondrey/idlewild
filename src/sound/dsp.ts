@@ -212,13 +212,15 @@ class Brain implements Instrument {
 class Imported implements Instrument {
   l = 0; r = 0;
   private static readonly scale = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21];
-  private phase = 0; private vibPhase = 0; private freq = 220; private target = 220;
+  private phase = 0; private vibPhase = 0; private freq = 220; private target = 220; private step = -1;
   private vibrato = 0.01; private lpL: Svf; private lpR: Svf;
   private readonly rate: number;
   constructor(rate: number) { this.rate = rate; this.lpL = new Svf(rate); this.lpR = new Svf(rate); }
   block(c: Ctl) {
-    const index = Math.min(Imported.scale.length - 1, Math.floor(c.breath * Imported.scale.length));
-    this.target = 220 * semitones(Imported.scale[index] + c.brow * 0.7);
+    const position = c.breath * Imported.scale.length;
+    // Hysteresis keeps sensor noise near a step boundary from flipping notes.
+    if (this.step < 0 || position < this.step - 0.3 || position >= this.step + 1.3) this.step = Math.max(0, Math.min(Imported.scale.length - 1, Math.floor(position)));
+    this.target = 220 * semitones(Imported.scale[this.step] + c.brow * 0.7);
     this.vibrato = 0.008 + 0.02 * c.jaw;
     const cutoff = 1400 + 3200 * c.smile + 600 * c.arterial;
     this.lpL.set(cutoff, 0.7); this.lpR.set(cutoff, 0.7);
@@ -238,16 +240,14 @@ interface Pop { on: boolean; phase: number; freq: number; chirp: number; env: nu
 class Bubbles implements Instrument {
   l = 0; r = 0;
   private pops: Pop[] = Array.from({ length: 8 }, () => ({ on: false, phase: 0, freq: 0, chirp: 0, env: 0, pan: 0, gain: 0 }));
-  private previousBreath = 0.5; private fall = 0; private rate_ = 0;
+  private rate_ = 0;
   private decay: number;
   private readonly rate: number; private readonly rng: Rng;
   constructor(rate: number, rng: Rng) { this.rate = rate; this.rng = rng; this.decay = Math.exp(-1 / (rate * 0.035)); }
   block(c: Ctl) {
     const dt = CONTROL / this.rate;
-    const velocity = Math.max(0, (this.previousBreath - c.breath) / dt);
-    this.previousBreath = c.breath;
-    this.fall += (velocity - this.fall) * 0.1;
-    const exhale = c.air * Math.min(0.6, this.fall * 2);
+    // Exhale depth, not speed, so faster breathing never earns more events.
+    const exhale = c.air * 0.6 * Math.min(1, Math.max(0, 0.5 - c.breath) * 2);
     this.rate_ = Math.min(8, exhale * 8 + c.movement * 5 + c.air * 0.4 * c.breath);
     if (this.rng.next() < this.rate_ * dt) this.spawn(c);
   }

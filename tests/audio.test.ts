@@ -282,3 +282,23 @@ test('live engine renders stereo contiguous blocks only while enabled and restar
   assert.equal(buffers.length, after);
   await sound.dispose();
 });
+
+test('bubbles events follow exhale depth, not breathing speed', async () => {
+  const { createSoundEngine } = await import('../src/sound/dsp.ts');
+  const rate = 48_000;
+  const energy = (hz: number) => {
+    const engine = createSoundEngine('bubbles', 3, rate);
+    const block = 480;
+    const left = new Float32Array(block), right = new Float32Array(block);
+    let sum = 0;
+    for (let start = 0; start < rate * 40; start += block) {
+      const breath = 0.5 + 0.45 * Math.sin(2 * Math.PI * hz * start / rate);
+      engine.render({ level: 1, voice: 0, air: 1, breath, phraseHz: 0.12, arterial: 0, pulse: 0, jaw: 0, smile: 0, brow: 0, pan: 0, movement: 0, blink: 0 }, left, right, 0, block);
+      for (let i = 0; i < block; i++) sum += left[i] ** 2 + right[i] ** 2;
+    }
+    return sum;
+  };
+  const slow = energy(0.15), fast = energy(0.45);
+  assert.ok(slow > 0);
+  assert.ok(fast < slow * 1.3, `fast ${fast} vs slow ${slow}`);
+});

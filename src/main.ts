@@ -301,7 +301,7 @@ function animate(now: number) {
 }
 
 function paintOverlay(timeMs: number) {
-  const frames = sourceKind && latest ? history : selected?.samples ?? [];
+  const frames = sourceKind ? (latest ? history : []) : selected?.samples ?? [];
   const visible = Boolean(overlayContext) && input('show-signals').checked && frames.length > 0 && hasSdkSignals(frames);
   overlayCanvas.hidden = !visible;
   if (!visible || !overlayContext) return;
