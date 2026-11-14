@@ -876,3 +876,101 @@ test('a pulse trend never changes brain regions', () => {
   const trended: SceneFrame = { ...frame, frame: { ...frame.frame!, trends: { pulseRate: { direction: 'rising', changePerMinute: 30, windowMs: 20_000, samples: 20 } } } };
   assert.deepEqual(brainRegionActivity(trended), brainRegionActivity(frame));
 });
+
+function fusedFrame(timeMs: number, valid: Partial<Record<Channel, number>> = {}, ageMs = 0): SceneFrame {
+  const result = signalFrame(timeMs, valid, ageMs);
+  result.frame!.source = 'live';
+  result.frame!.tracking = { sampledAtMs: timeMs, face: null, movement: null, body: { leftShoulder: [0.25, 1, 0, 1], leftElbow: [0.25, 0.6, 0, 1] } };
+  return result;
+}
+
+function breathPose(subject: SceneSubject, bones: Record<string, THREE.Bone>, frame: SceneFrame) {
+  subject.update(frame);
+  const world = (name: string) => bones[name].getWorldPosition(new THREE.Vector3());
+  return { chest: bones.Chest.quaternion.clone(), scale: bones.Chest.scale.clone(), shoulderY: world('DEF-Shoulder.L').y, head: bones['DEF-Head'].quaternion.clone(), all: transforms(subject.root) };
+}
+
+test('breath layers over fused tracked poses with visible chest and shoulder motion and no wall-time input', () => {
+  const { subject, bones } = trackingRig();
+  const still = breathPose(subject, bones, fusedFrame(1000));
+  const inhale = breathPose(subject, bones, fusedFrame(1000, { breath: 1 }));
+  const exhale = breathPose(subject, bones, fusedFrame(1000, { breath: -1 }));
+  assert.ok(inhale.scale.z > still.scale.z * 1.05 && exhale.scale.z < still.scale.z * 0.95);
+  assert.ok(inhale.scale.z < still.scale.z * 1.2, 'chest expansion stays bounded');
+  assert.ok(inhale.chest.angleTo(still.chest) > 0.05);
+  assert.ok(inhale.shoulderY - still.shoulderY > 0.03 && still.shoulderY - exhale.shoulderY > 0.03);
+  assert.ok(inhale.head.angleTo(still.head) > 0.05, 'head follows through');
+  assert.ok(direction(bones['DEF-UpperArm_1.L'], bones['DEF-Forearm_1.L']).y < -0.98, 'tracked arm still follows tracking');
+  breathPose(subject, bones, fusedFrame(4000, { breath: 1 }));
+  assert.deepEqual(breathPose(subject, bones, fusedFrame(1000, { breath: 1 })).all, inhale.all);
+  assert.deepEqual(breathPose(subject, bones, fusedFrame(1000)).all, still.all);
+  subject.dispose();
+});
+
+test('breath effect on a tracked character fades to zero when the signal is stale, missing or reduced', () => {
+  const { subject, bones } = trackingRig();
+  const still = breathPose(subject, bones, fusedFrame(1000));
+  const half = breathPose(subject, bones, fusedFrame(1000, { breath: 1 }, SIGNAL_STALE_MS - 250));
+  const full = breathPose(subject, bones, fusedFrame(1000, { breath: 1 }));
+  const gain = (pose: typeof still) => pose.shoulderY - still.shoulderY;
+  assert.ok(gain(half) > 0 && gain(half) < gain(full));
+  assert.deepEqual(breathPose(subject, bones, fusedFrame(1000, { breath: 1 }, SIGNAL_STALE_MS)).all, still.all);
+  const invalid = fusedFrame(1000, { breath: 1 });
+  invalid.frame!.signals.breath.quality = 'unstable';
+  assert.deepEqual(breathPose(subject, bones, invalid).all, still.all);
+  const reduced = fusedFrame(1000, { breath: 1 });
+  reduced.reducedMotion = true;
+  const frozen = breathPose(subject, bones, reduced).all;
+  reduced.timeMs = 6000;
+  assert.deepEqual(breathPose(subject, bones, reduced).all, frozen);
+  subject.dispose();
+});
+
+test('runner stride is independent of breath and breathing rate on an authored Run clip', () => {
+  const model = new THREE.Group();
+  model.add(new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshStandardMaterial()));
+  const pacer = new THREE.Bone();
+  pacer.name = 'Pacer';
+  model.add(pacer);
+  const clips = [new THREE.AnimationClip('Run', 2, [new THREE.VectorKeyframeTrack('Pacer.position', [0, 2], [0, 0, 0, 2, 0, 0])])];
+  const subject = createCharacter(model, clips, 'runner');
+  subject.update(fusedFrame(1000));
+  const calm = pacer.position.x;
+  for (const samples of [{ breath: 1, breathingRate: 30 }, { breath: -1, breathingRate: 6 }, { breath: 1 }]) {
+    subject.update(fusedFrame(1000, samples));
+    assert.equal(pacer.position.x, calm);
+  }
+  subject.dispose();
+});
+
+test('star, bubbles and brain ring visibly track breath and ignore stale breath', async () => {
+  const star = createStar();
+  const core = star.root.getObjectByName('StarCore')!;
+  star.update(signalFrame(1000));
+  const base = core.scale.x;
+  star.update(signalFrame(1000, { breath: 1 }));
+  assert.ok(core.scale.x > base * 1.2 && core.scale.x < base * 1.5);
+  star.update(signalFrame(1000, { breath: 1 }, SIGNAL_STALE_MS));
+  assert.equal(core.scale.x, base);
+  star.dispose();
+  const bubbles = createBubbles();
+  const heights = (frame: SceneFrame) => { bubbles.update(frame); return bubbles.root.children.map(child => child.position.y); };
+  const rest = heights(signalFrame(1000));
+  const inhale = heights(signalFrame(1000, { breath: 1 }));
+  const exhale = heights(signalFrame(1000, { breath: -1 }));
+  assert.ok(inhale.every((y, i) => y > rest[i] + 0.3));
+  assert.ok(exhale.some((y, i) => y > rest[i] - 0.3) && exhale.some((y, i) => y < rest[i] - 0.3), 'exhale sinks most bubbles and releases a seeded few upward');
+  assert.deepEqual(heights(signalFrame(1000, { breath: -1 })), exhale);
+  bubbles.dispose();
+  const brain = createAnatomicalBrain((await loadBrain()).scene);
+  const ring = brain.root.getObjectByName('BreathPhaseRing')!;
+  brain.update(signalFrame(1000));
+  const rest0 = ring.scale.x;
+  brain.update(signalFrame(1000, { breath: 1 }));
+  assert.ok(ring.scale.x > rest0 * 1.3 && ring.scale.x < rest0 * 1.6);
+  brain.update(signalFrame(1000, { breath: -1 }));
+  assert.ok(ring.scale.x < rest0 * 0.7);
+  brain.update(signalFrame(1000, { breath: 1 }, SIGNAL_STALE_MS));
+  assert.equal(ring.scale.x, rest0);
+  brain.dispose();
+});

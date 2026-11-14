@@ -1,11 +1,13 @@
 import * as THREE from 'three';
-import { sceneDynamics, signalValue } from './dynamics.ts';
+import { clamp, sceneDynamics, signalValue } from './dynamics.ts';
 import { RUNNER_PACE } from './procedural.ts';
 import { disposeObject, fitModel } from './resources.ts';
 import { BONE_ALIASES, boneFinder, createRunnerMotion, createTracking, type CharacterMorph } from './tracking.ts';
 import type { SceneSubject } from './types.ts';
 
 const PULSE_GLOW = new THREE.Color(0xff7a3d);
+const SHOULDERS = ['defshoulderl', 'mixamorigleftshoulder', 'leftshoulder', 'shoulderl', 'claviclel', 'defshoulderr', 'mixamorigrightshoulder', 'rightshoulder', 'shoulderr', 'clavicler'];
+const BREATH = { spine: 0.1, chest: 0.2, head: 0.2, shoulderRise: 0.05, scaleX: 0.09, scaleZ: 0.14 } as const;
 
 export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[], kind: 'rex' | 'imported' | 'runner'): SceneSubject {
   const root = new THREE.Group();
@@ -50,17 +52,46 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
   const chest = findBone(BONE_ALIASES.chest);
   const jaw = findBone(BONE_ALIASES.jaw);
   const head = findBone(BONE_ALIASES.head) ?? findBone(BONE_ALIASES.neck);
+  const spine = findBone(BONE_ALIASES.spine);
+  const shoulders = SHOULDERS.map(name => findBone([name])).filter((bone): bone is THREE.Bone => Boolean(bone?.parent));
+  const height = Math.max(new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3()).y, 1e-3);
+  const right = new THREE.Vector3(), parentQuaternion = new THREE.Quaternion(), worldDelta = new THREE.Quaternion(), place = new THREE.Vector3();
+  const pitchWorld = (bone: THREE.Bone, angle: number) => {
+    if (angle === 0) return;
+    if (bone.parent) bone.parent.getWorldQuaternion(parentQuaternion); else parentQuaternion.identity();
+    bone.quaternion.premultiply(parentQuaternion).premultiply(worldDelta.setFromAxisAngle(right, angle)).premultiply(parentQuaternion.invert());
+  };
+  // Layered on the authored pose before tracking aims limbs, so tracked arms keep their observed world direction.
+  const applyBreath = (breath: number) => {
+    if (breath === 0) return;
+    root.updateMatrixWorld(true);
+    right.set(1, 0, 0).applyQuaternion(framing.getWorldQuaternion(parentQuaternion));
+    if (spine && spine !== chest) pitchWorld(spine, -breath * BREATH.spine);
+    if (chest) {
+      pitchWorld(chest, -breath * BREATH.chest);
+      chest.scale.x *= 1 + breath * BREATH.scaleX;
+      chest.scale.z *= 1 + breath * BREATH.scaleZ;
+    }
+    if (head) pitchWorld(head, breath * BREATH.head);
+    for (const shoulder of shoulders) {
+      shoulder.updateWorldMatrix(true, false);
+      shoulder.getWorldPosition(place);
+      place.y += breath * BREATH.shoulderRise * height;
+      shoulder.position.copy(shoulder.parent!.worldToLocal(place));
+    }
+  };
   const blinkMorphs = morphs.some(morph => morph.kind === 'blink');
   const jawMorphs = morphs.some(morph => morph.kind === 'talking');
   const pitch = new THREE.Vector3(1, 0, 0), roll = new THREE.Vector3(0, 0, 1), offset = new THREE.Quaternion();
   const tilt = (bone: THREE.Bone, axis: THREE.Vector3, angle: number) => { if (angle !== 0) bone.quaternion.multiply(offset.setFromAxisAngle(axis, angle)); };
-  const animationPose = bones.map(bone => ({ bone, quaternion: bone.quaternion.clone(), scale: bone.scale.clone() }));
+  const animationPose = bones.map(bone => ({ bone, position: bone.position.clone(), quaternion: bone.quaternion.clone(), scale: bone.scale.clone() }));
   const applyTracking = createTracking(model, bones, morphs);
   const run = kind === 'runner' && !runClip ? createRunnerMotion(model, bones) : null;
   let runnerVariant: 0 | 1 | 2 = 1;
   let disposed = false;
   function restoreAnimationPose() {
     for (const transform of animationPose) {
+      transform.bone.position.copy(transform.position);
       transform.bone.quaternion.copy(transform.quaternion);
       transform.bone.scale.copy(transform.scale);
     }
@@ -68,6 +99,7 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
   }
   function rememberAnimationPose() {
     for (const transform of animationPose) {
+      transform.position.copy(transform.bone.position);
       transform.quaternion.copy(transform.bone.quaternion);
       transform.scale.copy(transform.bone.scale);
     }
@@ -90,25 +122,21 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
     },
     update(input) {
       if (disposed) return;
-      const { time, motion, breath, breathingPace, pulsePace, blink, talking } = sceneDynamics(input);
+      const { time, motion, breath, breathingPace, pulsePace, arterial, blink, talking } = sceneDynamics(input);
       const signals = motion > 0 && input.frame?.source !== 'local-camera';
       restoreAnimationPose();
       mixer.setTime(time * motion * (runClip ? RUNNER_PACE[runnerVariant] : 1));
       rememberAnimationPose();
       const headPitch = -pulsePace * 0.3 + (signals && !blinkMorphs ? blink * 0.1 : 0);
       const headRoll = signals && !jaw && !jawMorphs ? talking * 0.1 : 0;
-      root.rotation.set((chest ? 0 : -breathingPace * 0.08) + (head ? 0 : headPitch * 0.4), 0, breath * 0.03 + (head ? 0 : headRoll * 0.4));
-      if (!chest) root.scale.set(1 + breath * 0.04, 1, 1 + breath * 0.08);
+      root.rotation.set((chest ? 0 : -breathingPace * 0.08) + (head ? 0 : headPitch * 0.4), 0, (chest ? 0 : breath * 0.03) + (head ? 0 : headRoll * 0.4));
+      if (!chest) root.scale.set(1 + breath * 0.06, 1, 1 + breath * 0.1);
       if (run) {
         root.position.y = 0;
         root.position.y = run(input, runnerVariant);
       }
-      for (const [material, base] of glowMaterials) material.emissive.copy(base).lerp(PULSE_GLOW, pulsePace * 0.5);
-      if (chest) {
-        chest.scale.x *= 1 + breath * 0.08;
-        chest.scale.z *= 1 + breath * 0.12;
-        tilt(chest, pitch, -breathingPace * 0.25 - breath * 0.08);
-      }
+      for (const [material, base] of glowMaterials) material.emissive.copy(base).lerp(PULSE_GLOW, clamp(pulsePace * 0.5 + arterial * 0.08, 0, 0.6));
+      if (chest) tilt(chest, pitch, -breathingPace * 0.25);
       if (head) {
         tilt(head, pitch, headPitch);
         tilt(head, roll, headRoll);
@@ -119,6 +147,7 @@ export function createCharacter(model: THREE.Group, clips: THREE.AnimationClip[]
           if (morph.kind && signalValue(input, morph.kind) !== null) morph.mesh.morphTargetInfluences![morph.index] = morph.kind === 'blink' ? blink : talking * 0.9;
         }
       }
+      applyBreath(breath);
       applyTracking(input);
       root.updateMatrixWorld(true);
     },

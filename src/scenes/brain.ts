@@ -285,16 +285,18 @@ export function createAnatomicalBrain(model: THREE.Group): BrainSubject {
     root,
     update(input) {
       last = input;
-      const { time, motion, breath, breathingPace, pulsePace } = sceneDynamics(input);
+      const { time, motion, breath, breathingPace, pulsePace, arterial } = sceneDynamics(input);
       pivot.rotation.set(TILT, Math.sin(time * 0.2) * 0.35 * motion, 0);
       // S1-S3 drive body-signal gauges only; BRAIN-EVIDENCE.md forbids mapping these channels to regions.
-      gauge(breathRing, 1, breath * 0.3);
+      gauge(breathRing, 1, breath * 0.6);
+      (breathRing.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.5 + breath * 0.35;
       gauge(breathingRateRing, 1.1, breathingPace * 0.4);
       gauge(pulseRateRing, 1.2, pulsePace * 0.4);
       const trend = signalValue(input, 'pulseRate') === null ? undefined : input.frame?.trends?.pulseRate;
       const tone = PULSE_RING[trend?.direction ?? 'steady'];
       pulseMaterial.color.setHex(tone);
       pulseMaterial.emissive.setHex(tone);
+      pulseMaterial.emissiveIntensity = 0.5 + arterial * 0.15;
       for (const region of activity.keys()) activity.set(region, 0);
       evaluate(input, raise);
       const example = brainExample(input) !== null;

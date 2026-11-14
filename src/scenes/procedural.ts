@@ -37,27 +37,35 @@ export function createBubbles(): SceneSubject {
     clearcoat: 1, clearcoatRoughness: 0.12, emissive: color, emissiveIntensity: 0.045,
     depthWrite: false,
   }));
+  const baseColors = colors.map(color => new THREE.Color(color));
+  const warm = new THREE.Color(0xffc29a);
   const bubbles = Array.from({ length: 28 }, (_, i) => part(root, `Bubble_${i}`, sphere, surfaces[i % surfaces.length], [0, 0, 0]));
   return {
     root,
     update(input) {
-      const { time, motion, breath, breathingPace, pulsePace, jaw, smile, brow, blink, movement, armSpread, armLift, lean, turn } = sceneDynamics(input);
+      const { time, motion, breath, breathingPace, pulsePace, arterial, jaw, smile, brow, blink, movement, armSpread, armLift, lean, turn } = sceneDynamics(input);
+      const exhale = Math.max(0, -breath);
       root.position.x = lean * 0.7;
       root.rotation.set(0, turn * 0.3, -lean * 0.12);
-      for (const surface of surfaces) {
-        surface.emissiveIntensity = 0.045 + smile * 0.22 + jaw * 0.12 + pulsePace * 0.3;
+      surfaces.forEach((surface, index) => {
+        surface.emissiveIntensity = Math.max(0, 0.045 + smile * 0.22 + jaw * 0.12 + pulsePace * 0.3 + arterial * 0.06);
+        surface.iridescenceThicknessMaximum = 440 + arterial * 90;
+        surface.color.copy(baseColors[index]).lerp(warm, pulsePace * 0.35);
+        surface.emissive.copy(surface.color);
         surface.opacity = 0.52 + brow * 0.16;
-      }
+      });
       const sway = 0.17 * motion + movement * 0.24 + pulsePace * 0.35;
       const drift = 0.18 * motion + breathingPace * 0.4;
       for (let i = 0; i < bubbles.length; i++) {
         const phase = randomFor(input.seed, i + 200) * Math.PI * 2;
+        const released = randomFor(input.seed, i + 400) < 0.4 ? exhale * (0.6 + randomFor(input.seed, i + 600)) : 0;
+        const x = (randomFor(input.seed, i * 4) * 5.2 - 2.6) * (1 + armSpread * 0.35 + smile * 0.12);
         bubbles[i].position.set(
-          (randomFor(input.seed, i * 4) * 5.2 - 2.6) * (1 + armSpread * 0.35 + smile * 0.12) + Math.sin(time * 0.33 + phase) * sway,
-          randomFor(input.seed, i * 4 + 1) * 2.9 + 0.65 + Math.sin(time * 0.48 + phase) * drift + breath * 0.6 + armLift * 0.7 + movement * 0.25 + brow * 0.12,
+          x * (1 + released * 0.25) + Math.sin(time * 0.33 + phase) * sway,
+          randomFor(input.seed, i * 4 + 1) * 2.9 + 0.65 + Math.sin(time * 0.48 + phase) * drift + breath * 0.9 + released * 0.9 + armLift * 0.7 + movement * 0.25 + brow * 0.12,
           (randomFor(input.seed, i * 4 + 2) * 2.2 - 1.1) * (1 + armSpread * 0.35),
         );
-        bubbles[i].scale.setScalar((0.16 + randomFor(input.seed, i * 4 + 3) * 0.38) * (1 + breath * 0.4 + jaw * 0.4 + smile * 0.2 - blink * 0.2));
+        bubbles[i].scale.setScalar((0.16 + randomFor(input.seed, i * 4 + 3) * 0.38) * (1 + breath * 0.6 - released * 0.25 + jaw * 0.4 + smile * 0.2 - blink * 0.2));
       }
     },
     dispose: () => disposeObject(root),
@@ -79,6 +87,7 @@ export function createStar(): SceneSubject {
   const starMaterial = new THREE.MeshStandardMaterial({ color: 0xffce66, emissive: 0xff8a25, emissiveIntensity: 0.45, roughness: 0.26, metalness: 0.65 });
   const geometry = new THREE.ExtrudeGeometry(shape, { depth: 0.3, bevelEnabled: true, bevelSegments: 3, steps: 1, bevelSize: 0.12, bevelThickness: 0.12 });
   part(core, 'StarBody', geometry, starMaterial, [0, 0, -0.15]);
+  const starEmissive = new THREE.Color(0xff8a25), warmEmissive = new THREE.Color(0xff3d14);
   const ringMaterial = new THREE.MeshStandardMaterial({ color: 0xffedc0, emissive: 0xeaa332, emissiveIntensity: 0.3, roughness: 0.35, metalness: 0.65 });
   const ringGeometry = new THREE.TorusGeometry(1.65, 0.016, 6, 96);
   const rings = [0, 1].map(i => {
@@ -91,8 +100,8 @@ export function createStar(): SceneSubject {
   return {
     root,
     update(input) {
-      const { time, motion, breath, breathingPace, pulsePace, jaw, smile, brow, blink, movement, armSpread, armLift, lean, turn } = sceneDynamics(input);
-      const expansion = (1 + breath * 0.3 + smile * 0.2 + jaw * 0.3 + movement * 0.3 + pulsePace * 0.12) * (1 - blink * 0.15);
+      const { time, motion, breath, breathingPace, pulsePace, arterial, jaw, smile, brow, blink, movement, armSpread, armLift, lean, turn } = sceneDynamics(input);
+      const expansion = (1 + breath * 0.4 + smile * 0.2 + jaw * 0.3 + movement * 0.3 + pulsePace * 0.12) * (1 - blink * 0.15);
       const shake = Math.sin(time * 2.4) * movement;
       core.scale.set(expansion * (1 + armSpread * 0.45), expansion * (1 + brow * 0.15 + armLift * 0.2), expansion);
       core.rotation.y = Math.sin(time * 0.3) * (0.22 * motion + pulsePace * 0.35) + turn * 1.1 + shake * 0.6;
@@ -102,14 +111,16 @@ export function createStar(): SceneSubject {
       rings[1].rotation.z = 1.2 - time * 0.09 * motion;
       rings[0].rotation.x = 0.55 + armLift * 0.7 + shake * 0.4;
       rings[1].rotation.x = 1.1 - armSpread * 0.7 - shake * 0.4;
-      rings[0].scale.setScalar(1 + armSpread * 0.5 + brow * 0.12);
-      rings[1].scale.setScalar(1 + movement * 0.5 + smile * 0.12);
-      starMaterial.emissiveIntensity = 0.45 + Math.max(0, breath) * 0.8 + smile * 0.55 + jaw * 0.4 + pulsePace * 0.7 + movement * 0.8 + armLift * 0.4;
+      rings[0].scale.setScalar(1 + armSpread * 0.5 + brow * 0.12 + breath * 0.12);
+      rings[1].scale.setScalar(1 + movement * 0.5 + smile * 0.12 + breath * 0.12);
+      starMaterial.emissive.copy(starEmissive).lerp(warmEmissive, pulsePace * 0.6);
+      ringMaterial.emissiveIntensity = Math.max(0.05, 0.3 + breath * 0.25 + arterial * 0.04);
+      starMaterial.emissiveIntensity = Math.max(0.1, 0.45 + breath * 0.6 + arterial * 0.08) + smile * 0.55 + jaw * 0.4 + pulsePace * 0.7 + movement * 0.8 + armLift * 0.4;
       for (let i = 0; i < dust.length; i++) {
         const angle = randomFor(input.seed, i * 2) * Math.PI * 2 + time * 0.05 * motion + shake * 0.5;
         const radius = (1.9 + randomFor(input.seed, i * 2 + 1) * 0.6) * (1 + armSpread * 0.5 + movement * 0.6 + pulsePace * 0.08);
         dust[i].position.set(Math.cos(angle) * radius + lean * 1.4, 1.9 + Math.sin(angle) * radius * 0.7 + armLift * 0.8, Math.sin(angle * 3) * 0.6);
-        dust[i].scale.setScalar(1 + jaw * 1.2 + brow * 0.5 + blink * 0.6 + movement * 1.5);
+        dust[i].scale.setScalar(1 + arterial * 0.25 + jaw * 1.2 + brow * 0.5 + blink * 0.6 + movement * 1.5);
       }
     },
     dispose: () => disposeObject(root),
@@ -165,14 +176,14 @@ export function createRunner(): SceneSubject {
     },
     update(input) {
       const { time, motion, breath, breathingPace, pulsePace, blink, talking, movement } = sceneDynamics(input);
-      const response = breath + movement;
       const phase = time * 7.5 * pace;
       const stride = motion * 0.5;
       body.position.y = 1.18 + Math.abs(Math.cos(phase)) * 0.055 * motion;
       body.rotation.x = 0.08 * motion;
-      torso.scale.set(1 + response * 0.035, 1, 1 + response * 0.08);
-      torso.rotation.x = -breathingPace * 0.06;
-      head.rotation.set(blink * 0.06 - pulsePace * 0.06, 0, talking * 0.05);
+      torso.scale.set(1 + breath * 0.1 + movement * 0.035, 1, 1 + breath * 0.16 + movement * 0.08);
+      torso.rotation.x = -breathingPace * 0.06 - breath * 0.12;
+      for (const shoulder of arms) shoulder.position.y = 0.26 + breath * 0.04;
+      head.rotation.set(blink * 0.06 - pulsePace * 0.06 + breath * 0.08, 0, talking * 0.05);
       for (let i = 0; i < hips.length; i++) {
         const cycle = Math.sin(phase + i * Math.PI);
         hips[i].rotation.x = cycle * stride;
