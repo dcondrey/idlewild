@@ -1,6 +1,8 @@
 import { _electron as electron, expect } from '@playwright/test';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 
@@ -16,7 +18,8 @@ await mkdir(output, { recursive: true });
 const prior = JSON.parse(await readFile(path.join(root, 'artifacts/ui/report.json'), 'utf8'));
 const template = JSON.parse(await readFile(prior.exports.control.path, 'utf8'));
 const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
-const app = await electron.launch({ args: [root], cwd: root, env });
+const userData = await mkdtemp(path.join(os.tmpdir(), 'idlewild-check-'));
+const app = await electron.launch({ args: [root, `--idlewild-user-data=${userData}`], cwd: root, env });
 const errors = [];
 const report = { model, poses: [], exports: [] };
 let expressionClips = [];
@@ -138,4 +141,4 @@ try {
   assert.deepEqual(errors, []);
   await writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report));
-} finally { await app.close(); }
+} finally { await app.close(); await rm(userData, { recursive: true, force: true }); }

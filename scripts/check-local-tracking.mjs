@@ -2,6 +2,8 @@ import { _electron as electron, expect } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { installFixtureCamera, loadFixtures } from './tracking-fixtures.mjs';
 
@@ -10,7 +12,8 @@ const output = path.join(root, 'artifacts/local-tracking');
 await mkdir(output, { recursive: true });
 const fixtures = await loadFixtures(root, process.argv.includes('--prepare-fixtures'));
 const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
-const app = await electron.launch({ args: [root], cwd: root, env });
+const userData = await mkdtemp(path.join(os.tmpdir(), 'idlewild-check-'));
+const app = await electron.launch({ args: [root, `--idlewild-user-data=${userData}`], cwd: root, env });
 const errors = [];
 const requests = new Set();
 const report = {};
@@ -124,4 +127,4 @@ try {
     return { status: document.getElementById('status').textContent, message: document.getElementById('message').textContent, consent: document.getElementById('camera-consent').checked, video: { readyState: video.readyState, width: video.videoWidth, height: video.videoHeight, paused: video.paused }, tracks: window.__fixtureTracks?.map(track => track.readyState), workers: window.__trackingWorkers };
   })));
   throw error;
-} finally { await app.close(); }
+} finally { await app.close(); await rm(userData, { recursive: true, force: true }); }

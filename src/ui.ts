@@ -14,7 +14,11 @@ const ICON_PATHS: Record<string, string> = {
   brain: '<path d="M11 5.5a3 3 0 0 0-5 2 3 3 0 0 0-1.5 5 3 3 0 0 0 2 4.5 3 3 0 0 0 4.5 1.5zM13 5.5a3 3 0 0 1 5 2 3 3 0 0 1 1.5 5 3 3 0 0 1-2 4.5 3 3 0 0 1-4.5 1.5z"/>',
   imported: '<path d="M12 15V4.5M7.5 9L12 4.5 16.5 9M5 19.5h14"/>',
   add: '<path d="M12 5v14M5 12h14"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  help: '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.3-2.4 3.8M12 17.2h.01"/>',
 };
+
+const SHORTCUT_SCENES = ['Rex', 'Bubbles', 'Star', 'Sprite', 'Runner', 'Brain', 'Your character'];
 
 function icon(id: string) {
   return `<svg class="scene-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[id] ?? ICON_PATHS.imported}</svg>`;
@@ -30,7 +34,8 @@ export function mountStudio(root: HTMLElement) {
   root.innerHTML = `
     <header class="topbar">
       <a class="brand" href="#main"><span class="brand-mark" aria-hidden="true">i</span> idlewild<span class="brand-detail">PERFORMANCE STUDIO</span></a>
-      <nav class="top-actions" aria-label="Studio tools"><button id="open-import" class="quiet">Import</button><button id="open-takes" class="quiet" hidden>Takes <span id="take-count">0 / 6</span></button><button id="help" class="quiet">Guide</button></nav>
+      <div id="live-pill" class="live-pill" data-state="idle" role="status" aria-live="polite"><span class="live-dot" aria-hidden="true"></span><span id="live-pill-text">No input</span></div>
+      <nav class="top-actions" aria-label="Studio tools"><button id="open-import" class="quiet">Import</button><button id="open-takes" class="quiet" hidden>Takes <span id="take-count">0 / 6</span></button><button id="help" class="quiet">Guide</button><button id="open-shortcuts" class="quiet icon-button" title="Keyboard shortcuts" aria-label="Keyboard shortcuts">${icon('help')}</button><button id="open-preferences" class="quiet icon-button" title="Preferences" aria-label="Preferences">${icon('settings')}</button></nav>
     </header>
     <main id="main" class="workspace">
       <aside class="panel input-panel" aria-label="Performance input">
@@ -59,7 +64,7 @@ export function mountStudio(root: HTMLElement) {
           <canvas id="stage" aria-label="Animated creative scene"></canvas><canvas id="signal-overlay" aria-hidden="true" hidden></canvas>
           <div class="stage-overlay">
             <div class="overlay-start">
-              <button id="detail-view" class="overlay-button" aria-pressed="false" hidden>Close view</button>
+              <button id="detail-view" class="overlay-button" aria-pressed="false" hidden>Close-up</button>
               <div id="framing-region" role="status" aria-live="polite"><div id="framing-prompt" class="framing-prompt" hidden><p>Move back so your whole body is visible.</p><button id="dismiss-framing" class="dismiss" aria-label="Dismiss framing tip">×</button></div></div>
               <div id="brain-legend" class="brain-legend" hidden><p id="brain-caption">${BRAIN_CAPTION}</p><ul id="brain-regions" class="brain-regions" aria-live="off" aria-label="Simulated region highlights" aria-describedby="brain-caption"></ul></div>
             </div>
@@ -88,13 +93,15 @@ export function mountStudio(root: HTMLElement) {
     <dialog id="camera-dialog" aria-labelledby="camera-title">
       <button class="close" data-close aria-label="Close camera settings">×</button><span class="eyebrow">PERFORMANCE INPUT</span><h2 id="camera-title">Your camera, your choice.</h2>
       <p>SmartSpectra reads your breathing and pulse from the camera; on-device tracking adds your face and body. Together they perform the character.</p>
+      <section class="step-card" aria-labelledby="camera-step-title"><h3 id="camera-step-title"><span class="step-number" aria-hidden="true">1</span>Open your camera</h3>
       <label class="check consent"><input id="camera-consent" type="checkbox"> I consent to camera preview and on-device face and body tracking.</label>
       <label for="camera">Body camera</label><select id="camera"><option value="">System default (first preview)</option></select>
       <p class="fine">Desk View and Continuity Camera appear here as ordinary cameras. Idlewild asks each camera for its widest view; choose a wide camera and step back.</p>
       <div class="row"><button id="refresh-cameras">Refresh cameras</button><button id="preview" class="primary">Open preview</button></div>
       <div id="camera-view" hidden><video id="camera-preview" muted playsinline aria-label="Body camera preview"></video><p class="fine">Preview stays on when you close this panel and appears in the corner of the stage. Stop input releases every camera.</p></div>
-      <section id="measurement-settings" class="measurement" aria-labelledby="measurement-title">
-        <h3 id="measurement-title">SmartSpectra live signals</h3>
+      </section>
+      <section id="measurement-settings" class="step-card measurement" aria-labelledby="measurement-title">
+        <h3 id="measurement-title"><span class="step-number" aria-hidden="true">2</span>SmartSpectra live signals</h3>
         <p class="fine">Breathing movement, breathing rate and pulse rate from your camera, with blink and talking detection. Uses your own Presage key, account credits and Presage network processing. Telemetry is disabled and Idlewild never requests insights, but the SDK may generate automatic vitals insights that upload data, and Idlewild cannot disable them; vendor retention is unverified. Creative animation, not a medical measurement.</p>
         <label for="api-key">Presage API key · this session only</label><input id="api-key" type="password" autocomplete="off" spellcheck="false" maxlength="512" placeholder="Enter your own key">
         <div class="row"><button id="save-key">Use key</button><button id="clear-key">Clear key</button></div><p id="key-status" class="fine">No key set.</p>
@@ -168,11 +175,53 @@ export function mountStudio(root: HTMLElement) {
       <details id="credits-full"><summary>Full attributions and third-party notices</summary><div id="credits-files" class="credit-files"></div></details>
       <p class="dialog-message message" role="status" aria-live="polite"></p><div class="dialog-actions"><button data-close>Done</button></div>
     </dialog>
+    <dialog id="preferences-dialog" aria-labelledby="preferences-title">
+      <button class="close" data-close aria-label="Close preferences">×</button><span class="eyebrow">PREFERENCES</span><h2 id="preferences-title">Make the studio yours.</h2>
+      <p class="fine">Saved on this computer. API keys, consent, camera choices, takes and measurements are never saved.</p>
+      <div class="pref-group"><h3>Startup</h3>
+        <div class="pref-row"><label for="pref-scene">Open with</label><select id="pref-scene"><option value="rex">Rex</option><option value="bubbles">Bubbles</option><option value="star">Star</option><option value="sprite">Sprite</option><option value="runner">Runner</option><option value="brain">Brain</option></select></div>
+        <p class="fine">Motion, Sensitivity and Sound remember their last values.</p>
+      </div>
+      <div class="pref-group"><h3>Stage</h3>
+        <label class="check"><input id="pref-show-signals" type="checkbox"> Show the SmartSpectra signal panel on stage</label>
+        <div class="pref-row"><label for="pref-reduced-motion">Reduce motion</label><select id="pref-reduced-motion"><option value="system">Follow system setting</option><option value="on">Always</option><option value="off">Never</option></select></div>
+        <label class="check"><input id="pref-loop" type="checkbox"> Loop take playback</label>
+      </div>
+      <div class="pref-group"><h3>SmartSpectra</h3>
+        <label class="check"><input id="pref-live-tracking" type="checkbox"> Also track face and body on this device</label>
+        <label class="check"><input id="pref-live-extended" type="checkbox"> Also request HRV and expression estimates</label>
+        <p class="fine">These set the starting choices in Use camera. Each session still needs your key and consent.</p>
+      </div>
+      <div class="pref-group"><h3>Export</h3>
+        <label class="check"><input id="pref-export-signals" type="checkbox"> Include the signal panel in video exports</label>
+      </div>
+      <p class="dialog-message message" role="status" aria-live="polite"></p><div class="dialog-actions split"><button id="reset-preferences" class="quiet">Restore defaults</button><button data-close>Done</button></div>
+    </dialog>
+    <dialog id="shortcuts-dialog" aria-labelledby="shortcuts-title">
+      <button class="close" data-close aria-label="Close keyboard shortcuts">×</button><span class="eyebrow">HELP</span><h2 id="shortcuts-title">Keyboard shortcuts.</h2>
+      <dl id="shortcut-list" class="shortcuts"></dl>
+      <p class="fine">Every shortcut is also in the menu bar.</p>
+      <div class="dialog-actions"><button data-close>Done</button></div>
+    </dialog>
+    <dialog id="privacy-dialog" aria-labelledby="privacy-title">
+      <button class="close" data-close aria-label="Close data and privacy">×</button><span class="eyebrow">HELP</span><h2 id="privacy-title">Your data, your call.</h2>
+      <ul class="requirements">
+        <li>Nothing starts at launch. The camera opens only after you consent, and Stop input releases every camera.</li>
+        <li>Face and body tracking runs entirely on this computer.</li>
+        <li>SmartSpectra needs your own Presage key and a separate metered-measurement consent (18+). The key stays in memory for this session and is never written to disk.</li>
+        <li>SmartSpectra sends camera-derived data to Presage for processing. Idlewild disables SDK telemetry and never requests insights, but the SDK may generate automatic vitals insights that upload data, and Idlewild cannot disable them. Vendor retention follows Presage’s terms and is not verified by Idlewild.</li>
+        <li>Camera images are never saved, uploaded by Idlewild or exported. No microphone is used; all sound is synthesized.</li>
+        <li>Takes stay in memory until you export them. Exports with measured breathing and pulse are personal data; you decide where they go.</li>
+        <li>Creative animation, not a medical measurement: no diagnosis, no health claims, no covert monitoring.</li>
+      </ul>
+      <p class="fine">Preferences are saved on this computer and never include keys, consent, takes or measurements.</p>
+      <div class="dialog-actions"><button data-close>Done</button></div>
+    </dialog>
     <dialog id="guide" aria-labelledby="guide-title"><form method="dialog"><button class="close" aria-label="Close studio guide">×</button></form><span id="guide-step" class="eyebrow"></span><h2 id="guide-title"></h2><p id="guide-copy"></p><div class="row"><button id="guide-back">Back</button><button id="guide-next" class="primary">Next</button><button id="guide-skip">Skip guide</button></div></dialog>`;
 }
 
 export function setupPanels() {
-  const openers = [['open-camera', 'camera'], ['open-signals', 'signals'], ['open-import', 'import'], ['use-own-character', 'import'], ['menu-own-character', 'import'], ['open-takes', 'takes'], ['open-edit', 'edit'], ['open-export', 'export'], ['open-credits', 'credits']] as const;
+  const openers = [['open-camera', 'camera'], ['open-signals', 'signals'], ['open-import', 'import'], ['use-own-character', 'import'], ['menu-own-character', 'import'], ['open-takes', 'takes'], ['open-edit', 'edit'], ['open-export', 'export'], ['open-credits', 'credits'], ['open-preferences', 'preferences'], ['open-shortcuts', 'shortcuts']] as const;
   for (const [trigger, name] of openers) {
     const dialog = byId<HTMLDialogElement>(`${name}-dialog`);
     byId(trigger).addEventListener('click', () => {
@@ -188,6 +237,36 @@ export function setupPanels() {
     if ((event.target as HTMLElement).closest('button.take')) byId<HTMLDialogElement>('takes-dialog').close();
   });
   setupCredits();
+  renderShortcuts();
+}
+
+function renderShortcuts() {
+  const mac = /Mac/.test(navigator.platform);
+  const mod = mac ? '⌘' : 'Ctrl+';
+  const shift = mac ? '⇧' : 'Shift+';
+  const rows: [string, string][] = [
+    ['Space', 'Play or pause the selected take'],
+    [`${mod}R`, 'Record or finish a take'],
+    [`${mod}.`, 'Stop input and release cameras'],
+    [`${shift}${mod}C`, 'Use camera'],
+    [`${shift}${mod}R`, 'Start a synthetic rehearsal'],
+    [`${mod}L`, 'Loop playback'],
+    [`${mod}1–${mod}7`, `Characters: ${SHORTCUT_SCENES.join(', ')}`],
+    [`${shift}${mod}S`, 'Show or hide the signal panel'],
+    [`${shift}${mod}M`, 'Reduce motion'],
+    [`${shift}${mod}A`, 'Sound on or off'],
+    [`${mod}E`, 'Export the selected take'],
+    [`${mod}O`, 'Import a character or control data'],
+    [`${mod}T`, 'Takes'],
+    [`${mod},`, 'Preferences'],
+    [`${mod}/`, 'This list'],
+  ];
+  const list = byId('shortcut-list');
+  list.replaceChildren(...rows.flatMap(([keys, action]) => {
+    const term = document.createElement('dt'); const kbd = document.createElement('kbd'); kbd.textContent = keys; term.append(kbd);
+    const detail = document.createElement('dd'); detail.textContent = action;
+    return [term, detail];
+  }));
 }
 
 function setupCredits() {

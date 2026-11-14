@@ -20,6 +20,9 @@ import { importCharacter, validateClipCompatibility, disposeImported } from './i
 import { assetCopyright, getAssetCopyright, setAssetCopyright } from './asset-credits';
 import { SCENE_REGISTRY, type SceneEntry } from './scenes/registry';
 import type { AnimationClip, Group } from 'three';
+import { isMenuCommand, type MenuCommand } from './commands';
+import { DEFAULT_PREFERENCES } from './preferences';
+import type { MenuScene, MenuState, Preferences } from './desktop';
 
 mountStudio(document.querySelector<HTMLElement>('#app')!);
 setupGuide();
@@ -70,6 +73,8 @@ input('reduced-motion').checked = reducedPreference.matches;
 const applyMotionPreference = () => document.documentElement.classList.toggle('motion-reduced', input('reduced-motion').checked);
 applyMotionPreference();
 input('reduced-motion').addEventListener('change', applyMotionPreference);
+let preferences: Preferences = { ...DEFAULT_PREFERENCES };
+reducedPreference.addEventListener('change', () => { if (preferences.reducedMotion === 'system') { input('reduced-motion').checked = reducedPreference.matches; applyMotionPreference(); publishMenuState(); } });
 const camera = createCamera(element<HTMLVideoElement>('camera-preview'), () => {
   inputIntent++;
   void stopInput().then(() => message('The selected camera disconnected or frame submission failed. Reconnect it, refresh, then open a new preview.', true))
@@ -98,6 +103,7 @@ function clockLabel(ms: number) {
 }
 
 function refreshActions() {
+  refreshLivePill();
   updateStudioFlow({ hasInput: sourceKind !== null, cameraActive: camera.active, recording: recorder !== null, hasTake: selected !== null, playing, busy, exporting: exporting !== null });
   button('rehearse').disabled = busy || exporting !== null || sourceKind !== null || cleanupFailed;
   button('record').disabled = !stage || busy || exporting !== null || (!recorder && (!latest || sourceKind === null || takes.length >= TAKE_LIMITS.takes));
@@ -129,6 +135,62 @@ function refreshActions() {
   for (const id of ['open-export', 'open-edit']) button(id).disabled = !selected || busy || recorder !== null || exporting !== null;
   button('open-takes').disabled = !takes.length || busy || recorder !== null || exporting !== null;
   if (cleanupFailed) { button('stop-input').hidden = false; element('next-step').textContent = 'Stop again to finish releasing capture before starting another input.'; }
+  publishMenuState();
+}
+
+function refreshLivePill() {
+  const [state, text] = exporting ? ['exporting', 'Exporting'] : recorder ? ['recording', 'Recording'] :
+    sourceKind === 'live' ? ['live', companion ? 'SmartSpectra live · tracking' : 'SmartSpectra live'] :
+    sourceKind === 'local-camera' ? ['tracking', 'Face & body tracking'] : sourceKind === 'rehearsal' ? ['rehearsal', 'Synthetic rehearsal'] :
+    camera.active ? ['preview', 'Camera preview'] : playing ? ['playing', 'Playing take'] : ['idle', 'No input'];
+  const pill = element('live-pill');
+  if (pill.dataset.state !== state) pill.dataset.state = state;
+  if (element('live-pill-text').textContent !== text) element('live-pill-text').textContent = text;
+}
+
+let menuStateKey = '';
+function publishMenuState() {
+  if (!window.idlewild) return;
+  const state: MenuState = {
+    scene: entry.id as MenuScene, inputActive: sourceKind !== null || camera.active || recorder !== null, recording: recorder !== null, playing,
+    hasTake: selected !== null, canRecord: usable('record'), exporting: exporting !== null, loop: input('loop').checked,
+    showSignals: input('show-signals').checked, reducedMotion: input('reduced-motion').checked, sound: sound.enabled,
+  };
+  const key = JSON.stringify(state);
+  if (key === menuStateKey) return;
+  menuStateKey = key;
+  window.idlewild.setMenuState(state);
+}
+
+function usable(id: string) {
+  const target = element<HTMLButtonElement | HTMLInputElement>(id);
+  return !target.disabled && !target.hidden && !target.closest('[hidden]');
+}
+
+function savePreferences(partial: Partial<Preferences>) {
+  preferences = { ...preferences, ...partial };
+  renderPreferenceForm();
+  if (!window.idlewild) return;
+  void window.idlewild.setPreferences(partial).then(saved => { preferences = saved; renderPreferenceForm(); }, () => message('Preferences could not be saved. Your current settings still apply.', true));
+}
+
+function renderPreferenceForm() {
+  element<HTMLSelectElement>('pref-scene').value = preferences.scene;
+  element<HTMLSelectElement>('pref-reduced-motion').value = preferences.reducedMotion;
+  for (const [id, key] of [['pref-show-signals', 'showSignals'], ['pref-loop', 'loop'], ['pref-live-tracking', 'liveTracking'], ['pref-live-extended', 'liveExtended'], ['pref-export-signals', 'exportSignals']] as const) input(id).checked = preferences[key];
+}
+
+function applyPreferences(next: Preferences) {
+  preferences = next;
+  for (const id of ['motion', 'sensitivity', 'sound'] as const) { input(id).value = String(next[id]); element(`${id}-value`).textContent = `${next[id]}%`; }
+  input('show-signals').checked = next.showSignals;
+  input('reduced-motion').checked = next.reducedMotion === 'system' ? reducedPreference.matches : next.reducedMotion === 'on';
+  applyMotionPreference();
+  input('loop').checked = next.loop;
+  if (sourceKind !== 'live') { input('live-tracking').checked = next.liveTracking; input('live-extended').checked = next.liveExtended; }
+  input('export-signals').checked = next.exportSignals;
+  renderPreferenceForm();
+  publishMenuState();
 }
 
 async function run(action: () => Promise<void> | void) {
@@ -309,28 +371,35 @@ function paintOverlay(timeMs: number) {
   overlayContext.setTransform(1, 0, 0, 1, 0, 0);
   overlayContext.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
   overlayContext.setTransform(ratio, 0, 0, ratio, 0, 0);
-  const captionInset = element('scene-caption').closest<HTMLElement>('.stage-caption')?.offsetHeight ?? 0;
-  drawSignalOverlay(overlayContext, overlayCanvas.clientWidth, overlayCanvas.clientHeight - captionInset, { timeMs, frames, live: sourceKind === 'live', ...(sourceKind === 'live' ? { status: element('status').textContent ?? '' } : {}) });
+  const caption = element('scene-caption').closest<HTMLElement>('.stage-caption');
+  const limit = caption ? caption.offsetTop - 4 : overlayCanvas.clientHeight;
+  const panel = drawSignalOverlay(overlayContext, overlayCanvas.clientWidth, limit, { timeMs, frames, live: sourceKind === 'live', ...(sourceKind === 'live' ? { status: element('status').textContent ?? '' } : {}) });
+  const box = panel ? `${Math.round(panel.x)},${Math.round(panel.y)},${Math.round(panel.width)},${Math.round(panel.height)}` : '';
+  if (overlayCanvas.dataset.panel !== box) overlayCanvas.dataset.panel = box;
 }
 
 function chooseEntry(next: SceneEntry) {
   stage?.setScene(next.scene); entry = next;
   element('scene-title').textContent = next.title; element('scene-caption').textContent = next.caption;
-  button('detail-view').hidden = !DETAIL_SCENES.has(next.scene); button('detail-view').textContent = 'Close view'; button('detail-view').setAttribute('aria-pressed', 'false');
+  button('detail-view').hidden = !DETAIL_SCENES.has(next.scene); button('detail-view').textContent = 'Close-up'; button('detail-view').setAttribute('aria-pressed', 'false');
   element('brain-legend').hidden = next.scene !== 'brain';
   element('runner-choice').hidden = next.scene !== 'runner';
   element('brain-choice').hidden = next.scene !== 'brain';
   framing.reset();
   menu.setCurrent(next);
+  publishMenuState();
 }
 async function pickEntry(next: SceneEntry) {
-  if (next.model && importedEntry?.id !== next.id) { await loadBundled(next); return; }
-  if (next.scene === 'imported' && !importedRoot) throw new Error('Use your own character to import one first.');
-  chooseEntry(next);
+  if (next.model && importedEntry?.id !== next.id) await loadBundled(next);
+  else {
+    if (next.scene === 'imported' && !importedRoot) throw new Error('Use your own character to import one first.');
+    chooseEntry(next);
+  }
+  if (next.group === 'default' && entry.id === next.id && preferences.scene !== next.id) savePreferences({ scene: next.id as Preferences['scene'] });
 }
 on('detail-view', () => {
   const enabled = button('detail-view').getAttribute('aria-pressed') !== 'true';
-  stage?.setDetailView(enabled); button('detail-view').setAttribute('aria-pressed', String(enabled)); button('detail-view').textContent = enabled ? 'Full view' : 'Close view';
+  stage?.setDetailView(enabled); button('detail-view').setAttribute('aria-pressed', String(enabled)); button('detail-view').textContent = enabled ? 'Full view' : 'Close-up';
 });
 chooseEntry(entry);
 on('rehearse', async () => {
@@ -381,7 +450,30 @@ on('delete', async () => {
   await stopInput();
   takes = takes.filter(take => take.id !== selected?.id); selectTake(takes.at(-1) ?? null); element<HTMLDialogElement>('edit-dialog').close(); message('Take deleted from this workspace.');
 });
-for (const id of ['motion', 'sensitivity', 'sound']) input(id).addEventListener('input', () => { element(`${id}-value`).textContent = `${input(id).value}%`; });
+for (const id of ['motion', 'sensitivity', 'sound'] as const) {
+  input(id).addEventListener('input', () => { element(`${id}-value`).textContent = `${input(id).value}%`; });
+  input(id).addEventListener('change', () => savePreferences({ [id]: Number(input(id).value) }));
+}
+input('show-signals').addEventListener('change', () => { savePreferences({ showSignals: input('show-signals').checked }); publishMenuState(); });
+input('reduced-motion').addEventListener('change', () => { savePreferences({ reducedMotion: input('reduced-motion').checked ? 'on' : 'off' }); publishMenuState(); });
+input('loop').addEventListener('change', () => { savePreferences({ loop: input('loop').checked }); publishMenuState(); });
+input('live-tracking').addEventListener('change', () => savePreferences({ liveTracking: input('live-tracking').checked }));
+input('live-extended').addEventListener('change', () => savePreferences({ liveExtended: input('live-extended').checked }));
+input('export-signals').addEventListener('change', () => savePreferences({ exportSignals: input('export-signals').checked }));
+element<HTMLSelectElement>('pref-scene').addEventListener('change', () => savePreferences({ scene: element<HTMLSelectElement>('pref-scene').value as Preferences['scene'] }));
+element<HTMLSelectElement>('pref-reduced-motion').addEventListener('change', () => {
+  const mode = element<HTMLSelectElement>('pref-reduced-motion').value as Preferences['reducedMotion'];
+  input('reduced-motion').checked = mode === 'system' ? reducedPreference.matches : mode === 'on';
+  applyMotionPreference(); savePreferences({ reducedMotion: mode }); publishMenuState();
+});
+for (const [id, key, target] of [['pref-show-signals', 'showSignals', 'show-signals'], ['pref-loop', 'loop', 'loop'], ['pref-live-tracking', 'liveTracking', 'live-tracking'], ['pref-live-extended', 'liveExtended', 'live-extended'], ['pref-export-signals', 'exportSignals', 'export-signals']] as const) {
+  input(id).addEventListener('change', () => {
+    const checked = input(id).checked;
+    if (!(sourceKind === 'live' && (key === 'liveTracking' || key === 'liveExtended'))) input(target).checked = checked;
+    savePreferences({ [key]: checked }); publishMenuState();
+  });
+}
+button('reset-preferences').addEventListener('click', () => { applyPreferences({ ...DEFAULT_PREFERENCES }); savePreferences({ ...DEFAULT_PREFERENCES }); message('Preferences restored to defaults.'); });
 on('enable-sound', async () => { if (sound.enabled) await sound.disable(); else await sound.enable(); button('enable-sound').textContent = sound.enabled ? 'Mute sound' : 'Enable sound'; });
 input('runner-variant').addEventListener('change', () => stage?.setRunnerVariant(Number(input('runner-variant').value) as 0 | 1 | 2));
 input('camera-consent').addEventListener('change', () => { if (!input('camera-consent').checked) { inputIntent++; void stopInput().catch(() => message('Capture cleanup failed. Stop again.', true)); } refreshActions(); });
@@ -585,14 +677,80 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) { inputIntent++; exporting?.abort(); playing = false; void stopInput().catch(() => message('Capture cleanup failed. Stop again before retrying.', true)); }
 });
 window.addEventListener('beforeunload', () => {
-  disposed = true; cancelAnimationFrame(raf); exporting?.abort(); resize.disconnect(); offFrame?.(); offStatus?.();
+  disposed = true; cancelAnimationFrame(raf); exporting?.abort(); resize.disconnect(); offFrame?.(); offStatus?.(); offMenu?.();
   navigator.mediaDevices?.removeEventListener('devicechange', deviceChange); void source?.dispose(); void camera.stop(); void sound.dispose(); stage?.dispose();
 });
+function openDialog(id: string) {
+  const dialog = element<HTMLDialogElement>(id);
+  const feedback = dialog.querySelector('.dialog-message');
+  if (feedback) feedback.textContent = '';
+  if (!dialog.open) dialog.showModal();
+}
+
+function toggleCheckbox(id: string) {
+  const box = input(id);
+  if (box.disabled) return;
+  box.checked = !box.checked;
+  box.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+const press = (id: string) => { if (usable(id)) button(id).click(); };
+
+// The menu never starts a metered session; Use camera only opens the consent dialog.
+function handleMenu(command: MenuCommand) {
+  if (command.startsWith('scene:')) {
+    const next = SCENE_REGISTRY.find(item => item.id === command.slice(6));
+    if (!next || button('character-button').disabled || recorder) return;
+    if (next.group === 'yours' && !importedRoot) { press('open-import'); return; }
+    void run(() => pickEntry(next));
+    return;
+  }
+  switch (command) {
+    case 'preferences': renderPreferenceForm(); openDialog('preferences-dialog'); return;
+    case 'import-character': press('open-import'); return;
+    case 'open-takes': press('open-takes'); return;
+    case 'export': press('open-export'); return;
+    case 'export-video': case 'export-wav': case 'export-glb': case 'export-csv': press(command); return;
+    case 'export-json': press('export-data'); return;
+    case 'use-camera': press('open-camera'); return;
+    case 'start-rehearsal': press('rehearse'); return;
+    case 'stop-input': if (!button('stop-input').hidden) button('stop-input').click(); return;
+    case 'record': press('record'); return;
+    case 'play': press('play'); return;
+    case 'loop': toggleCheckbox('loop'); return;
+    case 'edit-take': press('open-edit'); return;
+    case 'show-signals': toggleCheckbox('show-signals'); return;
+    case 'reduce-motion': toggleCheckbox('reduced-motion'); return;
+    case 'sound': press('enable-sound'); return;
+    case 'guide': press('help'); return;
+    case 'shortcuts': openDialog('shortcuts-dialog'); return;
+    case 'privacy': openDialog('privacy-dialog'); return;
+    case 'credits': press('open-credits'); return;
+  }
+}
+const offMenu = window.idlewild?.onMenu(command => { if (isMenuCommand(command)) handleMenu(command); });
+document.addEventListener('keydown', event => {
+  if (event.key !== ' ' || event.repeat || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+  const target = event.target as HTMLElement | null;
+  if (target?.closest('input, select, textarea, button, a, summary, [contenteditable], dialog') || document.querySelector('dialog[open]')) return;
+  if (!usable('play')) return;
+  event.preventDefault();
+  button('play').click();
+});
+const preferencesReady = (window.idlewild?.getPreferences() ?? Promise.resolve(DEFAULT_PREFERENCES))
+  .then(loaded => { applyPreferences(loaded); return SCENE_REGISTRY.find(item => item.id === loaded.scene && item.group === 'default') ?? null; })
+  .catch(() => { message('Preferences could not load. Defaults apply for this session.', true); return null; });
+
 refreshActions();
 void createStage(canvas).then(async created => {
   if (disposed) { created.dispose(); return; }
   stage = created;
   const rect = canvas.parentElement!.getBoundingClientRect(); stage.resize(rect.width, rect.height);
+  const start = await preferencesReady;
+  if (disposed) return;
+  if (start && start.id !== entry.id) {
+    try { await pickEntry(start); } catch (error) { message(error instanceof Error ? error.message : 'Your startup character could not load.', true); }
+  }
   element('stage-state').textContent = 'READY';
   message('Ready. Start a synthetic rehearsal or open the studio guide.');
   refreshActions(); raf = requestAnimationFrame(animate);

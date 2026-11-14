@@ -115,19 +115,24 @@ export function extendedLine(frame: ControlFrame | undefined, timeMs: number): s
   return parts.length ? parts.join('  ·  ') : null;
 }
 
-export function drawSignalOverlay(ctx: CanvasRenderingContext2D, width: number, height: number, view: OverlayView): void {
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 160 || height < 120 || !Number.isFinite(view.timeMs)) return;
+export interface PanelRect { x: number; y: number; width: number; height: number }
+
+/** Draws the signal panel in the bottom-left of a width × height area and returns its rectangle, or null when nothing is drawn. */
+export function drawSignalOverlay(ctx: CanvasRenderingContext2D, width: number, height: number, view: OverlayView): PanelRect | null {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 160 || height < 120 || !Number.isFinite(view.timeMs)) return null;
   const header = overlayHeader(view);
-  if (!header) return;
+  if (!header) return null;
   const range = windowRange(view.frames, view.timeMs);
   const latest = range[1] > range[0] ? view.frames[range[1] - 1] : undefined;
   const status = view.status?.replace(/\s+/g, ' ').trim().slice(0, MAX_STATUS_CHARS);
-  const panelW = Math.round(Math.min(width - 16, Math.max(220, Math.min(320, width * 0.34))));
+  // Narrow stages keep the rates and drop the waveforms so the panel does not cover the character.
+  const compact = width < 560 || height < 320;
+  const panelW = Math.round(Math.min(width - 16, compact ? 210 : Math.max(220, Math.min(320, width * 0.34))));
   const pad = 10;
   const innerW = panelW - pad * 2;
   const sparkH = 30;
   const extra = extendedLine(latest, view.timeMs);
-  const panelH = 22 + (status ? 12 : 0) + 2 * (14 + 3 + sparkH + 3) + 12 + 46 + (extra ? 14 : 0) + 6;
+  const panelH = 22 + (status ? 12 : 0) + (compact ? 0 : 2 * (14 + 3 + sparkH + 3)) + 12 + 46 + (extra ? 14 : 0) + 6;
   const left = 8;
   const top = Math.max(8, height - panelH - 8);
   ctx.save();
@@ -151,7 +156,7 @@ export function drawSignalOverlay(ctx: CanvasRenderingContext2D, width: number, 
     ctx.fillStyle = '#f2c66d';
     ctx.fillText(status, 0, y, innerW);
   }
-  const traces: [Channel, string][] = [['breath', 'Breath'], ['arterialTrace', 'Pulse waveform · uncalibrated']];
+  const traces: [Channel, string][] = compact ? [] : [['breath', 'Breath'], ['arterialTrace', 'Pulse waveform · uncalibrated']];
   for (const [channel, label] of traces) {
     y += 14;
     const state = latestState(latest, channel, view.timeMs);
@@ -202,4 +207,5 @@ export function drawSignalOverlay(ctx: CanvasRenderingContext2D, width: number, 
   ctx.fillStyle = '#8197a3';
   ctx.fillText('Creative use · not a medical measurement', 0, y, innerW);
   ctx.restore();
+  return { x: left, y: top, width: panelW, height: panelH };
 }

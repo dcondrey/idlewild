@@ -15,6 +15,7 @@ Draft - requires owner approval. Not legal advice; makes no guarantee.
 - Exports contain control data and source labels. They exclude camera images and API keys. SmartSpectra takes and their exports (control JSON, signal CSV, the GLB `IdlewildSignals` curves and the video signal panel) contain your measured breathing and pulse readings; treat them as personal data. Where you save an export is your choice.
 - Raw SDK packet logs are written only when a developer explicitly launches with `--sdk-packet-log` or runs the live benchmark, and only to `.jsonl` files under the ignored `.local/` folder.
 - An optional SmartSpectra API key you enter is kept in main-process memory for the session only, is not written to disk, and is cleared with **Clear key**.
+- Preferences (startup character, Motion, Sensitivity and Sound levels, signal panel, reduced motion, loop, the SmartSpectra face-and-body and HRV/expression request options, and the video signal-panel option) are saved in `preferences.json` in the app's user-data folder. They never include keys, consent, camera choices, takes or measurements; every session asks for consent again.
 - The app does not run analytics of its own.
 
 ## Optional SmartSpectra measurement (Presage Technologies)

@@ -16,4 +16,8 @@ contextBridge.exposeInMainWorld('idlewild', Object.freeze({
   sendFrame: frame => ipcRenderer.invoke('studio:frame', frame),
   onFrame: callback => listen('studio:metrics', callback),
   onStatus: callback => listen('studio:status', callback),
+  onMenu: callback => listen('studio:menu', callback),
+  setMenuState: state => ipcRenderer.send('studio:menu-state', state),
+  getPreferences: () => ipcRenderer.invoke('studio:preferences:get'),
+  setPreferences: partial => ipcRenderer.invoke('studio:preferences:set', partial),
 }));

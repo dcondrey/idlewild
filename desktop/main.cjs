@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, Menu, net, protocol, session } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, net, protocol, session, shell } = require('electron');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { randomUUID } = require('node:crypto');
@@ -8,6 +8,8 @@ const { ENTRY_URL, WORKER_CSP, trustedURL, assetPath, validKey } = require('./se
 const { createCaptureController } = require('./capture.cjs');
 const { createBenchmarkLimit } = require('./benchmark-limit.cjs');
 const { createPacketLog, packetLogPath } = require('./packet-log.cjs');
+const { MENU_COMMANDS, INITIAL_MENU_STATE, validateMenuState, buildMenuTemplate } = require('./menu.cjs');
+const { createPreferenceStore } = require('./preferences.cjs');
 
 const flag = name => process.argv.find(value => value.startsWith(`--${name}=`))?.slice(name.length + 3);
 const metricSet = flag('sdk-metrics') ?? 'standard';
@@ -16,11 +18,33 @@ const packetLog = packetLogFlag === undefined ? null : createPacketLog(packetLog
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'idlewild', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 app.setName('Idlewild');
+const userDataFlag = flag('idlewild-user-data');
+if (!app.isPackaged && userDataFlag !== undefined && path.isAbsolute(userDataFlag)) app.setPath('userData', userDataFlag);
 let window = null;
 let apiKey = '';
 let cameraAllowed = false;
 let quitting = false;
 let closing = false;
+let menuState = { ...INITIAL_MENU_STATE };
+let preferences = null;
+const preferenceStore = () => {
+  if (!preferences) {
+    preferences = createPreferenceStore(path.join(app.getPath('userData'), 'preferences.json'));
+    preferences.load();
+  }
+  return preferences;
+};
+const sendCommand = command => {
+  if (MENU_COMMANDS.includes(command)) send('studio:menu', command);
+};
+const applyMenu = () => Menu.setApplicationMenu(Menu.buildFromTemplate(buildMenuTemplate({
+  platform: process.platform,
+  packaged: app.isPackaged,
+  state: menuState,
+  send: sendCommand,
+  openExternal: url => { void shell.openExternal(url).catch(() => {}); },
+  showAbout: () => app.showAboutPanel(),
+})));
 
 const send = (channel, payload) => {
   if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) window.webContents.send(channel, payload);
@@ -53,6 +77,19 @@ function handle(channel, action) {
     catch { throw new Error('The operation failed. Stop capture and try again; restart Idlewild if it persists.'); }
   });
 }
+
+handle('studio:preferences:get', () => preferenceStore().get());
+handle('studio:preferences:set', partial => {
+  if (partial === null || typeof partial !== 'object' || Array.isArray(partial) || Object.keys(partial).length > 32) throw new Error('Invalid preferences');
+  return preferenceStore().save(partial);
+});
+ipcMain.on('studio:menu-state', (event, value) => {
+  try { authorize(event); } catch { return; }
+  const next = validateMenuState(value);
+  if (!next || JSON.stringify(next) === JSON.stringify(menuState)) return;
+  menuState = next;
+  applyMenu();
+});
 
 handle('studio:key', key => {
   if (!validKey(key)) throw new Error('Invalid key');
@@ -96,10 +133,13 @@ app.whenReady().then(async () => {
   window = new BrowserWindow({ width: 1440, height: 960, minWidth: 760, minHeight: 620, backgroundColor: '#111922', title: 'Idlewild', webPreferences: {
     preload: path.join(__dirname, 'preload.cjs'), session: isolated, contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true,
   } });
-  Menu.setApplicationMenu(Menu.buildFromTemplate([
-    ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
-    { role: 'editMenu' }, { label: 'View', submenu: [{ role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' }] },
-  ]));
+  app.setAboutPanelOptions({
+    applicationName: 'Idlewild',
+    applicationVersion: app.getVersion(),
+    credits: 'Perform with your breath and pulse through the Presage SmartSpectra SDK. Creative animation, not a medical measurement.',
+    copyright: '© 2026 David Condrey',
+  });
+  applyMenu();
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.on('will-attach-webview', event => event.preventDefault());

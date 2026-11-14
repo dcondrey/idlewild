@@ -2,6 +2,8 @@ import { _electron as electron, expect } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
+import os from 'node:os';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { TakeRecorder } from '../src/recording.ts';
 import { validateFrame } from '../src/validation.ts';
@@ -16,7 +18,8 @@ delete env.ELECTRON_RUN_AS_NODE;
 delete env.DEBUG;
 const metricSet = process.argv.find(value => value.startsWith('--sdk-metrics='))?.slice('--sdk-metrics='.length) ?? 'standard';
 if (!['standard', 'core', 'extended'].includes(metricSet)) throw new Error('--sdk-metrics must be standard, core or extended.');
-const app = await electron.launch({ args: [root, '--live-benchmark', `--sdk-metrics=${metricSet}`, `--sdk-packet-log=${path.relative(root, path.join(directory, 'packets.jsonl'))}`], cwd: root, env, timeout: 30_000 });
+const userData = await mkdtemp(path.join(os.tmpdir(), 'idlewild-check-'));
+const app = await electron.launch({ args: [root, `--idlewild-user-data=${userData}`, '--live-benchmark', `--sdk-metrics=${metricSet}`, `--sdk-packet-log=${path.relative(root, path.join(directory, 'packets.jsonl'))}`], cwd: root, env, timeout: 30_000 });
 const report = { mode: checkOnly ? 'non-metered preparation check' : 'authorized live benchmark', metricSet, companionTracking: false,
   cues: [{ fromS: 0, toS: 10, cue: 'normal' }, { fromS: 10, toS: 25, cue: 'paced 4 s in / 4 s out, inhale first' }, { fromS: 25, toS: 35, cue: 'normal' }, { fromS: 35, toS: 43, cue: 'speak' }, { fromS: 43, toS: 55, cue: 'quiet' }], statuses: [], started: false, stopped: false, watchdog: false, recording: false };
 let recorder;
@@ -131,6 +134,7 @@ try {
   }
   clearTimeout(deadline);
   await app.close().catch(() => {});
+  await rm(userData, { recursive: true, force: true }).catch(() => {});
   await writeFile(path.join(directory, 'report.json'), JSON.stringify(report, null, 2), { mode: 0o600 });
   console.log(JSON.stringify({ directory, ...report }));
 }

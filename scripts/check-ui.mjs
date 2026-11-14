@@ -1,6 +1,8 @@
 import { _electron as electron, expect } from '@playwright/test';
 import assert from 'node:assert/strict';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
@@ -11,7 +13,9 @@ await mkdir(output, { recursive: true });
 const env = { ...process.env };
 delete env.ELECTRON_RUN_AS_NODE;
 const started = performance.now();
-const app = await electron.launch({ args: [root], cwd: root, env, timeout: 30_000 });
+const userData = await mkdtemp(path.join(os.tmpdir(), 'idlewild-check-ui-'));
+const launch = () => electron.launch({ args: [root, `--idlewild-user-data=${userData}`], cwd: root, env, timeout: 30_000 });
+let app = await launch();
 const errors = [];
 const report = { scenes: {}, exports: {}, checks: [] };
 let page;
@@ -72,6 +76,16 @@ try {
         assert.fail(`${name} fits ${viewport.width}×${viewport.height} without scrolling; overflowing: ${overflow.join(', ')}`);
       }
       assert.deepEqual(await widows(), [], `${name} has no widowed words at ${viewport.width}×${viewport.height}`);
+      const collision = await page.evaluate(() => {
+        const overlay = document.querySelector('#signal-overlay');
+        if (!overlay || overlay.hidden || !overlay.dataset.panel) return null;
+        const [x, y, width, height] = overlay.dataset.panel.split(',').map(Number);
+        const frame = overlay.getBoundingClientRect();
+        const panel = { left: frame.left + x, top: frame.top + y, right: frame.left + x + width, bottom: frame.top + y + height };
+        const caption = document.querySelector('.caption-copy').getBoundingClientRect();
+        return panel.left < caption.right && caption.left < panel.right && panel.top < caption.bottom && caption.top < panel.bottom ? { panel, caption: caption.toJSON() } : null;
+      });
+      assert.equal(collision, null, `${name}: signal panel overlaps the scene caption at ${viewport.width}×${viewport.height} ${JSON.stringify(collision)}`);
       await page.screenshot({ path: path.join(output, `${name}-${viewport.width}x${viewport.height}.png`) });
     }
   }
@@ -414,6 +428,89 @@ try {
   await page.locator('#import-data').setInputFiles(jsonPath);
   await expect(page.locator('#take-count')).toHaveText('1 / 6');
   report.checks.push('reduced motion, keyboard guide, small window, delete and data import');
+
+  const { MENU_COMMANDS: commands } = createRequire(import.meta.url)('../desktop/menu.cjs');
+  const menuItem = id => app.evaluate(({ Menu }, id) => { const item = Menu.getApplicationMenu()?.getMenuItemById(id); return item ? { enabled: item.enabled, checked: item.checked, label: item.label } : null; }, id);
+  const clickMenu = id => app.evaluate(({ Menu }, id) => { Menu.getApplicationMenu().getMenuItemById(id).click(); }, id);
+  for (const id of commands) assert.ok(await menuItem(id), `menu item ${id} exists`);
+  const dialogFromMenu = async (command, dialog, text) => {
+    await clickMenu(command);
+    await expect(page.locator(`#${dialog}`)).toHaveJSProperty('open', true);
+    if (text) await expect(page.locator(`#${dialog}`)).toContainText(text);
+    await page.evaluate(id => document.getElementById(id).close(), dialog);
+  };
+  await dialogFromMenu('preferences', 'preferences-dialog', 'never saved');
+  await dialogFromMenu('shortcuts', 'shortcuts-dialog', 'Play or pause');
+  await dialogFromMenu('privacy', 'privacy-dialog', 'automatic vitals insights');
+  await dialogFromMenu('credits', 'credits-dialog');
+  await dialogFromMenu('guide', 'guide');
+  await dialogFromMenu('use-camera', 'camera-dialog');
+  await dialogFromMenu('import-character', 'import-dialog');
+  await dialogFromMenu('open-takes', 'takes-dialog');
+  await dialogFromMenu('export', 'export-dialog');
+  await dialogFromMenu('edit-take', 'edit-dialog');
+  await clickMenu('scene:star');
+  await expect(page.locator('#character-current')).toHaveText('Star');
+  await expect.poll(async () => (await menuItem('scene:star')).checked).toBe(true);
+  await clickMenu('scene:rex');
+  await expect(page.locator('#character-current')).toHaveText('Rex');
+  for (const [command, box] of [['show-signals', 'show-signals'], ['loop', 'loop'], ['reduce-motion', 'reduced-motion']]) {
+    const before = await page.locator(`#${box}`).isChecked();
+    await clickMenu(command);
+    await expect(page.locator(`#${box}`)).toBeChecked({ checked: !before });
+    await expect.poll(async () => (await menuItem(command)).checked).toBe(!before);
+    await clickMenu(command);
+    await expect(page.locator(`#${box}`)).toBeChecked({ checked: before });
+  }
+  await page.locator('#stage').focus().catch(() => {});
+  await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
+  await page.keyboard.press('Space');
+  await expect(page.locator('#play')).toHaveText('Pause');
+  await expect(page.locator('#live-pill')).toHaveAttribute('data-state', 'playing');
+  await page.keyboard.press('Space');
+  await expect(page.locator('#play')).toHaveText('Play');
+  await clickMenu('start-rehearsal');
+  await expect(page.locator('#source-badge')).toHaveText('SYNTHETIC REHEARSAL');
+  await expect(page.locator('#live-pill')).toHaveAttribute('data-state', 'rehearsal');
+  await expect.poll(async () => [(await menuItem('stop-input')).enabled, (await menuItem('use-camera')).enabled, (await menuItem('start-rehearsal')).enabled]).toEqual([true, false, false]);
+  await expect(page.locator('#record')).toBeEnabled();
+  await clickMenu('record');
+  await expect(page.locator('#live-pill')).toHaveAttribute('data-state', 'recording');
+  await page.waitForTimeout(400);
+  await clickMenu('record');
+  await expect(page.locator('#take-count')).toHaveText('2 / 6');
+  await clickMenu('start-rehearsal');
+  await expect(page.locator('#live-pill')).toHaveAttribute('data-state', 'rehearsal');
+  await clickMenu('stop-input');
+  await expect(page.locator('#live-pill')).toHaveAttribute('data-state', 'idle');
+  await expect(page.locator('#stop-input')).toBeHidden();
+  await expect.poll(async () => (await menuItem('stop-input')).enabled).toBe(false);
+  report.checks.push('menu bar: every command present; dialogs, characters, toggles, rehearsal, record and stop from the menu; menu state follows the studio; Space plays and pauses');
+
+  await clickMenu('preferences');
+  await page.locator('#pref-scene').selectOption('star');
+  await page.locator('#pref-show-signals').uncheck();
+  await expect(page.locator('#show-signals')).not.toBeChecked();
+  await page.locator('#motion').evaluate(slider => { slider.value = '40'; slider.dispatchEvent(new Event('input')); slider.dispatchEvent(new Event('change')); });
+  await page.waitForTimeout(300);
+  const saved = JSON.parse(await readFile(path.join(userData, 'preferences.json'), 'utf8'));
+  assert.equal(saved.scene, 'star'); assert.equal(saved.showSignals, false); assert.equal(saved.motion, 40);
+  assert.ok(!Object.keys(saved).some(key => /key|consent|camera/i.test(key)), 'preferences never store keys, consent or cameras');
+  await app.close();
+  app = await launch();
+  page = await app.firstWindow();
+  page.on('pageerror', error => errors.push(error.message));
+  await expect(page.locator('#stage-state')).toHaveText('READY', { timeout: 30_000 });
+  await expect(page.locator('#character-current')).toHaveText('Star');
+  await expect(page.locator('#show-signals')).not.toBeChecked();
+  await expect(page.locator('#motion')).toHaveValue('40');
+  await expect(page.locator('#live-consent')).not.toBeChecked();
+  await expect(page.locator('#camera-consent')).not.toBeChecked();
+  await page.locator('#open-preferences').click();
+  await page.locator('#reset-preferences').click();
+  await expect(page.locator('#motion')).toHaveValue('70');
+  await expect(page.locator('#show-signals')).toBeChecked();
+  report.checks.push('preferences persist across relaunch, never restore consent, and restore to defaults');
   assert.deepEqual(errors, []);
   report.errors = errors;
   await writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2));
@@ -426,4 +523,4 @@ try {
   console.error(JSON.stringify({ dialogOpens: report.dialogOpens }));
   await writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2));
   throw error;
-} finally { await app.close(); }
+} finally { await app.close(); await rm(userData, { recursive: true, force: true }); }
