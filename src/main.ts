@@ -230,7 +230,7 @@ function currentInput(now: number): SceneFrame {
   if (latest && sourceKind) return { timeMs: latest.timeMs + Math.max(0, now - latestArrival), seed, controls: controls(), frame: latest, reducedMotion: input('reduced-motion').checked };
   if (selected) {
     if (playing) {
-      position = now - playOrigin;
+      position = Math.max(0, now - playOrigin);
       if (position >= selected.durationMs) {
         if (input('loop').checked) { position %= selected.durationMs; playOrigin = now - position; }
         else { position = selected.durationMs; playing = false; void sound.disable(); refreshActions(); }
@@ -253,6 +253,7 @@ let lastSignalPaint = 0;
 let lastLegendPaint = 0;
 function animate(now: number) {
   if (disposed) return;
+  raf = requestAnimationFrame(animate);
   if (!exporting && stage) {
     const data = currentInput(now);
     stage.update(data);
@@ -290,7 +291,6 @@ function animate(now: number) {
       }
     }
   }
-  raf = requestAnimationFrame(animate);
 }
 
 function paintOverlay(timeMs: number) {

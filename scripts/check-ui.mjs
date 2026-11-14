@@ -397,12 +397,14 @@ try {
   report.checks.push('repeated import/remove and rehearsal start/stop retain stable GPU resource counts');
   report.checks.push('exports, cancellation and baked-animation import');
   await page.locator('#reduced-motion').check();
+  await page.locator('#show-signals').uncheck();
   await page.locator('#play').click();
   await page.waitForTimeout(200);
   const beforeReduced = await page.locator('#stage').screenshot();
   await page.waitForTimeout(300);
   const afterReduced = await page.locator('#stage').screenshot();
   assert.equal(beforeReduced.equals(afterReduced), true, 'Reduced motion must render a stationary scene');
+  await page.locator('#show-signals').check();
   await page.locator('#play').click();
   await checkLayout('studio');
   await page.locator('#open-edit').click();
