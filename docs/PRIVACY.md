@@ -12,7 +12,8 @@ Draft - requires owner approval. Not legal advice; makes no guarantee.
 ## Your data on this device
 
 - Recorded takes stay in memory until you export them. Closing the app discards them. Deleting takes does not guarantee physical erasure of memory.
-- Exports contain control data and source labels. They exclude camera images and API keys. Where you save an export is your choice.
+- Exports contain control data and source labels. They exclude camera images and API keys. SmartSpectra takes and their exports (control JSON, signal CSV, the GLB `IdlewildSignals` curves and the video signal panel) contain your measured breathing and pulse readings; treat them as personal data. Where you save an export is your choice.
+- Raw SDK packet logs are written only when a developer explicitly launches with `--sdk-packet-log` or runs the live benchmark, and only to `.jsonl` files under the ignored `.local/` folder.
 - An optional SmartSpectra API key you enter is kept in main-process memory for the session only, is not written to disk, and is cleared with **Clear key**.
 - The app does not run analytics of its own.
 
@@ -20,6 +21,7 @@ Draft - requires owner approval. Not legal advice; makes no guarantee.
 
 - This mode is off by default, needs your own Presage API key, and requires a separate consent.
 - It sends camera-derived data to the vendor for processing and may consume metered account credits.
+- By default it requests chest breathing, breathing rate, pulse rate, an uncalibrated arterial (pulse waveform) trace, blink and talking detection. HRV and facial expression estimates are requested only when you tick that option. Optional face and body tracking during a SmartSpectra session runs on this device only.
 - Vendor telemetry is disabled by Idlewild, but that is not an offline mode. The vendor SDK may generate automatic periodic insights; Idlewild exposes no control to disable them.
 - Vendor retention is not verified. See Presage's terms and privacy policy: https://presagetech.com/legal/terms-of-service
 - Use of this mode is for adults 18 or older.

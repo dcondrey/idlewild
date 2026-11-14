@@ -302,7 +302,8 @@ function paintOverlay(timeMs: number) {
   overlayContext.setTransform(1, 0, 0, 1, 0, 0);
   overlayContext.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
   overlayContext.setTransform(ratio, 0, 0, ratio, 0, 0);
-  drawSignalOverlay(overlayContext, overlayCanvas.clientWidth, overlayCanvas.clientHeight, { timeMs, frames, live: sourceKind === 'live', ...(sourceKind === 'live' ? { status: element('status').textContent ?? '' } : {}) });
+  const captionInset = element('scene-caption').closest<HTMLElement>('.stage-caption')?.offsetHeight ?? 0;
+  drawSignalOverlay(overlayContext, overlayCanvas.clientWidth, overlayCanvas.clientHeight - captionInset, { timeMs, frames, live: sourceKind === 'live', ...(sourceKind === 'live' ? { status: element('status').textContent ?? '' } : {}) });
 }
 
 function chooseEntry(next: SceneEntry) {

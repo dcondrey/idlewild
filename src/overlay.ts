@@ -154,12 +154,14 @@ export function drawSignalOverlay(ctx: CanvasRenderingContext2D, width: number, 
   for (const [channel, label] of traces) {
     y += 14;
     const state = latestState(latest, channel, view.timeMs);
+    const detail = `${state.quality} · ${percent(state.confidence)}`;
     ctx.font = `600 10px ${FONT}`;
+    const detailWidth = ctx.measureText(detail).width;
     ctx.fillStyle = '#c9dcf0';
-    ctx.fillText(label, 0, y, innerW - 78);
+    ctx.fillText(label, 0, y, Math.max(40, innerW - detailWidth - 8));
     ctx.textAlign = 'right';
     ctx.fillStyle = QUALITY_COLOR[state.quality];
-    ctx.fillText(`${state.quality} · ${percent(state.confidence)}`, innerW, y);
+    ctx.fillText(detail, innerW, y);
     ctx.textAlign = 'left';
     y += 3;
     sparkline(ctx, view.frames, range, channel, view.timeMs, 0, y, innerW, sparkH, channel === 'breath' ? '#6fc8ff' : '#ff9ab0');

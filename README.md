@@ -1,8 +1,19 @@
 # Idlewild
 
-A desktop creative studio built with Electron, TypeScript and Three.js: record a control performance, replay it across characters and procedural scenes, then export animation and sound.
+A desktop performance studio for animators and game makers, built on the [Presage SmartSpectra SDK](https://presagetech.com/docs/smartspectra-sdk) with Electron, TypeScript and Three.js. Breathe, move and perform in front of your camera: SmartSpectra measures your chest breathing, breathing rate and pulse rate while on-device tracking follows your face and body. The character breathes with you. Record the performance once, replay it on any character or scene, and export video with a live signal panel, procedural sound, a baked GLB with breathing and pulse curves, and CSV curves for your animation tools.
 
-Use consented, on-device face and body tracking without an API key, account or credits, or try visibly synthetic rehearsal without a camera. Scenes include three detailed Blender Studio characters (Rex, Sprite and the Rain runner), bubbles, star and an anatomical brain whose highlighted regions are an educational simulation based on published studies, not measured brain activity. Optional SmartSpectra signals require separate credentials and consent; that desktop integration still requires live validation. See [verification evidence and remaining limits](docs/CONTEXT.md).
+How SmartSpectra drives the studio:
+
+| SmartSpectra signal | What it does |
+| --- | --- |
+| Chest breathing trace | Characters' chests, shoulders and heads breathe; bubbles rise on inhale and release on exhale; the star glows; the sound's breath layer swells. |
+| Breathing rate | Slow posture and scene pacing within comfortable bounds. Faster breathing is never rewarded. |
+| Pulse rate | Slow color warmth and glow; shown with its trend. Never turned into fake heartbeats. |
+| Pulse waveform (uncalibrated arterial trace) | A fine shimmer on surfaces and a subtle tremolo in the sound. |
+| Blink, talking | Eyelid and jaw motion when no face camera tracking is available. |
+| HRV, expression estimates (opt-in) | Shown on the signal panel; expression estimates shape smile and brow when no face is tracked. |
+
+Every signal keeps its quality and confidence; missing or stale input fades out rather than being invented. This is creative animation, not medical measurement. Without a key, use on-device face and body tracking alone, or try a visibly synthetic rehearsal without a camera. Scenes include three detailed Blender Studio characters (Rex, Sprite and the Rain runner), bubbles, star and an anatomical brain whose highlighted regions are an educational simulation based on published studies, not measured brain activity. See [verification evidence and remaining limits](docs/CONTEXT.md).
 
 ## Run locally
 
@@ -34,12 +45,16 @@ After building, `node scripts/check-local-tracking.mjs --prepare-fixtures` downl
 
 A require-only native SDK probe succeeded on macOS arm64 with Node 26.8.1 and SDK 3.5.0; it created no SDK instance or measurement session. The installed SDK declares macOS arm64, Linux x64/arm64 with glibc ≥2.35, and Windows x64 support. Other platforms and packaged distribution remain unverified. There are no installers, signing or notarization artifacts.
 
+### Live SmartSpectra runs without wasting credits
+
+`node scripts/live-benchmark.mjs --authorized` opens one bounded 55-second live session after you enter your key and consent; `--sdk-metrics=core` requests only chest breathing, breathing rate and pulse rate, and `--sdk-metrics=extended` adds HRV and expressions. It writes `report.json`, the recorded take `control.json` and the raw SDK packets `packets.jsonl` to ignored `.local/live-benchmarks/<time>/`. A normal session can also log packets with `./node_modules/.bin/electron . --sdk-packet-log=.local/<name>.jsonl` (the path must be a `.jsonl` file under `.local/`). `node scripts/replay-packets.mjs <packets.jsonl>` re-runs the current mapper over a packet log and writes a take you can import, so mapping changes never need another metered session. Packet logs and takes contain your measured signals; keep them out of the repository.
+
 ## Make a take
 
-1. Choose **Use camera**, consent, open preview and select **Start face & body tracking**, or choose **Start rehearsal**. Pick a character or scene from the **Character** menu and adjust Motion and Sensitivity. **Enable sound** starts procedural audio; local body movement shapes its level, and Sound sets its volume.
+1. Choose **Use camera**, consent and open preview. Enter your Presage key under **SmartSpectra live signals**, accept the metered-measurement consent and select **Start SmartSpectra performance**; face and body tracking start alongside it unless you clear that option. Without a key, select **Start face & body tracking**, or choose **Start rehearsal**. The signal panel on the stage shows breathing and pulse traces, rates, quality and confidence; **Show SmartSpectra signals on stage** hides it. Pick a character or scene from the **Character** menu and adjust Motion and Sensitivity. **Enable sound** starts procedural audio; local body movement shapes its level, and Sound sets its volume.
 2. Choose **Record take**, perform, then **Finish take**. Input stops and your take is ready to play. Recording stops automatically at its limit: three minutes, at most 3,600 stored samples, six takes in the workspace.
 3. Play, scrub or loop the selected take on another scene. **Takes** opens the take library; **Edit** opens trim and delete. Trim uses seconds and replaces that in-memory take; export the original first if you need both versions.
-4. **Export** opens choices for **Control data**, **WAV sound**, **Video preview** and **Baked GLB** using the current scene and controls. Keep the window visible during video export; Cancel stops an unfinished export.
+4. **Export** opens choices for **Control data**, **Signal curves** (CSV), **WAV sound**, **Video preview** (with the signal panel unless you clear that option) and **Baked GLB** (with an `IdlewildSignals` node group carrying breathing and pulse curves) using the current scene and controls. See [FORMATS.md](docs/FORMATS.md). Keep the window visible during video export; Cancel stops an unfinished export.
 
 Takes and imported characters are held in memory. Export before closing. **Guide** reopens the skippable walkthrough. Controls appear when they are useful; camera setup, imports, signals and editing use focused dialogs. The main studio fits desktop viewports down to 760×620; dialogs can scroll at high zoom. Keyboard navigation and Reduce motion are supported.
 
@@ -53,7 +68,7 @@ Startup does not request camera or microphone access. Open **Use camera**, check
 
 Local mode processes one face and body on this device, without SmartSpectra, a key or paid processing. Its facial coefficients, head rotation, body positions and movement amount are estimates. Poor light, occlusion, distance and fast motion reduce quality; missing or stale input does not invent replacement tracking. Local mode does not supply breathing, pulse, arterial traces or speech detection. Face-only tracking produces no movement sound until body movement is available.
 
-For an explicitly authorized SmartSpectra session, expand **SmartSpectra · optional API key**, enter your own Presage API key, select **Use key**, read the vendor-processing disclosure, check the separate metered-measurement consent and select **Start live measurement**. Keys stay in main-process memory for the session; the input field is cleared after submission. Setting a key does not start capture. **Clear key** clears it and stops input.
+For a SmartSpectra session, open **Use camera** and the preview, enter your own Presage API key under **SmartSpectra live signals**, select **Use key**, read the vendor-processing disclosure, check the separate metered-measurement consent and select **Start SmartSpectra performance**. By default Idlewild requests chest breathing, breathing rate, pulse rate, the uncalibrated arterial (pulse waveform) trace, blink and talking; **Also request HRV and expression estimates** adds those if your account includes them (clear it if start fails). **Also track my face and body on this device** runs local tracking on the same camera frames and merges it onto the SmartSpectra timeline. The SDK's chest breathing and arterial traces have no declared units, so each is centered and scaled against its own recent range before it drives a scene. Keys stay in main-process memory for the session; the input field is cleared after submission. Setting a key does not start capture. Keep the window visible while measuring: hiding or minimizing it stops input. **Clear key** clears the key and stops input.
 
 SmartSpectra measurement uses vendor networking and may consume account credits. Its telemetry setting is disabled and the app does not request insights, but automatic vitals insights may upload data; vendor retention is unverified. Telemetry-off does not mean offline processing. Do not use paid measurement for development, smoke checks or tuning without the required explicit exception.
 
@@ -69,9 +84,9 @@ Source and input availability remain visible. For SmartSpectra/rehearsal signals
 | Blank stage or graphics lost | Use a WebGL-capable desktop session, close other GPU-heavy applications, then reopen Idlewild. Export takes before restarting when possible. |
 | Camera denied or disconnected | Stop input, allow camera access in system privacy settings, reconnect the intended device, select Refresh, and explicitly reopen preview. Close another application if it owns the camera. |
 | Local models fail to load or tracking falls behind | Confirm both `.task` models and the `wasm/` files in `public/tracking/` are present, rebuild, then reopen preview and start tracking. Improve lighting, keep the intended joints visible and close other CPU-heavy applications. Signals shows face/body availability; inference speed depends on the device. |
-| Authentication or unavailable signals | Clear and re-enter the key; verify account entitlements and network access. Missing/stale channels are not replaced with synthetic live signals. |
+| Authentication or unavailable signals | Clear and re-enter the key; verify account entitlements and network access. If start fails with HRV and expression estimates requested, clear that option. Missing/stale channels are not replaced with synthetic live signals. |
 | Capture cleanup failed | Stop again before retrying. If cleanup still fails, close and reopen the app; do not start overlapping sessions. |
-| Silent playback or export | Enable sound for monitoring; raise Sound and Sensitivity. Local mode needs visible body movement; other sources need valid breath input. WAV/preview generation uses the selected Sound setting independently of monitor mute. Missing input and gaps become silence. |
+| Silent playback or export | Enable sound for monitoring; raise Sound and Sensitivity. Local mode needs visible body movement or facial motion; SmartSpectra sources need valid breath input. WAV/preview generation uses the selected Sound setting independently of monitor mute. Missing input and gaps become silence. |
 | Video encoding stalls or is unsupported | Use Electron, keep the window visible and try a shorter take. WAV, control JSON and baked GLB are separate export choices. |
 | Character or clip rejected | Follow the reported limit; export one self-contained scene with supported textures and dense geometry. Clip node names and morph widths must match the loaded character. See [format limits](docs/FORMATS.md). |
 
