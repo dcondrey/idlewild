@@ -7,6 +7,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { TakeRecorder } from '../src/recording.ts';
 import { validateFrame } from '../src/validation.ts';
+import { BENCHMARK_END_MESSAGE } from '../desktop/benchmark-limit.cjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const checkOnly = process.argv.includes('--check');
@@ -54,7 +55,8 @@ try {
           resolveStopped();
         }, 58_000);
       }
-      if (status.phase === 'error' && report.started && !report.stopped && report.failed === undefined) {
+      if (status.phase === 'error' && status.message === BENCHMARK_END_MESSAGE && report.started) report.limitReached = true;
+      else if (status.phase === 'error' && report.started && !report.stopped && report.failed === undefined) {
         report.failed = String(status.message).slice(0, 512);
         report.elapsedMs = Math.round(performance.now() - startedAt);
         clearTimeout(deadline);
@@ -79,7 +81,7 @@ try {
       }
       recorder.append(frame);
     });
-    await page.evaluate(() => {
+    await page.evaluate(endMessage => {
       window.idlewild.onStatus(status => { void window.__benchmarkStatus(status); });
       window.idlewild.onFrame(frame => { void window.__benchmarkFrame(frame); });
       const cue = document.createElement('p');
@@ -97,10 +99,10 @@ try {
             cue.textContent = `Benchmark · ${Math.max(0, Math.ceil(55 - elapsed))}s left. ${phase}`;
           }, 1000);
         }
-        if (status.phase === 'error' && started !== null) { clearInterval(timer); cue.textContent = `Benchmark ended: ${status.message} No automatic restart.`; }
+        if (status.phase === 'error' && started !== null && status.message !== endMessage) { clearInterval(timer); cue.textContent = `Benchmark ended: ${status.message} No automatic restart.`; }
         else if (status.phase === 'idle' && started !== null) { clearInterval(timer); cue.textContent = 'Benchmark stopped. No automatic restart.'; }
       });
-    });
+    }, BENCHMARK_END_MESSAGE);
     await page.locator('#character-button').click();
     await page.locator('[data-scene="sprite"]').click();
     await expect(page.locator('#message')).toContainText('Import ready', { timeout: 20_000 });

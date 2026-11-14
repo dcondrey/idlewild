@@ -6,7 +6,7 @@ const { pathToFileURL } = require('node:url');
 const { randomUUID } = require('node:crypto');
 const { ENTRY_URL, WORKER_CSP, trustedURL, assetPath, validKey } = require('./security.cjs');
 const { createCaptureController } = require('./capture.cjs');
-const { createBenchmarkLimit } = require('./benchmark-limit.cjs');
+const { createBenchmarkLimit, BENCHMARK_END_MESSAGE } = require('./benchmark-limit.cjs');
 const { createPacketLog, packetLogPath } = require('./packet-log.cjs');
 const { MENU_COMMANDS, INITIAL_MENU_STATE, validateMenuState, buildMenuTemplate } = require('./menu.cjs');
 const { createPreferenceStore } = require('./preferences.cjs');
@@ -67,7 +67,7 @@ const capture = createCaptureController({
 const benchmarkLimit = process.argv.includes('--live-benchmark') ? createBenchmarkLimit({ expire: () => {
   cameraAllowed = false;
   apiKey = '';
-  send('studio:status', { phase: 'error', message: 'The authorized live benchmark has ended. Camera and measurement are stopping.', sessionId: null });
+  send('studio:status', { phase: 'error', message: BENCHMARK_END_MESSAGE, sessionId: null });
   void capture.dispose().catch(() => send('studio:status', { phase: 'error', message: 'Benchmark cleanup failed. Close Idlewild before another session.', sessionId: null }));
 } }) : null;
 

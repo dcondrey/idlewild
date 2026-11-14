@@ -1,6 +1,7 @@
 'use strict';
 
 const BENCHMARK_LIMIT_MS = 55_000;
+const BENCHMARK_END_MESSAGE = 'The authorized live benchmark has ended. Camera and measurement are stopping.';
 
 function createBenchmarkLimit(options) {
   if (!options || typeof options !== 'object' || Array.isArray(options)) throw new TypeError('Benchmark callbacks are required');
@@ -38,4 +39,4 @@ function createBenchmarkLimit(options) {
   };
 }
 
-module.exports = { BENCHMARK_LIMIT_MS, createBenchmarkLimit };
+module.exports = { BENCHMARK_LIMIT_MS, BENCHMARK_END_MESSAGE, createBenchmarkLimit };
