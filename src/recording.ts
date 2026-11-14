@@ -84,7 +84,7 @@ export function frameAt(take: Take, timeMs: number, options: { loop?: boolean } 
     else high = middle;
   }
   const frame = take.samples[low - 1];
-  return frame && target - frame.timeMs < (take.source === 'local-camera' ? TRACKING_STALE_MS : SAMPLE_MS) ? copyFrame(frame) : null;
+  return frame && target - frame.timeMs < (frame.tracking ? TRACKING_STALE_MS : SAMPLE_MS) ? copyFrame(frame) : null;
 }
 
 export function addTake(takes: readonly Take[], take: Take): Take[] {

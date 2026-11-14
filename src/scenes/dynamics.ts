@@ -52,13 +52,13 @@ function ratePace(input: SceneFrame, channel: 'breathingRate' | 'pulseRate', low
 export function sceneDynamics(input: SceneFrame) {
   const motion = input.reducedMotion ? 0 : clamp(input.controls.motion);
   const sensitivity = clamp(input.controls.sensitivity);
-  const local = input.frame?.source === 'local-camera';
   const tracking = motion > 0 ? trackingAt(input) : null;
   const strength = trackingStrength(input);
   const faceStrength = trackingStrength(input, tracking?.face?.sampledAtMs);
   const face = (shape: FaceShape) => clamp(tracking?.face?.weights[shape] ?? 0) * faceStrength;
-  const jaw = local ? face('jawOpen') : clamp(signalValue(input, 'talking') ?? 0) * motion;
-  const blink = local ? (face('eyeBlinkLeft') + face('eyeBlinkRight')) / 2 : clamp(signalValue(input, 'blink') ?? 0) * motion;
+  const tracked = Boolean(tracking?.face) && faceStrength > 0;
+  const jaw = tracked ? face('jawOpen') : clamp(signalValue(input, 'talking') ?? 0) * motion;
+  const blink = tracked ? (face('eyeBlinkLeft') + face('eyeBlinkRight')) / 2 : clamp(signalValue(input, 'blink') ?? 0) * motion;
   const smile = (face('mouthSmileLeft') + face('mouthSmileRight')) / 2;
   const brow = Math.max(face('browInnerUp'), (face('browDownLeft') + face('browDownRight')) / 2);
   const movement = clamp(tracking?.movement ?? 0) * strength;
@@ -94,9 +94,10 @@ export function sceneDynamics(input: SceneFrame) {
   return {
     time: motion === 0 ? 0 : Math.max(0, Number.isFinite(input.timeMs) ? input.timeMs : 0) / 1000,
     motion,
-    breath: local ? 0 : clamp(signalValue(input, 'breath') ?? 0, -1, 1) * sensitivity * motion,
-    breathingPace: local ? 0 : ratePace(input, 'breathingRate', 6, 30) * sensitivity * motion,
-    pulsePace: local ? 0 : ratePace(input, 'pulseRate', 45, 135) * sensitivity * motion,
+    breath: clamp(signalValue(input, 'breath') ?? 0, -1, 1) * sensitivity * motion,
+    breathingPace: ratePace(input, 'breathingRate', 6, 30) * sensitivity * motion,
+    pulsePace: ratePace(input, 'pulseRate', 45, 135) * sensitivity * motion,
+    arterial: clamp(signalValue(input, 'arterialTrace') ?? 0, -1, 1) * sensitivity * motion,
     blink,
     talking: clamp(signalValue(input, 'talking') ?? 0) * motion,
     jaw, smile, brow, movement, armSpread, armLift, lean, turn,

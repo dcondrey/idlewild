@@ -106,7 +106,8 @@ export function validateFrame(value: unknown): ControlFrame {
   const inputs = record(input.signals, 'signals');
   const signals = {} as Record<Channel, Signal>;
   for (const channel of Object.keys(CHANNEL_UNITS) as Channel[]) signals[channel] = signal(inputs[channel], channel, timeMs, frameSource);
-  if (input.tracking !== undefined && frameSource !== 'local-camera') throw new Error('Tracking must retain its local-camera source');
+  if (frameSource === 'local-camera' && input.tracking === undefined) throw new Error('Local-camera frames require tracking');
+  if (frameSource === 'rehearsal' && input.tracking !== undefined) throw new Error('Synthetic rehearsal does not carry camera tracking');
   let trends: ControlFrame['trends'];
   if (input.trends !== undefined) {
     const value = record(input.trends, 'trends');
@@ -114,7 +115,7 @@ export function validateFrame(value: unknown): ControlFrame {
     if (value.pulseRate !== undefined && signals.pulseRate.value === null) throw new Error('A pulse trend requires a pulse value');
     trends = value.pulseRate === undefined ? {} : { pulseRate: trend(value.pulseRate) };
   }
-  return { sessionId, source: frameSource, timeMs, signals, ...(frameSource === 'local-camera' ? { tracking: tracking(input.tracking, timeMs) } : {}), ...(trends ? { trends } : {}) };
+  return { sessionId, source: frameSource, timeMs, signals, ...(input.tracking !== undefined ? { tracking: tracking(input.tracking, timeMs) } : {}), ...(trends ? { trends } : {}) };
 }
 
 export function validateTake(value: unknown): Take {

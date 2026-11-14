@@ -361,7 +361,7 @@ test('local tracking expires at 300 ms and missing, future, foreign-source or re
     else assert.deepEqual(transforms(subject.root), authored);
   }
   const foreign = trackedInput(500, { body });
-  foreign.frame!.source = 'live';
+  foreign.frame!.source = 'rehearsal';
   const reduced = trackedInput(500, { body });
   reduced.reducedMotion = true;
   for (const frame of [neutral, { ...neutral, frame: null }, trackedInput(500, { sampledAtMs: 501, body }), foreign, reduced]) {

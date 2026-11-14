@@ -4,6 +4,7 @@ import { BODY_JOINTS, FACE_SHAPES, TAKE_LIMITS, type ControlFrame } from '../src
 import { createRehearsalSource, rehearsalFrame } from '../src/rehearsal.ts';
 import { addTake, frameAt, TakeRecorder, trimTake } from '../src/recording.ts';
 import { MAX_TAKE_JSON_BYTES, validateFrame, validateTake } from '../src/validation.ts';
+import { attachTracking } from '../src/fusion.ts';
 
 function localFrame(timeMs = 1000): ControlFrame {
   const frame = rehearsalFrame(1, 'local-test', timeMs);
@@ -36,10 +37,36 @@ test('local tracking recordings copy nested data and preserve acquisition age th
   assert.deepEqual(validateTake(trimmed), trimmed);
 });
 
+test('fused live frames re-base local tracking onto the live clock and drop stale or foreign tracking', () => {
+  const live = (timeMs: number): ControlFrame => ({ ...localFrame(timeMs), source: 'live', sessionId: 'sdk', tracking: undefined });
+  const tracked = localFrame(1000);
+  tracked.tracking!.sampledAtMs = 960;
+  tracked.tracking!.face!.sampledAtMs = 940;
+  const fused = validateFrame(attachTracking(live(25_000), 5030, { frame: tracked, arrivedAtMs: 5000 }));
+  assert.equal(fused.source, 'live');
+  assert.equal(fused.tracking!.sampledAtMs, 25_000 - 70);
+  assert.equal(fused.tracking!.face!.sampledAtMs, 25_000 - 90);
+  const recorder = new TakeRecorder('fused', 'live', 'sdk', 1);
+  recorder.append(fused);
+  recorder.append(validateFrame(attachTracking(live(25_400), 5430, { frame: tracked, arrivedAtMs: 5400 })));
+  const take = recorder.finish();
+  assert.ok(frameAt(take, 220)?.tracking, 'fused takes hold tracked frames for the tracking window, not the 50 ms signal slot');
+  assert.equal(frameAt(take, 300), null);
+  for (const arrivedAtMs of [5000 - 300 + 40 - 1, 5040]) {
+    const result = attachTracking(live(25_000), 5030, { frame: tracked, arrivedAtMs });
+    assert.equal(result.tracking, undefined);
+  }
+  assert.equal(attachTracking(live(25_000), 5030 + 229, { frame: tracked, arrivedAtMs: 5000 }).tracking?.sampledAtMs, 25_000 - 299);
+  assert.equal(attachTracking(live(25_000), 5030 + 230, { frame: tracked, arrivedAtMs: 5000 }).tracking, undefined);
+  assert.equal(attachTracking(live(25_000), 5030, { frame: { ...tracked, source: 'rehearsal' }, arrivedAtMs: 5000 }).tracking, undefined);
+});
+
 test('local input rejects fabricated physiology, malformed geometry and source laundering', () => {
   const check = (mutate: (frame: ControlFrame) => void) => { const frame = localFrame(); mutate(frame); assert.throws(() => validateFrame(frame)); };
   check(frame => { frame.signals.breath.value = 0.5; frame.signals.breath.quality = 'valid'; });
-  check(frame => { frame.source = 'live'; });
+  check(frame => { frame.source = 'rehearsal'; for (const signal of Object.values(frame.signals)) signal.provenance = 'synthetic'; });
+  const fused = localFrame(); fused.source = 'live'; fused.signals.breath = { ...fused.signals.breath, value: 0.5, quality: 'valid', provenance: 'measured' };
+  assert.equal(validateFrame(fused).tracking?.face?.weights.jawOpen, fused.tracking!.face!.weights.jawOpen);
   check(frame => { delete frame.tracking; });
   check(frame => { frame.tracking!.sampledAtMs = 1001; });
   check(frame => { frame.tracking!.face!.rotation = [0, 0, 0, 0]; });
