@@ -11,6 +11,8 @@ const CHANNELS = Object.freeze({
   blink: ['face', 'blinking', 'boolean', 0],
   talking: ['face', 'talking', 'boolean', 0],
 });
+const EXPRESSION_NAMES = Object.freeze({ 1: 'angry', 2: 'contempt', 3: 'disgust', 4: 'fear', 5: 'happy', 6: 'neutral', 7: 'sad', 8: 'surprise' });
+const VARIABILITY_THRESHOLD = 50;
 const TRACE_WINDOWS = Object.freeze({ breath: 20_000, arterialTrace: 6_000 });
 const MAX_TRACE_POINTS = 2048;
 const own = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
@@ -65,6 +67,50 @@ function createMetricsMapper({ sessionId, epochUs }) {
   const latest = new Map();
   const traces = new Map(Object.entries(TRACE_WINDOWS).map(([channel, windowMs]) => [channel, createTraceNormalizer(windowMs)]));
   let previousTime = -Infinity;
+  let expression = null;
+  let variability = null;
+
+  function sampleTime(sample, timeMs) {
+    if (!own(sample, 'timestamp') || sample.timestamp === null) return null;
+    const timestamp = microseconds(sample.timestamp);
+    const delta = timestamp - origin;
+    if (delta > BigInt(Number.MAX_SAFE_INTEGER) || delta < BigInt(Number.MIN_SAFE_INTEGER)) throw new Error('Invalid measurement timestamp');
+    const sampledAtMs = Number(delta) / 1000;
+    return sampledAtMs > timeMs || sampledAtMs < -STALE_MS ? null : sampledAtMs;
+  }
+
+  function ingestExtended(packet, timeMs) {
+    const expressions = packet.face?.expression;
+    if (expressions !== undefined && expressions !== null) {
+      if (!Array.isArray(expressions) || expressions.length > MAX_CHANNEL_SAMPLES) throw new Error('Metrics sample limit exceeded');
+      for (const sample of expressions) {
+        if (!sample || typeof sample !== 'object' || !Array.isArray(sample.scores) || sample.scores.length > 16) throw new Error('Invalid expression sample');
+        const sampledAtMs = sampleTime(sample, timeMs);
+        if (sampledAtMs === null || (expression && sampledAtMs <= expression.sampledAtMs)) continue;
+        const scores = {};
+        for (const score of sample.scores) {
+          const name = EXPRESSION_NAMES[score?.type];
+          if (!name) continue;
+          if (typeof score.confidence !== 'number' || !Number.isFinite(score.confidence) || score.confidence < 0 || score.confidence > 100) throw new Error('Invalid expression score');
+          scores[name] = score.confidence / 100;
+        }
+        expression = { scores, quality: sample.stable === true ? 'valid' : 'unstable', sampledAtMs };
+      }
+    }
+    const readings = packet.cardio?.hrv;
+    if (readings !== undefined && readings !== null) {
+      if (!Array.isArray(readings) || readings.length > MAX_CHANNEL_SAMPLES) throw new Error('Metrics sample limit exceeded');
+      for (const sample of readings) {
+        if (!sample || typeof sample !== 'object') throw new Error('Invalid variability sample');
+        if (typeof sample.rmssd !== 'number' || !Number.isFinite(sample.rmssd) || sample.rmssd <= 0) continue;
+        if (sample.rmssd > 1e6) throw new Error('Invalid variability sample');
+        const sampledAtMs = sampleTime(sample, timeMs);
+        if (sampledAtMs === null || (variability && sampledAtMs <= variability.sampledAtMs)) continue;
+        const confidence = typeof sample.confidence === 'number' && Number.isFinite(sample.confidence) && sample.confidence >= 0 && sample.confidence <= 100 ? sample.confidence : null;
+        variability = { rmssd: sample.rmssd, quality: sample.stable === true && (confidence === null || confidence >= VARIABILITY_THRESHOLD) ? 'valid' : 'unstable', confidence: confidence === null ? null : confidence / 100, sampledAtMs };
+      }
+    }
+  }
 
   return {
     ingest(packet, timeMs) {
@@ -119,6 +165,7 @@ function createMetricsMapper({ sessionId, epochUs }) {
         }
         if (newest) updates.set(channel, newest);
       }
+      ingestExtended(packet, timeMs);
       for (const [channel, value] of updates) latest.set(channel, value);
       previousTime = timeMs;
       return this.snapshot(timeMs);
@@ -133,7 +180,10 @@ function createMetricsMapper({ sessionId, epochUs }) {
         signals[channel] = value ? { ...value, quality: timeMs - value.sampledAtMs >= STALE_MS ? 'stale' : value.quality } :
           { value: null, quality: 'missing', confidence: null, sampledAtMs: timeMs, unit, provenance: 'measured' };
       }
-      return { sessionId, source: 'live', timeMs, signals };
+      const extended = {};
+      if (expression) extended.expression = { ...expression, scores: { ...expression.scores }, quality: timeMs - expression.sampledAtMs >= STALE_MS ? 'stale' : expression.quality };
+      if (variability) extended.variability = { ...variability, quality: timeMs - variability.sampledAtMs >= STALE_MS * 4 ? 'stale' : variability.quality };
+      return { sessionId, source: 'live', timeMs, signals, ...(expression || variability ? { extended } : {}) };
     },
   };
 }

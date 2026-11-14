@@ -1,5 +1,5 @@
-import { BODY_JOINTS, CORE_FACE_SHAPES, FACE_SHAPES, TAKE_LIMITS } from './contracts.ts';
-import type { Channel, ControlFrame, Signal, SignalTrend, Source, Take, TrackingFrame, TrackingPoint, Unit } from './contracts.ts';
+import { BODY_JOINTS, CORE_FACE_SHAPES, EXPRESSION_TYPES, FACE_SHAPES, TAKE_LIMITS } from './contracts.ts';
+import type { Channel, ControlFrame, ExtendedSignals, Quality, Signal, SignalTrend, Source, Take, TrackingFrame, TrackingPoint, Unit } from './contracts.ts';
 
 export const MAX_TAKE_JSON_BYTES = 16 * 1024 * 1024;
 
@@ -98,6 +98,37 @@ function trend(value: unknown): SignalTrend {
   return { direction, changePerMinute: number(input.changePerMinute, -1000, 1000, 'pulse trend change'), windowMs: number(input.windowMs, 0, 600_000, 'pulse trend window'), samples };
 }
 
+function quality(value: unknown, name: string): Quality {
+  if (value !== 'valid' && value !== 'unstable' && value !== 'stale') throw new Error(`Invalid ${name} quality`);
+  return value;
+}
+
+function extended(value: unknown, frameTime: number): ExtendedSignals {
+  const input = record(value, 'extended signals');
+  if (Object.keys(input).some(key => key !== 'expression' && key !== 'variability')) throw new Error('Unsupported extended signal');
+  const result: ExtendedSignals = {};
+  if (input.expression !== undefined) {
+    const expression = record(input.expression, 'expression');
+    const scores = record(expression.scores, 'expression scores');
+    if (Object.keys(scores).some(key => !(EXPRESSION_TYPES as readonly string[]).includes(key))) throw new Error('Unsupported expression type');
+    result.expression = {
+      scores: Object.fromEntries(Object.entries(scores).map(([key, score]) => [key, number(score, 0, 1, `${key} score`)])),
+      quality: quality(expression.quality, 'expression'),
+      sampledAtMs: number(expression.sampledAtMs, frameTime - Number.MAX_SAFE_INTEGER, frameTime, 'expression sample time'),
+    };
+  }
+  if (input.variability !== undefined) {
+    const variability = record(input.variability, 'variability');
+    result.variability = {
+      rmssd: number(variability.rmssd, 0, 1e6, 'variability'),
+      quality: quality(variability.quality, 'variability'),
+      confidence: variability.confidence === null ? null : number(variability.confidence, 0, 1, 'variability confidence'),
+      sampledAtMs: number(variability.sampledAtMs, frameTime - Number.MAX_SAFE_INTEGER, frameTime, 'variability sample time'),
+    };
+  }
+  return result;
+}
+
 export function validateFrame(value: unknown): ControlFrame {
   const input = record(value, 'control frame');
   const sessionId = identity(input.sessionId, 'session ID');
@@ -115,7 +146,9 @@ export function validateFrame(value: unknown): ControlFrame {
     if (value.pulseRate !== undefined && signals.pulseRate.value === null) throw new Error('A pulse trend requires a pulse value');
     trends = value.pulseRate === undefined ? {} : { pulseRate: trend(value.pulseRate) };
   }
-  return { sessionId, source: frameSource, timeMs, signals, ...(input.tracking !== undefined ? { tracking: tracking(input.tracking, timeMs) } : {}), ...(trends ? { trends } : {}) };
+  if (input.extended !== undefined && frameSource !== 'live') throw new Error('Extended signals come only from SmartSpectra');
+  return { sessionId, source: frameSource, timeMs, signals, ...(input.tracking !== undefined ? { tracking: tracking(input.tracking, timeMs) } : {}), ...(trends ? { trends } : {}),
+    ...(input.extended !== undefined ? { extended: extended(input.extended, timeMs) } : {}) };
 }
 
 export function validateTake(value: unknown): Take {

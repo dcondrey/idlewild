@@ -221,6 +221,23 @@ test('unscaled SDK traces normalize to the same bounded shape regardless of offs
   for (let step = 0; step < 5; step++) assert.equal(flat.ingest({ breathing: { upperTrace: [{ value: 7, stable: true, timestamp: EPOCH * 1000 + step * 1000 }] } }, step).signals.breath.value, 0);
 });
 
+test('extended SDK expression scores and variability map to bounded optional readings and expire', () => {
+  const mapper = createMetricsMapper({ sessionId: 's', epochUs: BigInt(EPOCH) * 1000n });
+  const decoded = decodeMetrics(Metrics.encode({
+    face: { expression: [{ stable: true, timestamp: EPOCH * 1000, scores: [{ type: 5, confidence: 72 }, { type: 8, confidence: 10 }, { type: 0, confidence: 99 }] }] },
+    cardio: { hrv: [{ rmssd: 41.5, confidence: 49, stable: true, timestamp: EPOCH * 1000 }] },
+  }).finish());
+  const frame = mapper.ingest(decoded, 10);
+  assert.deepEqual(frame.extended.expression.scores, { happy: 0.72, surprise: 0.1 });
+  assert.equal(frame.extended.expression.quality, 'valid');
+  assert.equal(frame.extended.variability.rmssd, 41.5);
+  assert.equal(frame.extended.variability.quality, 'unstable');
+  assert.equal(mapper.snapshot(1499).extended.expression.quality, 'valid');
+  assert.equal(mapper.snapshot(1500).extended.expression.quality, 'stale');
+  assert.equal(createMetricsMapper({ sessionId: 's', epochUs: BigInt(EPOCH) * 1000n }).ingest({}, 1).extended, undefined);
+  assert.throws(() => createMetricsMapper({ sessionId: 's', epochUs: BigInt(EPOCH) * 1000n }).ingest({ face: { expression: [{ stable: true, timestamp: EPOCH * 1000, scores: [{ type: 5, confidence: 101 }] }] } }, 10));
+});
+
 test('unsafe, future, strict-clock, absent and oversized measurements never become valid controls', () => {
   const mapper = () => createMetricsMapper({ sessionId: 's', epochUs: BigInt(EPOCH) * 1000n });
   const sample = { value: 1, stable: true, timestamp: EPOCH * 1000 };

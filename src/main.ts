@@ -6,6 +6,7 @@ import { createStage, DETAIL_SCENES } from './stage';
 import { createRehearsalSource } from './rehearsal';
 import { createLocalTrackingSource } from './tracking/source';
 import { trackingAt } from './tracking-frame';
+import { attachTracking, type TrackedArrival } from './fusion';
 import { addTake, frameAt, TakeRecorder, trimTake } from './recording';
 import { validateFrame, validateTake, MAX_TAKE_JSON_BYTES } from './validation';
 import { createBreathContinuity } from './continuity';
@@ -13,7 +14,8 @@ import { createPulseTrend } from './pulse-trend';
 import { createCamera } from './camera';
 import { createSound, renderWav } from './audio';
 import { cameraErrorMessage, createBrainLegend, createCameraFeed, createFramingPrompt, mountStudio, setupCharacterMenu, setupGuide, setupPanels, updateStudioFlow } from './ui';
-import { bakeAnimation, exportControlData, exportPreview } from './exports';
+import { bakeAnimation, exportControlData, exportPreview, exportSignalCsv } from './exports';
+import { drawSignalOverlay } from './overlay';
 import { importCharacter, validateClipCompatibility, disposeImported } from './imports';
 import { assetCopyright, getAssetCopyright, setAssetCopyright } from './asset-credits';
 import { SCENE_REGISTRY, type SceneEntry } from './scenes/registry';
@@ -26,6 +28,9 @@ const element = <T extends HTMLElement = HTMLElement>(id: string) => document.ge
 const input = (id: string) => element<HTMLInputElement>(id);
 const button = (id: string) => element<HTMLButtonElement>(id);
 const canvas = element<HTMLCanvasElement>('stage');
+const overlayCanvas = element<HTMLCanvasElement>('signal-overlay');
+const overlayContext = overlayCanvas.getContext('2d');
+const hasSdkSignals = (frames: readonly ControlFrame[]) => frames.some(frame => frame.source !== 'local-camera');
 const FULL_BODY_SCENES: ReadonlySet<SceneId> = new Set(['rex', 'runner', 'imported']);
 const userEntry = SCENE_REGISTRY.find(item => item.group === 'yours')!;
 let stage: Awaited<ReturnType<typeof createStage>> | null = null;
@@ -33,6 +38,10 @@ let entry: SceneEntry = SCENE_REGISTRY[0];
 let importedEntry: SceneEntry | null = null;
 let loadingCharacter = false;
 let source: CaptureSource | null = null;
+let companion: CaptureSource | null = null;
+let tracked: TrackedArrival | null = null;
+let history: ControlFrame[] = [];
+const HISTORY_MS = 12_000;
 let sourceKind: Source | null = null;
 let latest: ControlFrame | null = null;
 let latestArrival = 0;
@@ -96,7 +105,7 @@ function refreshActions() {
   button('record').setAttribute('aria-pressed', String(recorder !== null));
   button('play').disabled = !selected || busy || exporting !== null || recorder !== null;
   button('play').textContent = playing ? 'Pause' : 'Play';
-  for (const id of ['trim', 'delete', 'export-data', 'export-wav', 'export-video', 'export-glb']) button(id).disabled = !selected || busy || recorder !== null || exporting !== null;
+  for (const id of ['trim', 'delete', 'export-data', 'export-wav', 'export-video', 'export-glb', 'export-csv']) button(id).disabled = !selected || busy || recorder !== null || exporting !== null;
   input('timeline').disabled = !selected || recorder !== null || sourceKind !== null || exporting !== null;
   button('preview').disabled = busy || exporting !== null || cleanupFailed || !input('camera-consent').checked;
   button('live').disabled = !window.idlewild || busy || exporting !== null || sourceKind !== null || !camera.active || !keySet || !input('live-consent').checked;
@@ -178,9 +187,14 @@ function finishRecording() {
 
 function receiveFrame(raw: ControlFrame) {
   if (raw.source !== sourceKind) return;
-  const frame = pulseTrend.update(continuity.update(validateFrame(raw), input('continuity').checked));
+  const arrived = performance.now();
+  const fused = raw.source === 'live' ? attachTracking(raw, arrived, tracked) : raw;
+  const frame = pulseTrend.update(continuity.update(validateFrame(fused), input('continuity').checked));
   latest = frame;
-  latestArrival = performance.now();
+  latestArrival = arrived;
+  if (history.length && history[history.length - 1].sessionId !== frame.sessionId) history = [];
+  history.push(frame);
+  while (history.length && history[0].timeMs < frame.timeMs - HISTORY_MS) history.shift();
   if (recorder) { recorder.append(frame); if (recorder.full) { finishRecording(); void stopInput().catch(() => message('Take saved; input cleanup failed. Stop again.', true)); } }
   refreshActions();
 }
@@ -190,13 +204,17 @@ async function stopInput() {
   if (stopping) return stopping;
   finishRecording();
   const old = source;
+  const oldCompanion = companion;
   source = null;
+  companion = null;
+  tracked = null;
+  history = [];
   sourceKind = null;
   latest = null;
   continuity.reset(); pulseTrend.reset();
   framing.reset();
   stopping = (async () => {
-    const results = await Promise.allSettled([old?.dispose(), camera.stop(), sound.disable()]);
+    const results = await Promise.allSettled([old?.dispose(), oldCompanion?.dispose(), camera.stop(), sound.disable()]);
     button('enable-sound').textContent = 'Enable sound';
     refreshActions();
     const failure = results.find(result => result.status === 'rejected');
@@ -243,6 +261,7 @@ function animate(now: number) {
     const displayTime = recorder ? Math.max(0, (latest?.timeMs ?? recordingOrigin) - recordingOrigin) : position;
     element('time').textContent = `${clockLabel(displayTime)} / ${clockLabel(duration)}`;
     if (!recorder) input('timeline').value = String(position);
+    paintOverlay(data.timeMs);
     const origin = data.frame?.source;
     const provenance = data.frame?.signals.breath.provenance;
     const badge = origin === 'rehearsal' ? 'SYNTHETIC REHEARSAL' : origin === 'local-camera' ? 'LOCAL CAMERA' : origin === 'live' ? sourceKind === 'live' ? 'LIVE · UNVERIFIED TIMING' : 'RECORDED LIVE' : 'NO INPUT';
@@ -255,13 +274,13 @@ function animate(now: number) {
       const asset = entry.scene in diagnostics.assets ? diagnostics.assets[entry.scene as keyof typeof diagnostics.assets] : null;
       element('stage-state').textContent = diagnostics.contextLost ? 'GRAPHICS LOST' : loadingCharacter || asset?.phase === 'loading' ? 'LOADING' : asset?.phase === 'error' ? 'ASSET UNAVAILABLE' : 'READY';
       if (asset?.phase === 'error') message(asset.message, true);
-      element('tracking-details').hidden = origin !== 'local-camera';
+      element('tracking-details').hidden = !data.frame?.tracking;
       element('physiology-details').hidden = origin === 'local-camera';
       const tracking = trackingAt(data);
-      if (sourceKind === 'local-camera' && FULL_BODY_SCENES.has(entry.scene)) framing.update(now, Boolean(tracking?.face && tracking.framing?.face && tracking.framing.tooClose));
+      if ((sourceKind === 'local-camera' || (sourceKind === 'live' && companion)) && FULL_BODY_SCENES.has(entry.scene)) framing.update(now, Boolean(tracking?.face && tracking.framing?.face && tracking.framing.tooClose));
       else framing.reset();
       if (entry.scene === 'brain' && now - lastLegendPaint >= 250) { lastLegendPaint = now; renderBrainLegend(stage.brainRegions(3), controls().brainExample); }
-      if (origin === 'local-camera') element('tracking-summary').textContent = `${tracking?.face ? 'Face tracked' : 'Face unavailable'} · ${tracking?.body ? `${Object.keys(tracking.body).length} body joints tracked` : 'Body unavailable'}`;
+      if (data.frame?.tracking) element('tracking-summary').textContent = `${tracking?.face ? 'Face tracked' : 'Face unavailable'} · ${tracking?.body ? `${Object.keys(tracking.body).length} body joints tracked` : 'Body unavailable'}`;
       for (const channel of Object.keys(signalNames) as (keyof typeof signalNames)[]) {
         const signal = data.frame?.signals[channel];
         const quality = signal && data.timeMs - signal.sampledAtMs >= SIGNAL_STALE_MS ? 'stale' : signal?.quality ?? 'missing';
@@ -272,6 +291,18 @@ function animate(now: number) {
     }
   }
   raf = requestAnimationFrame(animate);
+}
+
+function paintOverlay(timeMs: number) {
+  const frames = sourceKind && latest ? history : selected?.samples ?? [];
+  const visible = Boolean(overlayContext) && input('show-signals').checked && frames.length > 0 && hasSdkSignals(frames);
+  overlayCanvas.hidden = !visible;
+  if (!visible || !overlayContext) return;
+  const ratio = overlayCanvas.width / Math.max(1, overlayCanvas.clientWidth);
+  overlayContext.setTransform(1, 0, 0, 1, 0, 0);
+  overlayContext.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  overlayContext.setTransform(ratio, 0, 0, ratio, 0, 0);
+  drawSignalOverlay(overlayContext, overlayCanvas.clientWidth, overlayCanvas.clientHeight, { timeMs, frames, live: sourceKind === 'live', ...(sourceKind === 'live' ? { status: element('status').textContent ?? '' } : {}) });
 }
 
 function chooseEntry(next: SceneEntry) {
@@ -419,7 +450,23 @@ on('live', async () => {
   if (!input('camera-consent').checked || !input('live-consent').checked || !keySet) throw new Error('Preview consent, vendor-processing consent and a key are required.');
   sourceKind = 'live'; latest = null; continuity.reset(); pulseTrend.reset(); playing = false;
   try { await camera.startLive(); if (camera.active && sourceKind === 'live') element<HTMLDialogElement>('camera-dialog').close(); } catch (error) { await stopInput(); throw error; }
+  if (sourceKind === 'live' && input('live-tracking').checked) await startCompanionTracking();
 });
+async function startCompanionTracking() {
+  const tracker = createLocalTrackingSource(element<HTMLVideoElement>('camera-preview'), { faceVideo: element<HTMLVideoElement>('face-preview') });
+  companion = tracker;
+  const release = (text: string) => {
+    if (companion !== tracker) return;
+    companion = null; tracked = null;
+    void tracker.dispose().catch(() => message('Face tracking cleanup failed. Stop input before retrying.', true));
+    message(text, true);
+  };
+  try {
+    await tracker.start(frame => { if (companion === tracker && sourceKind === 'live') tracked = { frame, arrivedAtMs: performance.now() }; },
+      status => { if (status.phase === 'error') release('Face and body tracking stopped. SmartSpectra measurement continues.'); });
+    if (companion === tracker) message('SmartSpectra is measuring breathing and pulse; face and body tracking run on this device.');
+  } catch { release('Face and body tracking could not start. SmartSpectra measurement continues.'); }
+}
 const offFrame = window.idlewild?.onFrame(frame => {
   try { receiveFrame(frame); } catch { void stopInput().then(() => message('Invalid live control data. Stop and retry.', true)).catch(() => message('Invalid live control data; cleanup failed. Stop again.', true)); }
 });
@@ -435,7 +482,7 @@ function save(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = name; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
-async function exportTake(kind: 'data' | 'wav' | 'video' | 'glb') {
+async function exportTake(kind: 'data' | 'wav' | 'video' | 'glb' | 'csv') {
   if (!selected || !stage) return;
   const take = selected;
   const intent = ++inputIntent;
@@ -446,8 +493,10 @@ async function exportTake(kind: 'data' | 'wav' | 'video' | 'glb') {
   message(kind === 'video' ? 'Rendering the video in real time. Keep this window visible; Cancel stops the export.' : 'Preparing your export…');
   try {
     const copyright = kind === 'video' ? getAssetCopyright(stage.getExportRoot()) : undefined;
-    const blob = kind === 'data' ? exportControlData(take) : kind === 'wav' ? await renderWav(take, entry.scene, controls(), options.signal) : kind === 'glb' ?
-      await bakeAnimation(take, stage, controls(), options) : await exportPreview({ take, scene: entry.scene, controls: controls(), canvas, update: data => stage!.update(data), ...options, onProgress: progress => message(`Rendering video · ${Math.round(progress * 100)}%`) });
+    const overlay = input('export-signals').checked && hasSdkSignals(take.samples) ?
+      (context: CanvasRenderingContext2D, width: number, height: number, timeMs: number) => drawSignalOverlay(context, width, height, { timeMs, frames: take.samples, live: false }) : undefined;
+    const blob = kind === 'csv' ? exportSignalCsv(take) : kind === 'data' ? exportControlData(take) : kind === 'wav' ? await renderWav(take, entry.scene, controls(), options.signal) : kind === 'glb' ?
+      await bakeAnimation(take, stage, controls(), options) : await exportPreview({ take, scene: entry.scene, controls: controls(), canvas, update: data => stage!.update(data), ...(overlay ? { overlay } : {}), ...options, onProgress: progress => message(`Rendering video · ${Math.round(progress * 100)}%`) });
     options.signal.throwIfAborted();
     const example = controls().brainExample;
     const note = entry.scene === 'brain' ? `${example ? `Brain view: educational example from ${BRAIN_EXAMPLES[example].citation}. A published group result, not the performer's brain activity.` : BRAIN_CAPTION}\n\n` : '';
@@ -458,7 +507,7 @@ async function exportTake(kind: 'data' | 'wav' | 'video' | 'glb') {
     if (options.signal.aborted) message('Export canceled. The take is unchanged.'); else throw error;
   } finally { exporting = null; refreshActions(); }
 }
-for (const [id, kind] of [['export-data', 'data'], ['export-wav', 'wav'], ['export-video', 'video'], ['export-glb', 'glb']] as const) on(id, () => exportTake(kind));
+for (const [id, kind] of [['export-data', 'data'], ['export-wav', 'wav'], ['export-video', 'video'], ['export-glb', 'glb'], ['export-csv', 'csv']] as const) on(id, () => exportTake(kind));
 element('cancel-export').addEventListener('click', () => exporting?.abort());
 input('import-data').addEventListener('change', () => { const file = input('import-data').files?.[0]; input('import-data').value = ''; if (file) void run(async () => {
   element<HTMLDialogElement>('import-dialog').close();
@@ -518,7 +567,11 @@ on('remove-model', () => {
   element('import-credits').hidden = true; element('import-credit-text').textContent = '';
 });
 
-const resize = new ResizeObserver(entries => { const rect = entries[0].contentRect; stage?.resize(rect.width, rect.height); });
+const resize = new ResizeObserver(entries => {
+  const rect = entries[0].contentRect; stage?.resize(rect.width, rect.height);
+  const ratio = Math.min(2, devicePixelRatio || 1);
+  overlayCanvas.width = Math.max(1, Math.round(rect.width * ratio)); overlayCanvas.height = Math.max(1, Math.round(rect.height * ratio));
+});
 resize.observe(canvas.parentElement!);
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) { inputIntent++; exporting?.abort(); playing = false; void stopInput().catch(() => message('Capture cleanup failed. Stop again before retrying.', true)); }

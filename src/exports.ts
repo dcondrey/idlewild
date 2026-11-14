@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
-import type { SceneControls, SceneFrame, SceneId, Take } from './contracts.ts';
-import { BRAIN_EXAMPLE_IDS, TAKE_LIMITS } from './contracts.ts';
+import type { Channel, ControlFrame, Quality, SceneControls, SceneFrame, SceneId, Take } from './contracts.ts';
+import { BRAIN_EXAMPLE_IDS, CORE_FACE_SHAPES, SIGNAL_STALE_MS, TAKE_LIMITS } from './contracts.ts';
 import { frameAt } from './recording.ts';
 import { MAX_TAKE_JSON_BYTES, validateTake } from './validation.ts';
 import { renderWav } from './audio.ts';
@@ -58,6 +58,57 @@ export function exportControlData(take: Take): Blob {
   return blob;
 }
 
+export interface SignalReading { value: number | null; quality: Quality; confidence: number | null }
+
+/** Valid and unstable readings keep their value; missing, stale (by label or age) and nonfinite readings carry none. */
+export function signalReading(frame: ControlFrame, channel: Channel): SignalReading {
+  const signal = frame.signals[channel];
+  const aged = frame.timeMs - signal.sampledAtMs >= SIGNAL_STALE_MS;
+  const quality: Quality = aged && (signal.quality === 'valid' || signal.quality === 'unstable') ? 'stale' : signal.quality;
+  const usable = (quality === 'valid' || quality === 'unstable') && signal.value !== null && Number.isFinite(signal.value);
+  return { value: usable ? signal.value : null, quality: usable ? quality : quality === 'valid' || quality === 'unstable' ? 'missing' : quality, confidence: signal.confidence };
+}
+
+const CSV_SIGNALS: readonly [Channel, string, number][] = [
+  ['breath', 'breath', 4], ['breathingRate', 'breathing_rate', 2], ['pulseRate', 'pulse_rate', 2], ['arterialTrace', 'arterial', 4],
+];
+
+export const SIGNAL_CSV_COLUMNS: readonly string[] = [
+  'time_s', 'source',
+  'breath', 'breath_quality', 'breathing_rate', 'breathing_rate_quality', 'pulse_rate', 'pulse_rate_quality', 'arterial', 'arterial_quality',
+  'blink', 'talking', 'movement', 'qx', 'qy', 'qz', 'qw', ...CORE_FACE_SHAPES,
+];
+
+export function csvCell(value: string): string {
+  return /[",\r\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
+}
+
+function fixed(value: number | null | undefined, digits: number): string {
+  return value === null || value === undefined || !Number.isFinite(value) ? '' : value.toFixed(digits);
+}
+
+export function exportSignalCsv(input: Take): Blob {
+  const take = playableTake(input);
+  const lines = [SIGNAL_CSV_COLUMNS.map(csvCell).join(',')];
+  for (const frame of take.samples) {
+    const cells = [fixed(frame.timeMs / 1000, 3), frame.source];
+    for (const [channel, , digits] of CSV_SIGNALS) {
+      const reading = signalReading(frame, channel);
+      cells.push(fixed(reading.value, digits), reading.quality);
+    }
+    for (const channel of ['blink', 'talking'] as const) cells.push(fixed(signalReading(frame, channel).value, 0));
+    const tracking = trackingAt({ timeMs: frame.timeMs, seed: take.seed, controls: { motion: 0, sensitivity: 0, sound: 0 }, frame, reducedMotion: false });
+    cells.push(fixed(tracking?.movement, 4));
+    const rotation = tracking?.face?.rotation ?? null;
+    for (let index = 0; index < 4; index++) cells.push(fixed(rotation?.[index], 5));
+    for (const shape of CORE_FACE_SHAPES) cells.push(fixed(tracking?.face?.weights[shape], 4));
+    lines.push(cells.map(csvCell).join(','));
+  }
+  const blob = new Blob([lines.join('\r\n'), '\r\n'], { type: 'text/csv' });
+  if (blob.size > MAX_TAKE_JSON_BYTES) throw new Error('CSV export exceeds the supported size.');
+  return blob;
+}
+
 function exportNodes(root: THREE.Object3D): THREE.Object3D[] {
   const nodes: THREE.Object3D[] = [];
   const geometries = new Set<THREE.BufferGeometry>();
@@ -105,6 +156,8 @@ function exportNodes(root: THREE.Object3D): THREE.Object3D[] {
   return nodes;
 }
 
+const SIGNAL_NODES: readonly [Channel, string][] = [['breath', 'breath'], ['breathingRate', 'breathing_rate'], ['pulseRate', 'pulse_rate'], ['arterialTrace', 'arterial']];
+
 type Property = 'position' | 'quaternion' | 'scale' | 'morphTargetInfluences';
 type CapturedTrack = { node: THREE.Object3D; property: Property; width: number; values: Float32Array; changed: boolean };
 
@@ -136,6 +189,7 @@ export async function bakeAnimation(take: Take, stage: ExportStage, controls: Sc
     }
   }
   const provenance: Record<string, { startMs: number; endMs: number; source: string; quality: string }[]> = {};
+  const signalTracks = SIGNAL_NODES.map(([channel, name]) => ({ channel, name, values: new Float32Array(count * 3), seen: false }));
   for (let index = 0; index < count; index++) {
     if (index % 20 === 0) {
       options.signal?.throwIfAborted();
@@ -155,6 +209,13 @@ export async function bakeAnimation(take: Take, stage: ExportStage, controls: Sc
         capture.values[index * capture.width + component] = value;
         if (index && Math.abs(value - capture.values[component]) > 1e-6) capture.changed = true;
       }
+    }
+    for (const track of signalTracks) {
+      const reading = input.frame ? signalReading(input.frame, track.channel) : null;
+      if (reading?.value === null || !reading) continue;
+      const code = reading.quality === 'valid' ? 1 : 0.5;
+      track.values.set([reading.value, code, reading.confidence ?? 0], index * 3);
+      track.seen = true;
     }
     if (timeMs < take.durationMs) {
       for (const channel of ['breath', 'breathingRate', 'pulseRate', 'arterialTrace', 'blink', 'talking'] as const) {
@@ -226,6 +287,20 @@ export async function bakeAnimation(take: Take, stage: ExportStage, controls: Sc
       const Track = capture.property === 'quaternion' ? THREE.QuaternionKeyframeTrack : capture.property === 'morphTargetInfluences' ? THREE.NumberKeyframeTrack : THREE.VectorKeyframeTrack;
       tracks.push(new Track(name, times, capture.values));
     }
+    const signalNodes = signalTracks.filter(track => track.seen);
+    if (signalNodes.length) {
+      const group = new THREE.Group();
+      group.name = 'IdlewildSignals';
+      group.userData = { idlewild: { encoding: 'translation = (value, quality, confidence); quality 1 valid, 0.5 unstable, 0 missing or stale (value and confidence 0); stepped interpolation', units: { breath: 'relative, about -1..1', breathing_rate: 'breaths/min', pulse_rate: 'beats/min', arterial: 'relative, uncalibrated' }, source: take.source } };
+      for (const track of signalNodes) {
+        const node = new THREE.Object3D();
+        node.name = track.name;
+        node.position.fromArray(track.values, 0);
+        group.add(node);
+        tracks.push(new THREE.VectorKeyframeTrack(`${node.uuid}.position`, times, track.values, THREE.InterpolateDiscrete));
+      }
+      clone.add(group);
+    }
     clone.updateMatrixWorld(true);
     clone.userData = { idlewild: {
       version: 1, takeId: take.id, source: take.source, seed: take.seed, durationMs: take.durationMs,
@@ -274,6 +349,7 @@ function timed<T>(promise: Promise<T>, milliseconds: number, signal?: AbortSigna
 export async function exportPreview(options: ExportOptions & {
   take: Take; scene: SceneId; controls: SceneControls; canvas: HTMLCanvasElement;
   update(input: SceneFrame): void;
+  overlay?: (ctx: CanvasRenderingContext2D, width: number, height: number, timeMs: number) => void;
 }): Promise<Blob> {
   const take = playableTake(options.take);
   const controls = settings(options.controls);
@@ -309,8 +385,13 @@ export async function exportPreview(options: ExportOptions & {
     const render = (timeMs: number) => {
       options.update(inputAt(take, timeMs, controls, options.reducedMotion ?? false));
       drawing.drawImage(canvas, 0, 0, output.width, output.height);
-      const label = `${take.source === 'rehearsal' ? 'SYNTHETIC REHEARSAL' : take.source === 'local-camera' ? 'LOCAL CAMERA TRACKING' : 'LIVE CONTROL RECORDING'} · ${options.scene === 'brain' ? 'Educational simulation — not your measured brain activity' : options.scene}`;
       const font = Math.max(10, Math.min(16, output.width / 55));
+      if (options.overlay) {
+        drawing.save();
+        options.overlay(drawing, output.width, output.height - font * 2.5, timeMs);
+        drawing.restore();
+      }
+      const label = `${take.source === 'rehearsal' ? 'SYNTHETIC REHEARSAL' : take.source === 'local-camera' ? 'LOCAL CAMERA TRACKING' : 'LIVE CONTROL RECORDING'} · ${options.scene === 'brain' ? 'Educational simulation — not your measured brain activity' : options.scene}`;
       drawing.fillStyle = 'rgba(8, 15, 28, 0.9)';
       drawing.fillRect(0, output.height - font * 2.5, output.width, font * 2.5);
       drawing.font = `600 ${font}px sans-serif`;

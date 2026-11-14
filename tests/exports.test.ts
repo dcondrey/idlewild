@@ -2,7 +2,8 @@ import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { bakeAnimation, exportControlData, exportPreview } from '../src/exports.ts';
+import { bakeAnimation, csvCell, exportControlData, exportPreview, exportSignalCsv, SIGNAL_CSV_COLUMNS } from '../src/exports.ts';
+import { drawableValue, overlayHeader, traceSegments, windowRange } from '../src/overlay.ts';
 import { TakeRecorder } from '../src/recording.ts';
 import { rehearsalFrame } from '../src/rehearsal.ts';
 import type { SceneFrame } from '../src/contracts.ts';
@@ -193,4 +194,96 @@ test('cancellation stops baking before scene sampling and at cooperative yield b
 
 test('preview reports unavailable encoders without claiming an output', async () => {
   await assert.rejects(exportPreview({ take: take(), scene: 'rex', controls, canvas: {} as HTMLCanvasElement, update() {} }), /cannot encode/);
+});
+
+test('signal CSV keeps one row per sample and never zero-fills missing, stale or unusable values', async () => {
+  const recorder = new TakeRecorder('csv', 'rehearsal', 'session-one', 42);
+  for (const timeMs of [0, 100, 200, 2000]) recorder.append(rehearsalFrame(42, 'session-one', timeMs));
+  const input = recorder.finish();
+  Object.assign(input.samples[0].signals.breath, { value: null, quality: 'missing', confidence: null });
+  Object.assign(input.samples[1].signals.pulseRate, { value: null, quality: 'stale' });
+  Object.assign(input.samples[2].signals.breathingRate, { quality: 'unstable' });
+  input.samples[3].signals.arterialTrace.sampledAtMs = 0;
+  const blob = exportSignalCsv(input);
+  assert.match(blob.type, /^text\/csv/);
+  const lines = (await blob.text()).split('\r\n');
+  assert.equal(lines.pop(), '');
+  assert.equal(lines.length, input.samples.length + 1);
+  const header = lines[0].split(',');
+  assert.deepEqual(header, [...SIGNAL_CSV_COLUMNS]);
+  assert.equal(header.length, 17 + 13);
+  const rows = lines.slice(1).map(line => Object.fromEntries(line.split(',').map((cell, index) => [header[index], cell])));
+  assert.ok(lines.slice(1).every(line => line.split(',').length === header.length));
+  assert.equal(rows[0].breath, '');
+  assert.equal(rows[0].breath_quality, 'missing');
+  assert.equal(rows[1].pulse_rate, '');
+  assert.equal(rows[1].pulse_rate_quality, 'stale');
+  assert.equal(rows[2].breathing_rate, '15.00');
+  assert.equal(rows[2].breathing_rate_quality, 'unstable');
+  assert.equal(rows[3].arterial, '');
+  assert.equal(rows[3].arterial_quality, 'stale');
+  assert.equal(rows[3].time_s, '2.000');
+  assert.equal(rows[0].source, 'rehearsal');
+  assert.equal(rows[0].movement, '');
+  assert.equal(rows[0].jawOpen, '');
+  assert.throws(() => exportSignalCsv({ ...input, samples: [] }), /nonempty/);
+});
+
+test('CSV cells follow RFC 4180 quoting', () => {
+  assert.equal(csvCell('plain'), 'plain');
+  assert.equal(csvCell('a,b'), '"a,b"');
+  assert.equal(csvCell('say "hi"'), '"say ""hi"""');
+  assert.equal(csvCell('line\nbreak'), '"line\nbreak"');
+});
+
+test('overlay windows select the last ten seconds and break traces at gaps', () => {
+  const frames = Array.from({ length: 300 }, (_, index) => rehearsalFrame(7, 's', index * 100));
+  assert.deepEqual(windowRange(frames, 20_000), [101, 201]);
+  assert.deepEqual(windowRange(frames, 5000), [0, 51]);
+  assert.deepEqual(windowRange(frames, -1), [0, 0]);
+  assert.deepEqual(windowRange([], 1000), [0, 0]);
+  Object.assign(frames[150].signals.breath, { value: null, quality: 'missing', confidence: null });
+  frames[160].signals.breath.quality = 'unstable';
+  frames[170].signals.breath.sampledAtMs = frames[170].timeMs - 1500;
+  const [start, end] = windowRange(frames, 20_000);
+  const segments = traceSegments(frames, 'breath', start, end);
+  assert.equal(segments.length, 4);
+  assert.equal(segments.reduce((sum, segment) => sum + segment.length, 0), 100 - 3);
+  assert.equal(drawableValue(frames[160], 'breath'), null);
+  assert.equal(drawableValue(frames[100], 'breath', frames[100].timeMs + 1500), null);
+  assert.equal(overlayHeader({ timeMs: 0, frames: [frames[0]], live: true }), 'SYNTHETIC REHEARSAL');
+  const live = { ...frames[0], source: 'live' as const };
+  assert.equal(overlayHeader({ timeMs: 0, frames: [live], live: true }), 'SmartSpectra · LIVE');
+  assert.equal(overlayHeader({ timeMs: 0, frames: [live], live: false }), 'SmartSpectra · RECORDED TAKE');
+  assert.equal(overlayHeader({ timeMs: 0, frames: [{ ...live, source: 'local-camera' }], live: true }), null);
+});
+
+test('baked GLB carries signal nodes with stepped value, quality and confidence tracks', async () => {
+  const fixture = rig();
+  const input = take();
+  Object.assign(input.samples[2].signals.breath, { value: null, quality: 'missing', confidence: null });
+  const { data, json } = await glbJSON(await bakeAnimation(input, fixture.stage, controls));
+  const group = json.nodes.find((node: { name?: string }) => node.name === 'IdlewildSignals');
+  assert.ok(group.extras.idlewild.encoding);
+  const names = group.children.map((index: number) => json.nodes[index].name);
+  assert.deepEqual(names, ['breath', 'breathing_rate', 'pulse_rate', 'arterial']);
+  assert.ok(json.animations[0].samplers.some((sampler: { interpolation: string }) => sampler.interpolation === 'STEP'));
+  const gltf = await new GLTFLoader().parseAsync(data, '');
+  const mixer = new THREE.AnimationMixer(gltf.scene);
+  mixer.clipAction(gltf.animations[0]).play();
+  mixer.setTime(0.125);
+  const breath = gltf.scene.getObjectByName('breath')!.position;
+  assert.equal(breath.x, 0);
+  assert.equal(breath.y, 0);
+  mixer.setTime(0.175);
+  const later = gltf.scene.getObjectByName('breath')!.position;
+  assert.ok(Math.abs(later.x - input.samples[3].signals.breath.value!) < 1e-6);
+  assert.equal(later.y, 1);
+  assert.ok(Math.abs(later.z - input.samples[3].signals.breath.confidence!) < 1e-6);
+  assert.ok(Math.abs(gltf.scene.getObjectByName('pulse_rate')!.position.x - 65) < 1e-4);
+  mixer.stopAllAction();
+  mixer.uncacheRoot(gltf.scene);
+  fixture.geometry.dispose();
+  fixture.material.dispose();
+  fixture.mesh.skeleton.dispose();
 });

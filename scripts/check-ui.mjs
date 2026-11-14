@@ -96,7 +96,6 @@ try {
   await expect(page.locator('#source-badge')).toHaveText('NO INPUT');
   report.checks.push('isolated renderer; no SDK load, media or key on startup');
   await page.locator('#open-camera').click();
-  await page.locator('#measurement-settings summary').click();
   await page.locator('#api-key').fill('test-only-invalid-credential');
   await page.locator('#save-key').click();
   await expect(page.locator('#api-key')).toHaveValue('');

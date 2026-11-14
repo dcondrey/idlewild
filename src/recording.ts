@@ -12,6 +12,8 @@ function copyFrame(frame: ControlFrame, offset = 0): ControlFrame {
   for (const signal of Object.values(copy.signals)) signal.sampledAtMs -= offset;
   if (copy.tracking) copy.tracking.sampledAtMs -= offset;
   if (copy.tracking?.face?.sampledAtMs !== undefined) copy.tracking.face.sampledAtMs -= offset;
+  if (copy.extended?.expression) copy.extended.expression.sampledAtMs -= offset;
+  if (copy.extended?.variability) copy.extended.variability.sampledAtMs -= offset;
   return copy;
 }
 

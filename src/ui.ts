@@ -35,7 +35,7 @@ export function mountStudio(root: HTMLElement) {
     <main id="main" class="workspace">
       <aside class="panel input-panel" aria-label="Performance input">
         <span class="eyebrow">YOUR NEXT STEP</span><h1 id="flow-title">Start here.</h1>
-        <p id="next-step" class="next-step">Animate with your camera, or try a rehearsal. No key needed.</p>
+        <p id="next-step" class="next-step">Perform with your breath and pulse through SmartSpectra, or try a rehearsal.</p>
         <div id="input-actions" class="input-actions"><button id="rehearse" class="primary wide">Start rehearsal</button><button id="open-camera" class="wide quiet">Use camera</button></div>
         <p id="rehearsal-note" class="fine">Rehearsal is synthetic. No camera, account or credits.</p>
         <div class="acquisition"><span id="source-badge" class="tag">NO INPUT</span><p id="status" role="status" aria-live="polite">Ready for a rehearsal.</p><button id="stop-input" class="wide danger" title="Stop input and release the camera" hidden>Stop input</button><button id="open-signals" class="text-button" hidden>View signal details</button></div>
@@ -56,7 +56,7 @@ export function mountStudio(root: HTMLElement) {
           <span id="stage-state" class="tag">LOADING</span>
         </div>
         <div class="viewport">
-          <canvas id="stage" aria-label="Animated creative scene"></canvas>
+          <canvas id="stage" aria-label="Animated creative scene"></canvas><canvas id="signal-overlay" aria-hidden="true" hidden></canvas>
           <div class="stage-overlay">
             <div class="overlay-start">
               <button id="detail-view" class="overlay-button" aria-pressed="false" hidden>Close view</button>
@@ -77,6 +77,7 @@ export function mountStudio(root: HTMLElement) {
       <aside id="interpretation" class="panel output-panel" aria-label="Creative controls" hidden>
         <span class="eyebrow">MAKE IT YOURS</span><h2>Shape it.</h2>
         <div id="creative-controls"><label for="motion">Motion <output id="motion-value">70%</output></label><input id="motion" type="range" min="0" max="100" value="70"><label for="sensitivity">Sensitivity <output id="sensitivity-value">65%</output></label><input id="sensitivity" type="range" min="0" max="100" value="65"><label for="sound">Sound <output id="sound-value">45%</output></label><input id="sound" type="range" min="0" max="100" value="45"><button id="enable-sound" class="wide">Enable sound</button></div>
+        <label class="check"><input id="show-signals" type="checkbox" checked> Show SmartSpectra signals on stage</label>
         <label class="check reduce-motion"><input id="reduced-motion" type="checkbox"> Reduce motion</label>
         <div id="runner-choice" class="runner-choice" hidden><label for="runner-variant">Runner pace</label><select id="runner-variant"><option value="0">Easy</option><option value="1">Steady</option><option value="2">Brisk</option></select></div>
         <div id="brain-choice" class="runner-choice" hidden><label for="brain-example">Brain view</label><select id="brain-example" aria-describedby="brain-example-note"><option value="">Live input</option><optgroup label="Study examples">${BRAIN_EXAMPLE_IDS.map(id => `<option value="${id}">${BRAIN_EXAMPLES[id].label}</option>`).join('')}</optgroup></select><p id="brain-example-note" class="fine">Examples show regions one published group study reported. They never use your camera or body signals.</p></div>
@@ -86,25 +87,31 @@ export function mountStudio(root: HTMLElement) {
 
     <dialog id="camera-dialog" aria-labelledby="camera-title">
       <button class="close" data-close aria-label="Close camera settings">×</button><span class="eyebrow">PERFORMANCE INPUT</span><h2 id="camera-title">Your camera, your choice.</h2>
-      <p>Animate your face and body on this device. No API key, account or credits needed.</p>
+      <p>SmartSpectra reads your breathing and pulse from the camera; on-device tracking adds your face and body. Together they perform the character.</p>
       <label class="check consent"><input id="camera-consent" type="checkbox"> I consent to camera preview and on-device face and body tracking.</label>
       <label for="camera">Body camera</label><select id="camera"><option value="">System default (first preview)</option></select>
       <p class="fine">Desk View and Continuity Camera appear here as ordinary cameras. Idlewild asks each camera for its widest view; choose a wide camera and step back.</p>
       <div class="row"><button id="refresh-cameras">Refresh cameras</button><button id="preview" class="primary">Open preview</button></div>
       <div id="camera-view" hidden><video id="camera-preview" muted playsinline aria-label="Body camera preview"></video><p class="fine">Preview stays on when you close this panel and appears in the corner of the stage. Stop input releases every camera.</p></div>
-      <button id="local-tracking" class="wide primary" disabled>Start face & body tracking</button><p class="fine">Open preview first. Keep your face and upper body visible; step back to track your legs. Camera images stay on this device in local mode. No microphone is used.</p>
+      <section id="measurement-settings" class="measurement" aria-labelledby="measurement-title">
+        <h3 id="measurement-title">SmartSpectra live signals</h3>
+        <p class="fine">Breathing movement, breathing rate and pulse rate from your camera, with blink and talking detection. Uses your own Presage key, account credits and Presage network processing. Telemetry is disabled and insights are never requested; vendor retention is unverified. Creative animation, not a medical measurement.</p>
+        <label for="api-key">Presage API key · this session only</label><input id="api-key" type="password" autocomplete="off" spellcheck="false" maxlength="512" placeholder="Enter your own key">
+        <div class="row"><button id="save-key">Use key</button><button id="clear-key">Clear key</button></div><p id="key-status" class="fine">No key set.</p>
+        <label class="check consent"><input id="live-consent" type="checkbox"> I am 18 or older and authorize metered measurement and the disclosed vendor processing.</label>
+        <label class="check"><input id="live-tracking" type="checkbox" checked> Also track my face and body on this device</label>
+        <button id="live" class="wide primary">Start SmartSpectra performance</button>
+        <p class="fine">Keep this window visible while measuring; hiding or minimizing it stops input.</p>
+      </section>
+      <details id="local-only" open><summary>No key? Face &amp; body only</summary>
+        <button id="local-tracking" class="wide" disabled>Start face & body tracking</button><p class="fine">Runs on this device without a key or credits. No breathing or pulse. Keep your face and upper body visible; step back to track your legs. No microphone is used.</p>
+      </details>
       <details id="face-camera-settings" hidden><summary>Second camera · face close-up (optional)</summary>
         <p class="fine">A second camera near your face can add facial detail. It must be a different device; your body camera keeps tracking your body.</p>
         <label class="check consent"><input id="face-consent" type="checkbox"> I consent to a second camera preview for on-device face tracking.</label>
         <label for="face-camera">Face camera</label><select id="face-camera"><option value="">Choose a different camera</option></select>
         <button id="open-face-camera" class="wide" disabled>Open face camera</button>
         <video id="face-preview" muted playsinline aria-label="Face camera preview" hidden></video>
-      </details>
-      <details id="measurement-settings"><summary>SmartSpectra · optional API key</summary>
-        <p class="fine">Open a preview first. Live measurement uses account credits and vendor network processing. Automatic vitals insights may upload data; retention is unverified. Telemetry is disabled. This integration awaits consented live validation.</p>
-        <label for="api-key">Presage API key · this session only</label><input id="api-key" type="password" autocomplete="off" spellcheck="false" maxlength="512" placeholder="Enter your own key">
-        <div class="row"><button id="save-key">Use key</button><button id="clear-key">Clear key</button></div><p id="key-status" class="fine">No key set.</p>
-        <label class="check consent"><input id="live-consent" type="checkbox"> I am 18 or older and authorize metered measurement and the disclosed vendor processing.</label><button id="live" class="wide">Start live measurement</button>
       </details>
       <p class="dialog-message message" role="status" aria-live="polite"></p><div class="dialog-actions"><button data-close>Done</button></div>
     </dialog>
@@ -144,7 +151,7 @@ export function mountStudio(root: HTMLElement) {
     </dialog>
     <dialog id="export-dialog" aria-labelledby="export-title">
       <button class="close" data-close aria-label="Close export choices">×</button><span class="eyebrow">SAVE YOUR PERFORMANCE</span><h2 id="export-title">Take it with you.</h2><p>Export the selected take with your current scene and creative settings.</p>
-      <div class="export-grid"><button id="export-video"><strong>Video preview</strong><span>WebM · picture and sound</span></button><button id="export-glb"><strong>Baked GLB</strong><span>Reusable character animation</span></button><button id="export-wav"><strong>WAV sound</strong><span>Audio for your project</span></button><button id="export-data"><strong>Control data</strong><span>JSON · replay and reuse</span></button></div><p class="fine">Video renders the stage in real time; the camera feed is never included. Keep this window visible until it finishes. Supplied model credits download alongside the video.</p>
+      <div class="export-grid"><button id="export-video"><strong>Video preview</strong><span>WebM · picture and sound</span></button><button id="export-glb"><strong>Baked GLB</strong><span>Reusable character animation</span></button><button id="export-wav"><strong>WAV sound</strong><span>Audio for your project</span></button><button id="export-data"><strong>Control data</strong><span>JSON · replay and reuse</span></button><button id="export-csv"><strong>Signal curves</strong><span>CSV · breathing, pulse, face for animation tools</span></button></div><label class="check"><input id="export-signals" type="checkbox" checked> Show the SmartSpectra signal panel in the video</label><p class="fine">Video renders the stage in real time; the camera feed is never included. Keep this window visible until it finishes. Supplied model credits download alongside the video.</p>
       <p class="dialog-message message" role="status" aria-live="polite"></p>
     </dialog>
     <dialog id="credits-dialog" aria-labelledby="credits-title">
@@ -392,7 +399,7 @@ export function updateStudioFlow(state: { hasInput: boolean; cameraActive: boole
   byId('open-camera').classList.toggle('primary', state.cameraActive && !state.hasInput && !state.hasTake);
   byId('stop-input').textContent = state.cameraActive && !state.hasInput ? 'Stop camera' : 'Stop input';
   const title = state.exporting ? 'Saving…' : state.recording ? 'On record.' : state.playing ? 'Your replay.' : state.hasInput ? 'You’re ready.' : state.hasTake ? 'Your take.' : state.cameraActive ? 'Preview on.' : 'Start here.';
-  const hint = state.exporting ? 'Keep the studio visible while your export finishes.' : state.recording ? 'Finish your take when you have the performance you want.' : state.playing ? 'One performance can bring every character to life.' : state.hasInput ? 'Pick a character, then record a take.' : state.hasTake ? 'Play your take, try another character, or export it.' : state.cameraActive ? 'Open camera settings to start face and body tracking.' : 'Animate with your camera, or try a rehearsal. No key needed.';
+  const hint = state.exporting ? 'Keep the studio visible while your export finishes.' : state.recording ? 'Finish your take when you have the performance you want.' : state.playing ? 'One performance can bring every character to life.' : state.hasInput ? 'Pick a character, then record a take.' : state.hasTake ? 'Play your take, try another character, or export it.' : state.cameraActive ? 'Open camera settings to start SmartSpectra or face & body tracking.' : 'Perform with your breath and pulse through SmartSpectra, or try a rehearsal.';
   byId('flow-title').textContent = title;
   byId('next-step').textContent = state.busy && !state.exporting ? 'Preparing your studio…' : hint;
 }
@@ -400,14 +407,15 @@ export function updateStudioFlow(state: { hasInput: boolean; cameraActive: boole
 export function setupGuide() {
   const dialog = byId<HTMLDialogElement>('guide');
   const steps = [
-    ['Start with a rehearsal', 'Choose Start rehearsal for clearly labeled synthetic input. It needs no camera, account or credits. Controls appear once your input is running.'],
-    ['Your camera, your decision', 'Use camera asks for consent, then opens a preview. Desk View and Continuity Camera appear as ordinary cameras. Start face & body tracking runs on this device without a key or credits. Stop input releases every camera.'],
+    ['Perform with your breath', 'Use camera asks for consent and opens a preview. With your own Presage key, Start SmartSpectra performance measures breathing movement, breathing rate and pulse rate while on-device tracking adds your face and body. The character breathes with you.'],
+    ['Your camera, your decision', 'Each step has its own consent. SmartSpectra uses account credits and Presage processing; without a key, face & body tracking runs on this device alone. Desk View and Continuity Camera appear as ordinary cameras. Stop input releases every camera.'],
+    ['Try a rehearsal first', 'Start rehearsal plays clearly labeled synthetic breathing and pulse. It needs no camera, account or credits. Controls appear once your input is running.'],
     ['Add a face camera', 'Once the preview is open, Second camera adds an optional face close-up with its own consent. It must be a different device. Face values are geometric estimates, not emotions.'],
     ['See yourself while you perform', 'A small live feed sits in the corner of the stage while a camera runs; Hide camera tucks it away. It is never part of an export. If you are too close, a tip asks you to step back.'],
     ['Choose a character', 'The Character menu holds Rex, Sprite, the Rain runner, two abstract scenes and the brain. The brain scene is an educational simulation, not your measured brain activity.'],
     ['Use your own character', 'Use your own character opens import for a GLB or embedded glTF. Named bones and ARKit-style face morphs receive tracking; static models get creative movement. Rig requirements are listed there.'],
     ['Record once, play anywhere', 'Start an input, then Record take. Finish to keep up to three minutes of controls. Play, scrub and loop it on another character. Edit trims or deletes; Takes opens your library.'],
-    ['Keep your performance', 'Export offers WebM video, WAV sound, a baked GLB and control JSON. Camera images and keys are excluded. Takes live in memory, so export before closing. Credits & licenses sit in the footer.'],
+    ['Keep your performance', 'Export offers WebM video with the signal panel, WAV sound, a baked GLB with breathing and pulse curves, signal CSV and control JSON. Camera images and keys are excluded. Takes live in memory, so export before closing. Credits & licenses sit in the footer.'],
   ] as const;
   let step = 0;
   const render = () => {

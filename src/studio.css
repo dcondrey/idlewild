@@ -253,3 +253,5 @@ button.dismiss { min-width: 28px; min-height: 28px; padding: 0 6px; border: 0; b
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
 .motion-reduced * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+
+#signal-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }

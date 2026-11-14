@@ -49,6 +49,15 @@ export interface SignalTrend {
   samples: number;
 }
 
+export const EXPRESSION_TYPES = ['angry', 'contempt', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'] as const;
+export type ExpressionType = typeof EXPRESSION_TYPES[number];
+
+// Optional SmartSpectra outputs requested only with the extended metric set.
+export interface ExtendedSignals {
+  expression?: { scores: Partial<Record<ExpressionType, number>>; quality: Quality; sampledAtMs: number };
+  variability?: { rmssd: number; quality: Quality; confidence: number | null; sampledAtMs: number };
+}
+
 export interface ControlFrame {
   sessionId: string;
   source: Source;
@@ -56,6 +65,7 @@ export interface ControlFrame {
   signals: Record<Channel, Signal>;
   tracking?: TrackingFrame;
   trends?: { pulseRate?: SignalTrend };
+  extended?: ExtendedSignals;
 }
 
 export type CapturePhase = 'idle' | 'starting' | 'warming' | 'ready' | 'poor-signal' | 'stopping' | 'error';
