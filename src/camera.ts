@@ -167,11 +167,11 @@ export function createCamera(video: HTMLVideoElement, onDisconnect: () => void, 
       releaseFace();
       await Promise.allSettled([facePending]);
     },
-    async startLive() {
+    async startLive(extended = false) {
       if (!bridge) throw new Error('Live measurement requires the Electron desktop app.');
       if (!stream || !context) throw new Error('Start a camera preview first.');
       const token = generation;
-      await bridge.startLive(true);
+      await bridge.startLive(true, extended);
       if (token !== generation || !stream) { await bridge.stopLive(); return; }
       live = true;
       let lastStamp = 0;

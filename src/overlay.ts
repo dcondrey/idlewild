@@ -102,6 +102,18 @@ function sparkline(ctx: CanvasRenderingContext2D, frames: readonly ControlFrame[
   }
 }
 
+export function extendedLine(frame: ControlFrame | undefined, timeMs: number): string | null {
+  const parts: string[] = [];
+  const variability = frame?.extended?.variability;
+  if (variability?.quality === 'valid' && timeMs - variability.sampledAtMs < SIGNAL_STALE_MS * 4) parts.push(`HRV rmssd ${variability.rmssd.toFixed(1)}`);
+  const expression = frame?.extended?.expression;
+  if (expression?.quality === 'valid' && timeMs - expression.sampledAtMs < SIGNAL_STALE_MS) {
+    const top = Object.entries(expression.scores).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))[0];
+    if (top) parts.push(`Expression estimate · ${top[0]} ${Math.round((top[1] ?? 0) * 100)}%`);
+  }
+  return parts.length ? parts.join('  ·  ') : null;
+}
+
 export function drawSignalOverlay(ctx: CanvasRenderingContext2D, width: number, height: number, view: OverlayView): void {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width < 160 || height < 120 || !Number.isFinite(view.timeMs)) return;
   const header = overlayHeader(view);
@@ -113,7 +125,8 @@ export function drawSignalOverlay(ctx: CanvasRenderingContext2D, width: number, 
   const pad = 10;
   const innerW = panelW - pad * 2;
   const sparkH = 30;
-  const panelH = 22 + (status ? 12 : 0) + 2 * (14 + 3 + sparkH + 3) + 12 + 46 + 6;
+  const extra = extendedLine(latest, view.timeMs);
+  const panelH = 22 + (status ? 12 : 0) + 2 * (14 + 3 + sparkH + 3) + 12 + 46 + (extra ? 14 : 0) + 6;
   const left = 8;
   const top = Math.max(8, height - panelH - 8);
   ctx.save();
@@ -176,6 +189,12 @@ export function drawSignalOverlay(ctx: CanvasRenderingContext2D, width: number, 
     ctx.fillText(detail, x, y + 31, half - 6);
   });
   y += 46;
+  if (extra) {
+    ctx.font = `500 10px ${FONT}`;
+    ctx.fillStyle = '#c9dcf0';
+    ctx.fillText(extra, 0, y, innerW);
+    y += 14;
+  }
   ctx.font = `500 9px ${FONT}`;
   ctx.fillStyle = '#8197a3';
   ctx.fillText('Creative use · not a medical measurement', 0, y, innerW);

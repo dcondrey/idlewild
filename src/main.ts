@@ -449,7 +449,7 @@ on('local-tracking', async () => {
 on('live', async () => {
   if (!input('camera-consent').checked || !input('live-consent').checked || !keySet) throw new Error('Preview consent, vendor-processing consent and a key are required.');
   sourceKind = 'live'; latest = null; continuity.reset(); pulseTrend.reset(); playing = false;
-  try { await camera.startLive(); if (camera.active && sourceKind === 'live') element<HTMLDialogElement>('camera-dialog').close(); } catch (error) { await stopInput(); throw error; }
+  try { await camera.startLive(input('live-extended').checked); if (camera.active && sourceKind === 'live') element<HTMLDialogElement>('camera-dialog').close(); } catch (error) { await stopInput(); throw error; }
   if (sourceKind === 'live' && input('live-tracking').checked) await startCompanionTracking();
 });
 async function startCompanionTracking() {

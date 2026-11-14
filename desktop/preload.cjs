@@ -11,7 +11,7 @@ contextBridge.exposeInMainWorld('idlewild', Object.freeze({
   setKey: key => ipcRenderer.invoke('studio:key', key),
   clearKey: () => ipcRenderer.invoke('studio:clear-key'),
   allowCamera: allowed => ipcRenderer.invoke('studio:camera', allowed),
-  startLive: consent => ipcRenderer.invoke('studio:start', consent),
+  startLive: (consent, extended = false) => ipcRenderer.invoke('studio:start', consent, extended),
   stopLive: () => ipcRenderer.invoke('studio:stop'),
   sendFrame: frame => ipcRenderer.invoke('studio:frame', frame),
   onFrame: callback => listen('studio:metrics', callback),

@@ -1,4 +1,4 @@
-import { SIGNAL_STALE_MS, TRACKING_STALE_MS, type Channel, type FaceShape, type SceneFrame, type TrackingPoint } from '../contracts.ts';
+import { SIGNAL_STALE_MS, TRACKING_STALE_MS, type Channel, type ExpressionType, type FaceShape, type SceneFrame, type TrackingPoint } from '../contracts.ts';
 import { trackingAt } from '../tracking-frame.ts';
 
 export const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
@@ -44,6 +44,15 @@ export function signalValue(input: SceneFrame, channel: Channel): number | null 
   return weight > 0 ? input.frame!.signals[channel].value! * weight : null;
 }
 
+export function expressionScore(input: SceneFrame, type: ExpressionType): number {
+  const frame = input.frame;
+  const expression = frame?.extended?.expression;
+  const score = expression?.scores[type];
+  if (!frame || !expression || expression.quality !== 'valid' || score === undefined || !Number.isFinite(score) || expression.sampledAtMs > frame.timeMs) return 0;
+  const age = Math.max(input.timeMs, frame.timeMs) - expression.sampledAtMs;
+  return age < SIGNAL_STALE_MS ? clamp(score) * clamp((SIGNAL_STALE_MS - age) / 500) : 0;
+}
+
 function ratePace(input: SceneFrame, channel: 'breathingRate' | 'pulseRate', low: number, high: number): number {
   const weight = signalWeight(input, channel);
   return weight > 0 ? clamp((input.frame!.signals[channel].value! - low) / (high - low)) * weight : 0;
@@ -59,8 +68,8 @@ export function sceneDynamics(input: SceneFrame) {
   const tracked = Boolean(tracking?.face) && faceStrength > 0;
   const jaw = tracked ? face('jawOpen') : clamp(signalValue(input, 'talking') ?? 0) * motion;
   const blink = tracked ? (face('eyeBlinkLeft') + face('eyeBlinkRight')) / 2 : clamp(signalValue(input, 'blink') ?? 0) * motion;
-  const smile = (face('mouthSmileLeft') + face('mouthSmileRight')) / 2;
-  const brow = Math.max(face('browInnerUp'), (face('browDownLeft') + face('browDownRight')) / 2);
+  const smile = tracked ? (face('mouthSmileLeft') + face('mouthSmileRight')) / 2 : expressionScore(input, 'happy') * motion;
+  const brow = tracked ? Math.max(face('browInnerUp'), (face('browDownLeft') + face('browDownRight')) / 2) : expressionScore(input, 'surprise') * motion;
   const movement = clamp(tracking?.movement ?? 0) * strength;
   let armSpread = 0, armLift = 0, lean = 0, turn = 0;
   const body = tracking?.body;

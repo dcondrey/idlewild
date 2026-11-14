@@ -53,7 +53,7 @@ const METRIC_SETS = Object.freeze({
 function createCaptureController({ loadSDK, onFrame, onStatus, now, metrics = 'standard', onPacket }) {
   if (typeof loadSDK !== 'function' || typeof onFrame !== 'function' || typeof onStatus !== 'function' || (onPacket !== undefined && typeof onPacket !== 'function')) throw new Error('Invalid capture callbacks');
   if (!Object.hasOwn(METRIC_SETS, metrics)) throw new Error('Invalid metric set');
-  const metricNames = METRIC_SETS[metrics];
+  const defaultMetrics = metrics;
   const clockOrigin = Date.now();
   const monotonicOrigin = performance.now();
   const clock = now ?? (() => clockOrigin + performance.now() - monotonicOrigin);
@@ -135,7 +135,9 @@ function createCaptureController({ loadSDK, onFrame, onStatus, now, metrics = 's
   return {
     start(request) {
       if (!request || request.consent !== true || typeof request.apiKey !== 'string' || !/^[!-~]{1,512}$/.test(request.apiKey) ||
-          typeof request.sessionId !== 'string' || !/^[A-Za-z0-9._:-]{1,128}$/.test(request.sessionId)) return Promise.reject(new Error('Live capture requires consent, a session, and a valid API key.'));
+          typeof request.sessionId !== 'string' || !/^[A-Za-z0-9._:-]{1,128}$/.test(request.sessionId) ||
+          (request.metrics !== undefined && !Object.hasOwn(METRIC_SETS, request.metrics))) return Promise.reject(new Error('Live capture requires consent, a session, and a valid API key.'));
+      const metricNames = METRIC_SETS[request.metrics ?? defaultMetrics];
       if (disposed || pendingStart || active || sdk || needsCleanup) return Promise.reject(new Error('Stop the current capture before starting another session.'));
       pendingStart = true;
       const token = ++generation;

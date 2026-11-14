@@ -974,3 +974,19 @@ test('star, bubbles and brain ring visibly track breath and ignore stale breath'
   assert.equal(ring.scale.x, rest0);
   brain.dispose();
 });
+
+test('SmartSpectra expression scores shape smile and brow only without a tracked face and expire with the signal', () => {
+  const scored = (ageMs: number, quality: 'valid' | 'unstable' = 'valid') => {
+    const frame = fusedFrame(1000);
+    frame.frame!.tracking = undefined;
+    frame.frame!.extended = { expression: { scores: { happy: 0.8, surprise: 0.5 }, quality, sampledAtMs: 1000 - ageMs } };
+    return frame;
+  };
+  const fresh = sceneDynamics(scored(0));
+  assert.ok(fresh.smile > 0.3 && fresh.brow > 0.2);
+  assert.equal(sceneDynamics(scored(SIGNAL_STALE_MS)).smile, 0);
+  assert.equal(sceneDynamics(scored(0, 'unstable')).smile, 0);
+  const tracked = scored(0);
+  tracked.frame!.tracking = { sampledAtMs: 1000, face: { weights: Object.fromEntries(FACE_SHAPES.map(name => [name, 0])) as NonNullable<TrackingFrame['face']>['weights'], rotation: null }, body: null, movement: null };
+  assert.equal(sceneDynamics(tracked).smile, 0, 'a tracked face takes precedence over expression scores');
+});

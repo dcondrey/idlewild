@@ -64,10 +64,10 @@ handle('studio:camera', async allowed => {
   cameraAllowed = allowed;
   if (!allowed) await capture.stop();
 });
-handle('studio:start', async consent => {
-  if (consent !== true || !cameraAllowed || !apiKey) throw new Error('Consent, preview and key required');
+handle('studio:start', async (consent, extended = false) => {
+  if (consent !== true || typeof extended !== 'boolean' || !cameraAllowed || !apiKey) throw new Error('Consent, preview and key required');
   benchmarkLimit?.begin();
-  await capture.start({ apiKey, consent: true, sessionId: randomUUID() });
+  await capture.start({ apiKey, consent: true, sessionId: randomUUID(), ...(extended ? { metrics: 'extended' } : {}) });
 });
 handle('studio:stop', () => capture.stop());
 handle('studio:frame', payload => {

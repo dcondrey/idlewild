@@ -273,6 +273,13 @@ test('native metric callback uses measurement epochs, discards event timestamps 
 
 test('metric sets are allow-listed and the optional packet log sees the session epoch and raw bytes before decoding', async () => {
   assert.throws(() => fixture({ metrics: 'everything' }), /metric set/);
+  const rejected = fixture();
+  await assert.rejects(rejected.controller.start({ ...request(), metrics: 'everything' }));
+  assert.deepEqual(rejected.calls, []);
+  const perSession = fixture();
+  await perSession.controller.start({ ...request(), metrics: 'core' });
+  assert.deepEqual(perSession.instances[0].options.requestedMetrics, [0, 2, 15]);
+  await perSession.controller.dispose();
   const events: Record<string, unknown>[] = [];
   const fake = fixture({ metrics: 'core', onPacket: event => events.push(event) });
   await fake.controller.start(request());

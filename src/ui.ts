@@ -100,6 +100,7 @@ export function mountStudio(root: HTMLElement) {
         <div class="row"><button id="save-key">Use key</button><button id="clear-key">Clear key</button></div><p id="key-status" class="fine">No key set.</p>
         <label class="check consent"><input id="live-consent" type="checkbox"> I am 18 or older and authorize metered measurement and the disclosed vendor processing.</label>
         <label class="check"><input id="live-tracking" type="checkbox" checked> Also track my face and body on this device</label>
+        <label class="check"><input id="live-extended" type="checkbox"> Also request HRV and expression estimates (your account may not include them; if start fails, clear this)</label>
         <button id="live" class="wide primary">Start SmartSpectra performance</button>
         <p class="fine">Keep this window visible while measuring; hiding or minimizing it stops input.</p>
       </section>
