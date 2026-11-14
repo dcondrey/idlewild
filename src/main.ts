@@ -188,8 +188,15 @@ function finishRecording() {
 function receiveFrame(raw: ControlFrame) {
   if (raw.source !== sourceKind) return;
   const arrived = performance.now();
-  const fused = raw.source === 'live' ? attachTracking(raw, arrived, tracked) : raw;
-  const frame = pulseTrend.update(continuity.update(validateFrame(fused), input('continuity').checked));
+  let checked: ControlFrame;
+  try { checked = validateFrame(raw.source === 'live' ? attachTracking(raw, arrived, tracked) : raw); }
+  catch (error) {
+    if (raw.source !== 'live' || !raw.tracking && !tracked) throw error;
+    tracked = null;
+    message('Skipped an invalid face and body sample. SmartSpectra measurement continues.', true);
+    checked = validateFrame(raw);
+  }
+  const frame = pulseTrend.update(continuity.update(checked, input('continuity').checked));
   latest = frame;
   latestArrival = arrived;
   if (history.length && history[history.length - 1].sessionId !== frame.sessionId) history = [];

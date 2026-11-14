@@ -17,7 +17,8 @@ delete env.DEBUG;
 const metricSet = process.argv.find(value => value.startsWith('--sdk-metrics='))?.slice('--sdk-metrics='.length) ?? 'standard';
 if (!['standard', 'core', 'extended'].includes(metricSet)) throw new Error('--sdk-metrics must be standard, core or extended.');
 const app = await electron.launch({ args: [root, '--live-benchmark', `--sdk-metrics=${metricSet}`, `--sdk-packet-log=${path.relative(root, path.join(directory, 'packets.jsonl'))}`], cwd: root, env, timeout: 30_000 });
-const report = { mode: checkOnly ? 'non-metered preparation check' : 'authorized live benchmark', metricSet, statuses: [], started: false, stopped: false, watchdog: false, recording: false };
+const report = { mode: checkOnly ? 'non-metered preparation check' : 'authorized live benchmark', metricSet, companionTracking: false,
+  cues: [{ fromS: 0, toS: 10, cue: 'normal' }, { fromS: 10, toS: 25, cue: 'paced 4 s in / 4 s out, inhale first' }, { fromS: 25, toS: 35, cue: 'normal' }, { fromS: 35, toS: 43, cue: 'speak' }, { fromS: 43, toS: 55, cue: 'quiet' }], statuses: [], started: false, stopped: false, watchdog: false, recording: false };
 let recorder;
 let firstFrameAt = null;
 let startedAt = null;
@@ -81,7 +82,8 @@ try {
           started = performance.now();
           timer = setInterval(() => {
             const elapsed = (performance.now() - started) / 1000;
-            cue.textContent = `Benchmark · ${Math.max(0, Math.ceil(55 - elapsed))}s left. ${elapsed < 35 ? 'Stay still and breathe normally.' : elapsed < 43 ? 'Say a short sentence naturally.' : 'Return to quiet, normal breathing.'}`;
+            const phase = elapsed < 10 ? 'Sit still and breathe normally.' : elapsed < 25 ? `Slow deep breaths: ${Math.floor((elapsed - 10) / 4) % 2 === 0 ? 'IN' : 'OUT'} (4 s in, 4 s out).` : elapsed < 35 ? 'Breathe normally.' : elapsed < 43 ? 'Say a short sentence naturally.' : 'Return to quiet, normal breathing.';
+            cue.textContent = `Benchmark · ${Math.max(0, Math.ceil(55 - elapsed))}s left. ${phase}`;
           }, 1000);
         }
         if (status.phase === 'idle' && started !== null) { clearInterval(timer); cue.textContent = 'Benchmark stopped. No automatic restart.'; }
@@ -93,7 +95,8 @@ try {
     await page.locator('#detail-view').click();
     await page.evaluate(() => { document.getElementById('continuity').checked = true; });
     await page.locator('#open-camera').click();
-    await page.locator('#measurement-settings').evaluate(element => { element.open = true; });
+    await page.locator('#live-tracking').uncheck();
+    await page.locator('#live-extended').setChecked(metricSet === 'extended');
     await app.evaluate(({ app, BrowserWindow }) => { app.focus({ steal: true }); BrowserWindow.getAllWindows()[0].focus(); });
     console.log(`READY_FOR_USER: camera setup is open; no SDK or camera started. Evidence directory: ${directory}`);
     const closed = new Promise(resolve => app.once('close', resolve));

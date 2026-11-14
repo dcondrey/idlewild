@@ -55,7 +55,7 @@ Most Creative or Delightful Use; Best Thoughtful Real-World Use.
 
 - Nothing starts at launch. The camera opens only after in-app consent; SmartSpectra needs your own key and a separate metered-measurement consent (18+).
 - Keys stay in main-process memory for the session and are never written to disk. Camera images are never saved, uploaded by Idlewild or exported. No microphone is used; all audio is synthesized.
-- SmartSpectra sends camera-derived data to Presage for processing. Idlewild disables SDK telemetry and never requests insights; vendor retention is governed by Presage's terms and is not verified by Idlewild.
+- SmartSpectra sends camera-derived data to Presage for processing. Idlewild disables SDK telemetry and never requests insights, but the SDK may generate automatic vitals insights that upload data and Idlewild cannot disable them; vendor retention is governed by Presage's terms and is not verified by Idlewild.
 - Takes live in memory until you export them. Exports that include measured breathing and pulse are personal data, and you choose where they go. Face and body tracking runs entirely on the device.
 - Creative animation, not medical measurement: no diagnosis, no health claims, no covert monitoring.
 
