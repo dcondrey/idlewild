@@ -9,7 +9,7 @@ Deadline: November 22, 2026, 11:59 PM PST. Required: a published DEV post using 
 - [ ] Record the demo take in a normal session (keep the window visible; hiding it stops input), export its control JSON, then re-render video, WAV, GLB and CSV from that JSON as often as needed.
 - [ ] Owner approves `docs/PRIVACY.md` and `docs/TERMS.md`.
 - [ ] Confirm no `.local/`, takes, packet logs, keys or recordings are tracked (`git ls-files`).
-- [ ] Create the public repository and push (owner authorization required).
+- [x] Create the public repository and push: https://github.com/dcondrey/idlewild
 - [ ] Optional: upload this agent session at dev.to/agent_sessions/new, check it for keys, then **Make Public**.
 
 ## Demo video (about 2 minutes)
@@ -36,7 +36,7 @@ Idlewild is a desktop performance studio for animators and game makers. You brea
 
 ### Code
 
-{% embed REPOSITORY_URL %}
+{% embed https://github.com/dcondrey/idlewild %}
 
 ### How It Responds to Human Signals
 
