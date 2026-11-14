@@ -13,22 +13,27 @@ function packetLogPath(value, root) {
   return file;
 }
 
+// Writes are queued on a stream so a slow disk never blocks the main process while SDK callbacks and camera frames are flowing.
+// Queued bytes are bounded by maxBytes, so a stalled disk costs at most that much memory.
 function createPacketLog(file, { maxBytes = MAX_LOG_BYTES } = {}) {
   fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   const fd = fs.openSync(file, 'a', 0o600);
+  const stream = fs.createWriteStream(file, { fd, autoClose: true });
+  let failed = false;
+  let closed = null;
+  stream.on('error', () => { failed = true; });
   let written = 0;
   let full = false;
-  let closed = false;
   const write = record => {
-    if (closed || full) return;
+    if (closed || full || failed) return;
     const line = `${JSON.stringify(record)}\n`;
     const size = Buffer.byteLength(line);
     if (written + size > maxBytes) {
       full = true;
-      fs.writeSync(fd, `${JSON.stringify({ kind: 'truncated', atBytes: written })}\n`);
+      stream.write(`${JSON.stringify({ kind: 'truncated', atBytes: written })}\n`);
       return;
     }
-    fs.writeSync(fd, line);
+    stream.write(line);
     written += size;
   };
   return {
@@ -37,9 +42,12 @@ function createPacketLog(file, { maxBytes = MAX_LOG_BYTES } = {}) {
       else if (event.kind === 'session') write({ kind: 'session', sessionId: event.sessionId, epochUs: event.epochUs, metrics: event.metrics });
     },
     close() {
-      if (closed) return;
-      closed = true;
-      fs.closeSync(fd);
+      closed ??= new Promise(resolve => {
+        if (stream.closed) return resolve();
+        stream.once('close', resolve);
+        stream.end();
+      });
+      return closed;
     },
   };
 }

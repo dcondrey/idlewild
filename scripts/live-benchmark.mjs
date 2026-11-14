@@ -54,7 +54,14 @@ try {
           resolveStopped();
         }, 58_000);
       }
-      if (status.phase === 'idle' && report.started) {
+      if (status.phase === 'error' && report.started && !report.stopped && report.failed === undefined) {
+        report.failed = String(status.message).slice(0, 512);
+        report.elapsedMs = Math.round(performance.now() - startedAt);
+        clearTimeout(deadline);
+        console.log(`LIVE_ENDED_WITH_ERROR: ${report.failed}`);
+        resolveStopped();
+      }
+      if (status.phase === 'idle' && report.started && !report.stopped) {
         report.stopped = true;
         report.elapsedMs = Math.round(performance.now() - startedAt);
         clearTimeout(deadline);
@@ -90,7 +97,8 @@ try {
             cue.textContent = `Benchmark · ${Math.max(0, Math.ceil(55 - elapsed))}s left. ${phase}`;
           }, 1000);
         }
-        if (status.phase === 'idle' && started !== null) { clearInterval(timer); cue.textContent = 'Benchmark stopped. No automatic restart.'; }
+        if (status.phase === 'error' && started !== null) { clearInterval(timer); cue.textContent = `Benchmark ended: ${status.message} No automatic restart.`; }
+        else if (status.phase === 'idle' && started !== null) { clearInterval(timer); cue.textContent = 'Benchmark stopped. No automatic restart.'; }
       });
     });
     await page.locator('#character-button').click();
@@ -106,9 +114,12 @@ try {
     const closed = new Promise(resolve => app.once('close', resolve));
     await Promise.race([stopped, closed]);
     await uiRecording;
-    if (report.stopped && !report.watchdog) {
-      await expect.poll(() => page.locator('#camera-preview').evaluate(video => video.srcObject === null), { timeout: 5000 }).toBe(true);
-      report.cameraReleased = true;
+    if (report.failed !== undefined || report.watchdog) process.exitCode = 1;
+    if ((report.stopped || report.failed !== undefined) && !report.watchdog) {
+      if (report.stopped) {
+        await expect.poll(() => page.locator('#camera-preview').evaluate(video => video.srcObject === null), { timeout: 5000 }).toBe(true);
+        report.cameraReleased = true;
+      }
       report.firstFrameDelayMs = firstFrameAt === null ? null : Math.round(firstFrameAt - startedAt);
       if (recorder) {
         const take = recorder.finish();
@@ -124,11 +135,11 @@ try {
       }
     }
   }
-} catch {
-  report.harnessError = 'Benchmark preparation or verification failed; no automatic retry was attempted.';
+} catch (error) {
+  report.harnessError = `Benchmark preparation or verification failed; no automatic retry was attempted. ${String(error?.message ?? error).split('\n')[0].slice(0, 300)}`;
   process.exitCode = 1;
 } finally {
-  if (report.started && !report.stopped && !report.watchdog) {
+  if (report.started && !report.stopped && report.failed === undefined && !report.watchdog) {
     app.process().kill('SIGKILL');
     report.watchdog = true;
   }

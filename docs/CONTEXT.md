@@ -256,3 +256,23 @@ Verification ran from a clean clone on the internal disk, because `/Volumes/A` s
 - Passed: `npm test` 171/171, build, `test:ui` (menu loop, Space, preference relaunch), `live-benchmark --check`, `check-local-tracking`, `check-scene-exports` and `check-character --model rex`.
 - One `test:ui` run failed when input stopped as if the window were hidden 0.2 s into a keyboard-recorded take. The rerun of the same code passed; macOS window occlusion is suspected.
 - Still unverified: the fused live path in Electron (no fixture SDK yet) and live SDK cadence and polarity.
+
+## Live run readiness (2026-11-14)
+
+A review of the metered path against the installed SDK 3.5.0 (its `index.d.ts`, README and native strings) found two defects that could spoil the one paid run:
+- **Frame cadence.** The renderer sent a frame, awaited the IPC reply, then waited 50 ms, so SmartSpectra got about 17 fps. The SDK graph is built for 30 fps (`throttled_video_30fps`; its readiness check requires 27 fps), and sustained low frame rate ends a session with error 14. Live frames now come from `MediaStreamTrackProcessor` on a clone of the preview track: each camera frame is sent once, stamped with its capture time anchored to epoch microseconds, re-anchored if the two clocks drift more than 1 s, and never repeated. If the processor is missing, the app fails before any metered start. The main process now drops a frame only when capture spacing is under 1/35 s or arrival spacing under 1/70 s; the old arrival-only 1/35 s gate dropped frames under IPC jitter.
+- **Blocking packet log.** `--sdk-packet-log` used `writeSync` on the main thread, so a stalled disk (seen on `/Volumes/A` this session) would block SDK callbacks and frame IPC. Writes now queue on a stream, bounded by the 64 MiB cap, and are flushed (up to 10 s) after capture shutdown on window close and quit.
+
+The benchmark now ends as soon as SmartSpectra reports an error: the message goes to `report.failed` and the exit code is 1. It closes the app normally instead of killing it, so the packet log flushes. A harness failure records the first line of its cause.
+
+SDK facts that matter for the run:
+- `start()` is synchronous.
+- Error codes: 10 non-monotonic timestamp, 11 timestamp gap, 13 metric not authorized, 14 sustained low frame rate.
+- On macOS the SDK keeps a device key in the keychain, with an in-memory fallback (per its binary strings), so a keychain prompt on first use is possible. This is unverified.
+
+Verification ran from the internal-disk clone:
+- Passed: `npm test` 173/173, build, `test:ui`, `live-benchmark --check` and `check-local-tracking`.
+- Frame pump in Electron 45, with a 30 fps canvas stream standing in for the camera and a stub bridge:
+  - Old pump: 85 frames in 5 s, with 56–163 ms gaps.
+  - New pump: 151 frames in 5 s, with 32.1–34.4 ms gaps, timestamps within 5 ms of the clock and nothing sent after stop.
+- Not verified: SDK acceptance of these frames, live cadence, polarity, entitlements, and the fused SmartSpectra + tracking path. These need the metered run; the fixture SDK was declined.

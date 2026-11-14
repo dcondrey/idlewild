@@ -15,6 +15,11 @@ const flag = name => process.argv.find(value => value.startsWith(`--${name}=`))?
 const metricSet = flag('sdk-metrics') ?? 'standard';
 const packetLogFlag = flag('sdk-packet-log');
 const packetLog = packetLogFlag === undefined ? null : createPacketLog(packetLogPath(packetLogFlag, process.cwd()));
+const PACKET_FLUSH_LIMIT_MS = 10_000;
+const shutdownCapture = async () => {
+  await capture.dispose();
+  if (packetLog) await Promise.race([packetLog.close(), new Promise(resolve => setTimeout(resolve, PACKET_FLUSH_LIMIT_MS).unref())]);
+};
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'idlewild', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 app.setName('Idlewild');
@@ -153,7 +158,7 @@ app.whenReady().then(async () => {
     event.preventDefault();
     cameraAllowed = false;
     apiKey = '';
-    void capture.dispose().then(() => { closing = true; window.destroy(); app.quit(); }).catch(() => {
+    void shutdownCapture().then(() => { closing = true; window.destroy(); app.quit(); }).catch(() => {
       send('studio:status', { phase: 'error', message: 'Capture could not shut down. Stop capture and close again.', sessionId: null });
     });
   });
@@ -165,9 +170,9 @@ app.on('before-quit', event => {
   event.preventDefault();
   apiKey = '';
   cameraAllowed = false;
-  void capture.dispose().then(() => { quitting = true; app.quit(); }).catch(() => {
+  void shutdownCapture().then(() => { quitting = true; app.quit(); }).catch(() => {
     send('studio:status', { phase: 'error', message: 'Capture could not shut down. Stop capture and quit again.', sessionId: null });
   });
 });
 app.on('window-all-closed', () => app.quit());
-app.on('quit', () => packetLog?.close());
+app.on('quit', () => { void packetLog?.close(); });

@@ -178,3 +178,81 @@ test('SmartSpectra frames keep a constant pixel budget across camera aspect rati
     assert.ok(Math.abs(w / h - width / height) < 0.01);
   }
 });
+
+test('live frames come from the camera track at its own rate with anchored, increasing capture timestamps', async () => {
+  const { sdkFrameSize, nextFrameStamp } = await import('../src/camera.ts');
+  const oldDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  const oldMedia = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices');
+  const oldProcessor = Object.getOwnPropertyDescriptor(globalThis, 'MediaStreamTrackProcessor');
+  const context = { drawImage() {}, getImageData: (_x: number, _y: number, width: number, height: number) => ({ data: new Uint8ClampedArray(width * height * 4) }) };
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: { createElement: () => ({ width: 0, height: 0, getContext: () => context }) } });
+  const clone = { stops: 0, stop() { this.stops++; } };
+  const source = { ...fakeTrack('body'), readyState: 'live', clone: () => clone };
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => streamOf(source as unknown as ReturnType<typeof fakeTrack>) } });
+  let closed = 0;
+  let cancelled = 0;
+  const captureUs = [5_000_000, 5_033_333, 5_066_666, 5_100_000, 5_133_333];
+  try {
+    const calls: string[] = [];
+    const sent: { width: number; height: number; stride: number; timestampUs: number; bytes: Uint8Array }[] = [];
+    let reject = false;
+    let disconnects = 0;
+    const bridge = {
+      allowCamera: async () => {}, stopLive: async () => { calls.push('stopLive'); },
+      startLive: async () => { calls.push('startLive'); },
+      sendFrame: async (frame: typeof sent[number]) => { if (reject) throw new Error('ipc'); sent.push(frame); return true; },
+    } as unknown as DesktopBridge;
+    const camera = createCamera(preview() as unknown as HTMLVideoElement, () => { disconnects++; }, bridge);
+    await camera.start('body');
+    Reflect.deleteProperty(globalThis, 'MediaStreamTrackProcessor');
+    await assert.rejects(camera.startLive(), /cannot read camera frames/);
+    assert.deepEqual(calls, [], 'no metered session starts when frames cannot be read');
+
+    let queue = [...captureUs];
+    Object.defineProperty(globalThis, 'MediaStreamTrackProcessor', { configurable: true, writable: true, value: class {
+      readable: ReadableStream<unknown>;
+      constructor({ track }: { track: unknown }) {
+        assert.equal(track, clone, 'the pump reads a clone so the preview keeps its own track');
+        this.readable = new ReadableStream({
+          pull: controller => {
+            const timestamp = queue.shift();
+            if (timestamp === undefined) return new Promise(() => {});
+            controller.enqueue({ displayWidth: 1920, displayHeight: 1080, timestamp, close: () => { closed++; } });
+          },
+          cancel: () => { cancelled++; },
+        }, { highWaterMark: 0 });
+      }
+    } });
+    const before = Date.now() * 1000;
+    await camera.startLive();
+    while (sent.length < captureUs.length) await new Promise(resolve => setTimeout(resolve, 1));
+    const [width, height] = sdkFrameSize(1920, 1080);
+    assert.ok(sent.every(frame => frame.width === width && frame.height === height && frame.stride === width * 4 && frame.bytes.byteLength === width * height * 4));
+    assert.deepEqual(sent.slice(1).map((frame, index) => frame.timestampUs - sent[index].timestampUs), [33333, 33333, 33334, 33333], 'spacing follows capture time, not read time');
+    assert.ok(Math.abs(sent[0].timestampUs - before) < 1_000_000);
+    assert.equal(closed, captureUs.length, 'every VideoFrame is closed');
+    await camera.stop();
+    assert.equal(clone.stops, 1);
+    assert.equal(cancelled, 1);
+    assert.equal(disconnects, 0);
+
+    await camera.start('body');
+    queue = [...captureUs];
+    reject = true;
+    await camera.startLive();
+    while (disconnects === 0) await new Promise(resolve => setTimeout(resolve, 1));
+    assert.equal(clone.stops, 2, 'a failed submission releases the frame pump');
+    assert.equal(camera.active, false);
+  } finally {
+    if (oldDocument) Object.defineProperty(globalThis, 'document', oldDocument); else Reflect.deleteProperty(globalThis, 'document');
+    if (oldMedia) Object.defineProperty(navigator, 'mediaDevices', oldMedia); else Reflect.deleteProperty(navigator, 'mediaDevices');
+    if (oldProcessor) Object.defineProperty(globalThis, 'MediaStreamTrackProcessor', oldProcessor); else Reflect.deleteProperty(globalThis, 'MediaStreamTrackProcessor');
+  }
+
+  const clock = { offsetUs: null, lastUs: 0 };
+  assert.equal(nextFrameStamp(clock, 100, 1_000_000_000), 1_000_000_000);
+  assert.equal(nextFrameStamp(clock, 100, 1_000_000_500), 1_000_000_001, 'a repeated capture time still advances');
+  assert.equal(nextFrameStamp(clock, 2_000_100, 1_001_000_000), 1_002_000_000, 'drift of exactly 1 s keeps the anchor');
+  assert.equal(nextFrameStamp(clock, 3_600_101, 1_002_500_000), 1_002_500_000, 'drift beyond 1 s re-anchors to now');
+  assert.equal(nextFrameStamp(clock, 3_600_000, 1_002_500_100), 1_002_500_001, 'a backwards capture time never repeats or reverses');
+});

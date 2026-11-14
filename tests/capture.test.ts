@@ -166,8 +166,16 @@ test('frame bounds, RGBA allocation, epochs and submission rate are enforced', a
   assert.throws(() => fake.controller.sendFrame(make(1, 1)), /increasing/);
   assert.equal(fake.controller.sendFrame({ ...make(1, 1), timestampUs: EPOCH * 1000 + 1 }), false);
   fake.advance(40);
-  assert.equal(fake.controller.sendFrame({ ...make(1, 1), timestampUs: EPOCH * 1000 + 40000 }), true);
-  assert.equal(fake.calls.filter(call => call === 'frame:2').length, 2);
+  const at = (offsetUs: number) => ({ ...make(1, 1), timestampUs: EPOCH * 1000 + offsetUs });
+  assert.equal(fake.controller.sendFrame(at(40000)), true);
+  fake.advance(20);
+  assert.equal(fake.controller.sendFrame(at(40000 + 28570)), false, 'capture spacing below 35 fps is dropped');
+  assert.equal(fake.controller.sendFrame(at(40000 + 28571)), true, 'arrival jitter does not drop a frame whose capture spacing is valid');
+  fake.advance(5);
+  assert.equal(fake.controller.sendFrame(at(200000)), false, 'a burst of late frames is bounded by arrival spacing');
+  fake.advance(10);
+  assert.equal(fake.controller.sendFrame(at(200001)), true);
+  assert.equal(fake.calls.filter(call => call === 'frame:2').length, 4);
   await fake.controller.dispose();
 });
 
@@ -311,5 +319,41 @@ test('malformed and oversized native packets terminate capture without passing i
     assert.equal(fake.statuses.at(-1)?.phase, 'error');
     await fake.controller.stop();
     await fake.controller.dispose();
+  }
+});
+
+test('packet log writes ordered records off the main thread, truncates at its byte limit and flushes on close', async () => {
+  const { mkdtemp, readFile, rm } = await import('node:fs/promises');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const { createPacketLog, packetLogPath } = require('../desktop/packet-log.cjs');
+  const root = await mkdtemp(path.join(os.tmpdir(), 'idlewild-packets-'));
+  try {
+    assert.throws(() => packetLogPath('../outside.jsonl', root), /under \.local/);
+    assert.throws(() => packetLogPath('.local/log.json', root), /under \.local/);
+    const session = { kind: 'session', sessionId: 's', epochUs: '1', metrics: ['CHEST_BREATHING'] };
+    const packet = (timeMs: number) => ({ kind: 'packet', timeMs, bytes: new Uint8Array([timeMs, 2, 3]) });
+    const sizeOf = (record: object) => Buffer.byteLength(`${JSON.stringify(record)}\n`);
+    const sessionBytes = sizeOf(session);
+    const packetBytes = sizeOf({ kind: 'packet', timeMs: 1, bytes: Buffer.from([1, 2, 3]).toString('base64') });
+    const lines = async (maxBytes: number, count: number) => {
+      const file = packetLogPath(`.local/${maxBytes}.jsonl`, root);
+      const log = createPacketLog(file, { maxBytes });
+      log.record(session);
+      for (let index = 1; index <= count; index++) log.record(packet(index));
+      await log.close();
+      log.record(packet(9));
+      await log.close();
+      return (await readFile(file, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+    };
+    const exact = await lines(sessionBytes + 2 * packetBytes, 2);
+    assert.deepEqual(exact.map(record => record.timeMs ?? record.kind), ['session', 1, 2], 'records at exactly the limit are kept in order');
+    const over = await lines(sessionBytes + 2 * packetBytes - 1, 2);
+    assert.deepEqual(over.map(record => record.timeMs ?? record.kind), ['session', 1, 'truncated']);
+    assert.equal(over[2].atBytes, sessionBytes + packetBytes);
+    const roomy = await lines(sessionBytes + 2 * packetBytes + 1, 3);
+    assert.deepEqual(roomy.map(record => record.timeMs ?? record.kind), ['session', 1, 2, 'truncated'], 'nothing is written after truncation or close');
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });

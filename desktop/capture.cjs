@@ -5,6 +5,8 @@ const { createMetricsMapper, MAX_PACKET_BYTES } = require('./metrics.cjs');
 const MAX_WIDTH = 1280;
 const MAX_HEIGHT = 720;
 const MAX_FRAME_BYTES = MAX_WIDTH * MAX_HEIGHT * 4;
+const MIN_FRAME_SPACING_US = Math.floor(1_000_000 / 35);
+const MIN_ARRIVAL_SPACING_MS = 1000 / 70;
 const MESSAGES = Object.freeze({
   2: 'Authentication failed. Clear the key and enter a valid SmartSpectra key.',
   3: 'The SDK rejected the requested signals. Check account support before retrying.',
@@ -67,7 +69,8 @@ function createCaptureController({ loadSDK, onFrame, onStatus, now, metrics = 's
   let sessionId = null;
   let epochMs = 0;
   let lastFrameUs = -1;
-  let lastSubmitMs = -Infinity;
+  let lastSubmitUs = -Infinity;
+  let lastArrivalMs = -Infinity;
   let lastEmittedMs = -1;
   let timer = null;
   let validationCode = null;
@@ -162,7 +165,8 @@ function createCaptureController({ loadSDK, onFrame, onStatus, now, metrics = 's
           mapper = createMetricsMapper({ sessionId, epochUs: BigInt(Math.floor(epochMs * 1000)) });
           if (onPacket) { try { onPacket({ kind: 'session', sessionId, epochUs: String(Math.floor(epochMs * 1000)), metrics: metricNames }); } catch {} }
           lastFrameUs = -1;
-          lastSubmitMs = -Infinity;
+          lastSubmitUs = -Infinity;
+          lastArrivalMs = -Infinity;
           lastEmittedMs = -1;
           validationCode = null;
           let started = false;
@@ -224,8 +228,9 @@ function createCaptureController({ loadSDK, onFrame, onStatus, now, metrics = 's
       const currentMs = clock();
       if (frame.timestampUs <= lastFrameUs || Math.abs(frame.timestampUs / 1000 - currentMs) > 5000) throw new Error('Camera timestamps must be increasing epoch microseconds.');
       lastFrameUs = frame.timestampUs;
-      if (currentMs - lastSubmitMs < 1000 / 35) return false;
-      lastSubmitMs = currentMs;
+      if (frame.timestampUs - lastSubmitUs < MIN_FRAME_SPACING_US || currentMs - lastArrivalMs < MIN_ARRIVAL_SPACING_MS) return false;
+      lastSubmitUs = frame.timestampUs;
+      lastArrivalMs = currentMs;
       try {
         return sdk.sendFrame(frame.bytes, frame.width, frame.height, frame.stride, 2, frame.timestampUs) === true;
       } catch {

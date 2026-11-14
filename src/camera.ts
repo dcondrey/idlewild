@@ -3,8 +3,20 @@ const MAX_CAPTURE_HEIGHT = 1440;
 const CAPTURE_FRAME_RATE = 30;
 const SDK_FRAME_PIXELS = 640 * 480;
 
+const MAX_CLOCK_DRIFT_US = 1_000_000;
+
 interface CameraCapabilities extends MediaTrackCapabilities { resizeMode?: string[]; zoom?: { min?: number; max?: number } }
 interface CameraConstraints extends MediaTrackConstraints { resizeMode?: string; zoom?: number }
+type TrackProcessorConstructor = new (init: { track: MediaStreamTrack; maxBufferSize?: number }) => { readable: ReadableStream<VideoFrame> };
+
+export interface FrameClock { offsetUs: number | null; lastUs: number }
+
+// Anchors a frame's media-clock capture time to epoch microseconds, re-anchoring if the two clocks drift apart, and never repeats a timestamp.
+export function nextFrameStamp(clock: FrameClock, captureUs: number, nowUs: number): number {
+  if (clock.offsetUs === null || Math.abs(captureUs + clock.offsetUs - nowUs) > MAX_CLOCK_DRIFT_US) clock.offsetUs = nowUs - captureUs;
+  clock.lastUs = Math.max(clock.lastUs + 1, Math.floor(captureUs + clock.offsetUs));
+  return clock.lastUs;
+}
 
 export function sdkFrameSize(width: number, height: number): [number, number] {
   const ratio = Math.min(1, Math.sqrt(SDK_FRAME_PIXELS / (width * height)), 1280 / width, 720 / height);
@@ -50,8 +62,8 @@ export function createCamera(video: HTMLVideoElement, onDisconnect: () => void, 
   let stream: MediaStream | null = null;
   let pending: Promise<void> | null = null;
   let generation = 0;
-  let timer: ReturnType<typeof setTimeout> | null = null;
   let sending: Promise<unknown> | null = null;
+  let pump: { reader: ReadableStreamDefaultReader<VideoFrame>; track: MediaStreamTrack } | null = null;
   let live = false;
   let faceStream: MediaStream | null = null;
   let faceVideo: HTMLVideoElement | null = null;
@@ -73,9 +85,12 @@ export function createCamera(video: HTMLVideoElement, onDisconnect: () => void, 
   }
 
   function release() {
-    if (timer !== null) clearTimeout(timer);
-    timer = null;
     live = false;
+    if (pump) {
+      pump.reader.cancel().catch(() => {});
+      pump.track.stop();
+      pump = null;
+    }
     releaseFace();
     if (stream) stopTracks(stream);
     stream = null;
@@ -170,30 +185,43 @@ export function createCamera(video: HTMLVideoElement, onDisconnect: () => void, 
     async startLive(extended = false) {
       if (!bridge) throw new Error('Live measurement requires the Electron desktop app.');
       if (!stream || !context) throw new Error('Start a camera preview first.');
+      const Processor = (globalThis as { MediaStreamTrackProcessor?: TrackProcessorConstructor }).MediaStreamTrackProcessor;
+      if (typeof Processor !== 'function') throw new Error('This app build cannot read camera frames for SmartSpectra.');
+      const source = stream.getVideoTracks()[0];
+      if (!source || source.readyState !== 'live') throw new Error('Start a camera preview first.');
       const token = generation;
       await bridge.startLive(true, extended);
       if (token !== generation || !stream) { await bridge.stopLive(); return; }
+      const track = source.clone();
+      const reader = new Processor({ track, maxBufferSize: 2 }).readable.getReader();
+      pump = { reader, track };
       live = true;
-      let lastStamp = 0;
-      const tick = async () => {
-        if (!live || token !== generation || !stream) return;
-        try {
-          if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth > 0) {
-            [canvas.width, canvas.height] = sdkFrameSize(video.videoWidth, video.videoHeight);
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
-            lastStamp = Math.max(lastStamp + 1, Math.floor((performance.timeOrigin + performance.now()) * 1000));
-            sending = bridge.sendFrame({ bytes: new Uint8Array(pixels.data.buffer), width: canvas.width, height: canvas.height, stride: canvas.width * 4, timestampUs: lastStamp });
+      const clock: FrameClock = { offsetUs: null, lastUs: 0 };
+      const current = () => live && token === generation && pump?.reader === reader;
+      const run = async () => {
+        while (current()) {
+          const { value: frame, done } = await reader.read();
+          if (done) return;
+          try {
+            if (!current()) return;
+            const [width, height] = sdkFrameSize(frame.displayWidth, frame.displayHeight);
+            if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+            context.drawImage(frame, 0, 0, width, height);
+            const timestampUs = nextFrameStamp(clock, frame.timestamp, Math.floor((performance.timeOrigin + performance.now()) * 1000));
+            const pixels = context.getImageData(0, 0, width, height);
+            sending = bridge.sendFrame({ bytes: new Uint8Array(pixels.data.buffer), width, height, stride: width * 4, timestampUs });
             await sending;
+          } finally {
+            frame.close();
+            sending = null;
           }
-        } catch {
-          release();
-          onDisconnect();
-          return;
-        } finally { sending = null; }
-        if (live && token === generation) timer = setTimeout(() => { void tick(); }, 50);
+        }
       };
-      void tick();
+      void run().catch(() => {
+        if (!current()) return;
+        release();
+        onDisconnect();
+      });
     },
     stop,
   };
