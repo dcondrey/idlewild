@@ -7,6 +7,12 @@ const { randomUUID } = require('node:crypto');
 const { ENTRY_URL, WORKER_CSP, trustedURL, assetPath, validKey } = require('./security.cjs');
 const { createCaptureController } = require('./capture.cjs');
 const { createBenchmarkLimit } = require('./benchmark-limit.cjs');
+const { createPacketLog, packetLogPath } = require('./packet-log.cjs');
+
+const flag = name => process.argv.find(value => value.startsWith(`--${name}=`))?.slice(name.length + 3);
+const metricSet = flag('sdk-metrics') ?? 'standard';
+const packetLogFlag = flag('sdk-packet-log');
+const packetLog = packetLogFlag === undefined ? null : createPacketLog(packetLogPath(packetLogFlag, process.cwd()));
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'idlewild', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 app.setName('Idlewild');
@@ -22,6 +28,8 @@ const send = (channel, payload) => {
 const capture = createCaptureController({
   loadSDK: () => ({ ...require('@smartspectra/node-sdk'), decodeMetrics: require('@smartspectra/node-sdk/messages').decodeMetrics }),
   onFrame: frame => send('studio:metrics', frame),
+  metrics: metricSet,
+  ...(packetLog ? { onPacket: event => packetLog.record(event) } : {}),
   onStatus: status => {
     if (status.phase === 'idle') benchmarkLimit?.end();
     send('studio:status', status);
@@ -122,3 +130,4 @@ app.on('before-quit', event => {
   });
 });
 app.on('window-all-closed', () => app.quit());
+app.on('quit', () => packetLog?.close());

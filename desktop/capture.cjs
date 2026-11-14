@@ -44,8 +44,16 @@ function validateFrame(frame) {
   return { bytes, width, height, stride, timestampUs };
 }
 
-function createCaptureController({ loadSDK, onFrame, onStatus, now }) {
-  if (typeof loadSDK !== 'function' || typeof onFrame !== 'function' || typeof onStatus !== 'function') throw new Error('Invalid capture callbacks');
+const METRIC_SETS = Object.freeze({
+  standard: Object.freeze(['CHEST_BREATHING', 'BREATHING_RATE', 'PULSE_RATE', 'ARTERIAL_PRESSURE_TRACE', 'BLINKING', 'TALKING']),
+  core: Object.freeze(['CHEST_BREATHING', 'BREATHING_RATE', 'PULSE_RATE']),
+  extended: Object.freeze(['CHEST_BREATHING', 'BREATHING_RATE', 'PULSE_RATE', 'ARTERIAL_PRESSURE_TRACE', 'BLINKING', 'TALKING', 'HRV', 'EXPRESSIONS']),
+});
+
+function createCaptureController({ loadSDK, onFrame, onStatus, now, metrics = 'standard', onPacket }) {
+  if (typeof loadSDK !== 'function' || typeof onFrame !== 'function' || typeof onStatus !== 'function' || (onPacket !== undefined && typeof onPacket !== 'function')) throw new Error('Invalid capture callbacks');
+  if (!Object.hasOwn(METRIC_SETS, metrics)) throw new Error('Invalid metric set');
+  const metricNames = METRIC_SETS[metrics];
   const clockOrigin = Date.now();
   const monotonicOrigin = performance.now();
   const clock = now ?? (() => clockOrigin + performance.now() - monotonicOrigin);
@@ -142,13 +150,14 @@ function createCaptureController({ loadSDK, onFrame, onStatus, now }) {
           if (token !== generation || disposed) throw new Error('Capture start cancelled.');
           const { SmartSpectraSDK, MetricType, SmartSpectraLogLevel, decodeMetrics } = module;
           if (typeof SmartSpectraSDK !== 'function' || typeof decodeMetrics !== 'function' || !MetricType || SmartSpectraLogLevel?.kNone !== 4 || module.PixelFormat?.kRGBA !== 2) throw new Error('SDK interface unavailable');
-          const requestedMetrics = ['CHEST_BREATHING', 'BREATHING_RATE', 'PULSE_RATE', 'ARTERIAL_PRESSURE_TRACE', 'BLINKING', 'TALKING'].map(name => MetricType[name]);
+          const requestedMetrics = metricNames.map(name => MetricType[name]);
           if (!requestedMetrics.every(Number.isInteger)) throw new Error('SDK metric interface unavailable');
           sdk = new SmartSpectraSDK({ apiKey: key, requestedMetrics, enableTelemetry: false, enableAccumulatedOutput: false, logLevel: SmartSpectraLogLevel.kNone });
           key = '';
           epochMs = clock();
           if (!Number.isFinite(epochMs) || epochMs < 0 || !Number.isSafeInteger(Math.floor(epochMs * 1000))) throw new Error('Invalid capture clock');
           mapper = createMetricsMapper({ sessionId, epochUs: BigInt(Math.floor(epochMs * 1000)) });
+          if (onPacket) { try { onPacket({ kind: 'session', sessionId, epochUs: String(Math.floor(epochMs * 1000)), metrics: metricNames }); } catch {} }
           lastFrameUs = -1;
           lastSubmitMs = -Infinity;
           lastEmittedMs = -1;
@@ -160,6 +169,7 @@ function createCaptureController({ loadSDK, onFrame, onStatus, now }) {
             try {
               if (!(buffer instanceof Uint8Array) || buffer.byteLength === 0 || buffer.byteLength > MAX_PACKET_BYTES) throw new Error('Invalid packet size');
               const timeMs = Math.max(0, clock() - epochMs);
+              if (onPacket) { try { onPacket({ kind: 'packet', timeMs, bytes: buffer }); } catch {} }
               mapper.ingest(decodeMetrics(buffer), timeMs);
               emit(timeMs);
             } catch { fail('SmartSpectra returned invalid data. Stop and retry the session.'); }
@@ -243,4 +253,4 @@ function createCaptureController({ loadSDK, onFrame, onStatus, now }) {
   };
 }
 
-module.exports = { createCaptureController, validateFrame, MAX_WIDTH, MAX_HEIGHT, MAX_FRAME_BYTES };
+module.exports = { createCaptureController, validateFrame, METRIC_SETS, MAX_WIDTH, MAX_HEIGHT, MAX_FRAME_BYTES };

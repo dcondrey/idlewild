@@ -11,6 +11,8 @@ const CHANNELS = Object.freeze({
   blink: ['face', 'blinking', 'boolean', 0],
   talking: ['face', 'talking', 'boolean', 0],
 });
+const TRACE_WINDOWS = Object.freeze({ breath: 20_000, arterialTrace: 6_000 });
+const MAX_TRACE_POINTS = 2048;
 const own = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
 
 function microseconds(value) {
@@ -27,9 +29,41 @@ function microseconds(value) {
   throw new Error('Invalid measurement timestamp');
 }
 
+function percentile(sorted, fraction) {
+  const position = (sorted.length - 1) * fraction;
+  const low = Math.floor(position);
+  const high = Math.min(sorted.length - 1, low + 1);
+  return sorted[low] + (sorted[high] - sorted[low]) * (position - low);
+}
+
+// SDK traces have no declared units or scale, so each is centered and scaled by its own recent 5th-95th percentile range.
+function createTraceNormalizer(windowMs) {
+  let points = [];
+  return {
+    add(timeMs, value) {
+      if (points.length && timeMs <= points[points.length - 1].timeMs) return;
+      points.push({ timeMs, value });
+      const cutoff = timeMs - windowMs;
+      let start = 0;
+      while (start < points.length && points[start].timeMs < cutoff) start++;
+      if (start || points.length > MAX_TRACE_POINTS) points = points.slice(Math.max(start, points.length - MAX_TRACE_POINTS));
+    },
+    normalize(value) {
+      if (points.length < 2) return 0;
+      const sorted = points.map(point => point.value).sort((a, b) => a - b);
+      const low = percentile(sorted, 0.05);
+      const high = percentile(sorted, 0.95);
+      const half = (high - low) / 2;
+      if (!(half > 0) || !Number.isFinite(half)) return 0;
+      return Math.max(-1, Math.min(1, (value - (low + high) / 2) / half));
+    },
+  };
+}
+
 function createMetricsMapper({ sessionId, epochUs }) {
   const origin = microseconds(epochUs);
   const latest = new Map();
+  const traces = new Map(Object.entries(TRACE_WINDOWS).map(([channel, windowMs]) => [channel, createTraceNormalizer(windowMs)]));
   let previousTime = -Infinity;
 
   return {
@@ -45,6 +79,8 @@ function createMetricsMapper({ sessionId, epochUs }) {
         count += values.length;
         if (count > 8192) throw new Error('Metrics sample limit exceeded');
         let newest = latest.get(channel);
+        const trace = traces.get(channel);
+        const accepted = [];
         for (const sample of values) {
           if (!sample || typeof sample !== 'object' || Array.isArray(sample)) throw new Error('Invalid metric sample');
           const key = unit === 'boolean' ? 'detected' : 'value';
@@ -61,9 +97,11 @@ function createMetricsMapper({ sessionId, epochUs }) {
           if (sampledAtMs > timeMs || sampledAtMs < -STALE_MS) continue;
           const confidence = own(sample, 'confidence') && sample.confidence !== null ? sample.confidence : null;
           if (confidence !== null && (typeof confidence !== 'number' || !Number.isFinite(confidence) || confidence < 0 || confidence > 100)) throw new Error('Invalid metric confidence');
+          if (trace) accepted.push({ sampledAtMs, rawValue });
           if (newest && timestamp <= newest.timestamp) continue;
           newest = {
             timestamp,
+            raw: rawValue,
             signal: {
               value: unit === 'boolean' ? Number(rawValue) : rawValue,
               quality: sample.stable === true && (confidence === null || confidence >= threshold) ? 'valid' : 'unstable',
@@ -73,6 +111,11 @@ function createMetricsMapper({ sessionId, epochUs }) {
               provenance: 'measured',
             },
           };
+        }
+        if (trace) {
+          accepted.sort((a, b) => a.sampledAtMs - b.sampledAtMs);
+          for (const point of accepted) trace.add(point.sampledAtMs, point.rawValue);
+          if (newest && newest !== latest.get(channel)) newest.signal.value = trace.normalize(newest.raw);
         }
         if (newest) updates.set(channel, newest);
       }

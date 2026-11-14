@@ -16,7 +16,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-function fixture(options: { load?: Promise<void>; start?: Promise<void>; stop?: Promise<void>; throwStart?: boolean; throwDestroy?: boolean } = {}) {
+function fixture(options: { load?: Promise<void>; start?: Promise<void>; stop?: Promise<void>; throwStart?: boolean; throwDestroy?: boolean; metrics?: string; onPacket?: (event: Record<string, unknown>) => void } = {}) {
   const frames: ControlFrame[] = [];
   const statuses: CaptureStatus[] = [];
   const calls: string[] = [];
@@ -46,6 +46,7 @@ function fixture(options: { load?: Promise<void>; start?: Promise<void>; stop?: 
   const controller = createCaptureController({
     loadSDK: async () => { calls.push('load'); await options.load; return module; },
     onFrame: (frame: ControlFrame) => frames.push(frame), onStatus: (status: CaptureStatus) => statuses.push(status), now: () => now,
+    ...(options.metrics ? { metrics: options.metrics } : {}), ...(options.onPacket ? { onPacket: options.onPacket } : {}),
   });
   return { controller, calls, instances, frames, statuses, advance: (milliseconds: number) => { now += milliseconds; } };
 }
@@ -192,12 +193,32 @@ test('protobuf samples distinguish absent from zero and preserve confidence, ins
 test('measurement arrays deduplicate and preserve acquisition age across packets and staleness boundary', () => {
   const mapper = createMetricsMapper({ sessionId: 's', epochUs: BigInt(EPOCH) * 1000n });
   const sample = (offset: number, value: number) => ({ value, stable: true, timestamp: EPOCH * 1000 + offset });
-  assert.equal(mapper.ingest({ breathing: { upperTrace: [sample(1000, 1), sample(0, 2)] } }, 1).signals.breath.value, 1);
-  assert.equal(mapper.ingest({ breathing: { upperTrace: [sample(0, 3), sample(1000, 4)] } }, 2).signals.breath.value, 1);
+  assert.equal(mapper.ingest({ breathing: { upperTrace: [sample(1000, 1), sample(0, 2)] } }, 1).signals.breath.value, -1);
+  assert.equal(mapper.ingest({ breathing: { upperTrace: [sample(0, 3), sample(1000, 4)] } }, 2).signals.breath.value, -1);
   assert.equal(mapper.snapshot(1500).signals.breath.quality, 'valid');
   assert.equal(mapper.snapshot(1501).signals.breath.quality, 'stale');
   assert.equal(mapper.snapshot(1502).signals.breath.sampledAtMs, 1);
   assert.throws(() => mapper.snapshot(1501));
+});
+
+test('unscaled SDK traces normalize to the same bounded shape regardless of offset and gain', () => {
+  const run = (offset: number, gain: number) => {
+    const mapper = createMetricsMapper({ sessionId: 's', epochUs: BigInt(EPOCH) * 1000n });
+    const values: number[] = [];
+    for (let step = 0; step < 300; step++) {
+      const timeMs = step * 100;
+      const frame = mapper.ingest({ breathing: { upperTrace: [{ value: offset + gain * Math.sin(2 * Math.PI * timeMs / 4000), stable: true, timestamp: EPOCH * 1000 + timeMs * 1000 }] } }, timeMs);
+      values.push(frame.signals.breath.value);
+    }
+    return values;
+  };
+  const reference = run(0, 1);
+  const shifted = run(-4200, 0.003);
+  assert.ok(reference.every(value => value >= -1 && value <= 1));
+  assert.ok(Math.max(...reference.slice(100)) > 0.95 && Math.min(...reference.slice(100)) < -0.95);
+  for (let index = 100; index < reference.length; index++) assert.ok(Math.abs(reference[index] - shifted[index]) < 1e-6);
+  const flat = createMetricsMapper({ sessionId: 's', epochUs: BigInt(EPOCH) * 1000n });
+  for (let step = 0; step < 5; step++) assert.equal(flat.ingest({ breathing: { upperTrace: [{ value: 7, stable: true, timestamp: EPOCH * 1000 + step * 1000 }] } }, step).signals.breath.value, 0);
 });
 
 test('unsafe, future, strict-clock, absent and oversized measurements never become valid controls', () => {
@@ -230,6 +251,20 @@ test('native metric callback uses measurement epochs, discards event timestamps 
   assert.ok(fake.statuses.every(status => !status.message.includes('secret')));
   assert.match(fake.statuses.at(-1)?.message ?? '', /credits/);
   await fake.controller.stop();
+  await fake.controller.dispose();
+});
+
+test('metric sets are allow-listed and the optional packet log sees the session epoch and raw bytes before decoding', async () => {
+  assert.throws(() => fixture({ metrics: 'everything' }), /metric set/);
+  const events: Record<string, unknown>[] = [];
+  const fake = fixture({ metrics: 'core', onPacket: event => events.push(event) });
+  await fake.controller.start(request());
+  assert.deepEqual(fake.instances[0].options.requestedMetrics, [0, 2, 15]);
+  const bytes = packet(EPOCH * 1000, 0.5);
+  fake.instances[0].emit('metrics', bytes);
+  assert.deepEqual(events.map(event => event.kind), ['session', 'packet']);
+  assert.equal(events[0].epochUs, String(EPOCH * 1000));
+  assert.equal(events[1].bytes, bytes);
   await fake.controller.dispose();
 });
 
