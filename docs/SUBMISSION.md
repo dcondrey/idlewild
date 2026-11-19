@@ -4,8 +4,8 @@ Deadline: November 22, 2026, 11:59 PM PST. Required: a published DEV post using 
 
 ## Before publishing
 
-- [ ] One authorized live run: `node scripts/live-benchmark.mjs --authorized` (55 s, writes `.local/live-benchmarks/<time>/`). If it fails with an entitlement error, rerun with `--sdk-metrics=core`.
-- [ ] Inspect `report.json` and replay `packets.jsonl` with `node scripts/replay-packets.mjs`; tune mapping offline, never with extra metered runs.
+- [x] One authorized live run (2026-11-18, standard metrics, 55 s; SDK accepted the frames): `node scripts/live-benchmark.mjs --authorized` (55 s, writes `.local/live-benchmarks/<time>/`). If it fails with an entitlement error, rerun with `--sdk-metrics=core`.
+- [x] Inspect `report.json` and replay `packets.jsonl` with `node scripts/replay-packets.mjs`; tune mapping offline, never with extra metered runs.
 - [ ] Record the demo take in a normal session (keep the window visible; hiding it stops input), export its control JSON, then re-render video, WAV, GLB and CSV from that JSON as often as needed.
 - [ ] Owner approves `docs/PRIVACY.md` and `docs/TERMS.md`.
 - [ ] Confirm no `.local/`, takes, packet logs, keys or recordings are tracked (`git ls-files`).

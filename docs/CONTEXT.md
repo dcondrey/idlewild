@@ -276,3 +276,11 @@ Verification ran from the internal-disk clone:
   - Old pump: 85 frames in 5 s, with 56–163 ms gaps.
   - New pump: 151 frames in 5 s, with 32.1–34.4 ms gaps, timestamps within 5 ms of the clock and nothing sent after stop.
 - Not verified: SDK acceptance of these frames, live cadence, polarity, entitlements, and the fused SmartSpectra + tracking path. These need the metered run; the fixture SDK was declined.
+
+## Authorized live run (2026-11-18)
+
+One 55 s standard-metric run from the internal-disk clone ended normally at the time limit (`limitReached`, exit 0). The SDK accepted the 30 fps frames and returned 854 breathing-trace samples, 3 breathing-rate samples, and blinking, talking and expression data. It returned no pulse rate, arterial trace or HRV; the SDK reported "Move back until your chest is visible" and "Signal is stale" for most of the run, so framing (face-only) is the likely cause. Entitlement was not the limit: no error 13 was raised. That cause is unverified.
+
+Defect found by replay: SDK `upperTrace` and `rate` samples carry no `stable` flag, and the decoded protobuf reads the absent field as `false` through its prototype default, so the mapper marked breath `unstable` for the whole run. The mapper now treats an absent own `stable` property as valid (explicit `false` stays unstable); HRV and expression keep the strict check. Regression test in `tests/capture.test.ts`. Not re-verified with a live session: that breath is valid live, and whether pulse, arterial trace and HRV appear when the chest is in frame.
+
+UI changes made afterwards: the signal panel sits top-left under the stage controls, the input label is a right-edge tag, the camera feed starts collapsed, and the preview shows the full 16:9 frame. `npm test` 174/174, build and `test:ui` pass.
