@@ -115,9 +115,12 @@ export function extendedLine(frame: ControlFrame | undefined, timeMs: number): s
   return parts.length ? parts.join('  ·  ') : null;
 }
 
+/** Clears the stage's top-left control row. */
+const PANEL_TOP = 56;
+
 export interface PanelRect { x: number; y: number; width: number; height: number }
 
-/** Draws the signal panel in the bottom-left of a width × height area and returns its rectangle, or null when nothing is drawn. */
+/** Draws the signal panel on the left edge, below the stage controls, of a width × height area and returns its rectangle, or null when nothing is drawn. */
 export function drawSignalOverlay(ctx: CanvasRenderingContext2D, width: number, height: number, view: OverlayView): PanelRect | null {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width < 160 || height < 120 || !Number.isFinite(view.timeMs)) return null;
   const header = overlayHeader(view);
@@ -134,7 +137,7 @@ export function drawSignalOverlay(ctx: CanvasRenderingContext2D, width: number, 
   const extra = extendedLine(latest, view.timeMs);
   const panelH = 22 + (status ? 12 : 0) + (compact ? 0 : 2 * (14 + 3 + sparkH + 3)) + 12 + 46 + (extra ? 14 : 0) + 6;
   const left = 8;
-  const top = Math.max(8, height - panelH - 8);
+  const top = height >= PANEL_TOP + panelH + 8 ? PANEL_TOP : Math.max(8, height - panelH - 8);
   ctx.save();
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = 'rgba(8, 15, 28, 0.78)';

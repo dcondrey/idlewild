@@ -68,9 +68,9 @@ export function mountStudio(root: HTMLElement) {
               <div id="framing-region" role="status" aria-live="polite"><div id="framing-prompt" class="framing-prompt" hidden><p>Move back so your whole body is visible.</p><button id="dismiss-framing" class="dismiss" aria-label="Dismiss framing tip">×</button></div></div>
               <div id="brain-legend" class="brain-legend" hidden><p id="brain-caption">${BRAIN_CAPTION}</p><ul id="brain-regions" class="brain-regions" aria-live="off" aria-label="Simulated region highlights" aria-describedby="brain-caption"></ul></div>
             </div>
-            <div id="pip" class="pip" hidden><video id="pip-video" muted playsinline autoplay aria-label="Live camera feed. Not recorded or exported."></video><button id="pip-toggle" class="overlay-button" aria-controls="pip-video" aria-expanded="true">Hide camera</button></div>
+            <div id="pip" class="pip" hidden><video id="pip-video" muted playsinline autoplay aria-label="Live camera feed. Not recorded or exported."></video><button id="pip-toggle" class="overlay-button" aria-controls="pip-video" aria-expanded="false">Show camera</button></div>
           </div>
-          <div class="stage-caption"><div class="caption-copy"><h2 id="scene-title">Rex</h2><span id="scene-caption">A sporty showman with a long chin and big expressions.</span></div><span id="input-watermark">NO INPUT</span></div>
+          <div class="stage-caption"><div class="caption-copy"><h2 id="scene-title">Rex</h2><span id="scene-caption">A sporty showman with a long chin and big expressions.</span></div></div><span id="input-watermark">NO INPUT</span>
         </div>
         <div id="transport" class="transport" hidden>
           <div class="transport-top"><button id="record" class="record" hidden>● Record take</button><button id="play" hidden>Play</button><label id="loop-control" class="check" hidden><input id="loop" type="checkbox" checked> Loop</label><output id="time">0:00.00 / 0:00.00</output><div id="take-actions" class="take-actions" hidden><button id="open-edit" class="quiet">Edit</button><button id="open-export">Export</button></div></div>
@@ -390,7 +390,7 @@ export function createCameraFeed(preview: HTMLVideoElement) {
   const container = byId('pip');
   const video = byId<HTMLVideoElement>('pip-video');
   const toggle = byId<HTMLButtonElement>('pip-toggle');
-  let collapsed = false;
+  let collapsed = true;
   const sync = (active: boolean) => {
     container.hidden = !active;
     const stream = active && !collapsed ? preview.srcObject : null;
@@ -491,7 +491,7 @@ export function setupGuide() {
     ['Your camera, your decision', 'Each step has its own consent. SmartSpectra uses account credits and Presage processing; without a key, face & body tracking runs on this device alone. Desk View and Continuity Camera appear as ordinary cameras. Stop input releases every camera.'],
     ['Try a rehearsal first', 'Start rehearsal plays clearly labeled synthetic breathing and pulse. It needs no camera, account or credits. Controls appear once your input is running.'],
     ['Add a face camera', 'Once the preview is open, Second camera adds an optional face close-up with its own consent. It must be a different device. Face values are geometric estimates, not emotions.'],
-    ['See yourself while you perform', 'A small live feed sits in the corner of the stage while a camera runs; Hide camera tucks it away. It is never part of an export. If you are too close, a tip asks you to step back.'],
+    ['See yourself while you perform', 'The stage stays clear by default; Show camera opens a small live feed in the corner of the stage while a camera runs, and Hide camera tucks it away again. It is never part of an export. If you are too close, a tip asks you to step back.'],
     ['Choose a character', 'The Character menu holds Rex, Sprite, the Rain runner, two abstract scenes and the brain. The brain scene is an educational simulation, not your measured brain activity.'],
     ['Use your own character', 'Use your own character opens import for a GLB or embedded glTF. Named bones and ARKit-style face morphs receive tracking; static models get creative movement. Rig requirements are listed there.'],
     ['Record once, play anywhere', 'Start an input, then Record take. Finish to keep up to three minutes of controls. Play, scrub and loop it on another character. Edit trims or deletes; Takes opens your library.'],

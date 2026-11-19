@@ -231,6 +231,9 @@ try {
   await page.evaluate(() => { window.__fixtureDeny = false; });
   await page.locator('#preview').click();
   await expect(page.locator('#pip')).toBeVisible();
+  await expect(page.locator('#pip-video')).toBeHidden();
+  assert.equal(await page.evaluate(() => document.getElementById('pip-video').srcObject), null, 'The camera feed is collapsed by default');
+  await page.evaluate(() => document.getElementById('pip-toggle').click());
   await expect.poll(() => page.evaluate(() => { const pip = document.getElementById('pip-video'); return pip.srcObject === document.getElementById('camera-preview').srcObject && pip.readyState >= 2 && !pip.paused; })).toBe(true);
   assert.equal(await page.evaluate(() => window.__fixtureTracks.length), 1, 'Picture-in-picture reuses the consented preview stream');
   await expect(page.locator('#face-camera-settings')).toBeVisible();
