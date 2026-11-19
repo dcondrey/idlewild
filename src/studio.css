@@ -212,7 +212,7 @@ button.dismiss { min-width: 28px; min-height: 28px; padding: 0 6px; border: 0; b
 .brain-regions.example li::before { background: #4fa8ff; }
 .brain-regions li.baseline::before { background: var(--muted); }
 .pip { display: grid; justify-items: end; gap: 6px; width: clamp(112px, 22%, 232px); }
-.pip video { width: 100%; max-height: none; margin: 0; aspect-ratio: 4 / 3; object-fit: cover; border: 1px solid #5b7170; border-radius: 10px; background: #0b1216; box-shadow: 0 8px 30px #0008; }
+.pip video { width: 100%; max-height: none; margin: 0; aspect-ratio: 16 / 9; object-fit: contain; border: 1px solid #5b7170; border-radius: 10px; background: #0b1216; box-shadow: 0 8px 30px #0008; }
 .pip.collapsed { width: auto; }
 .requirements { margin: 12px 0 0; padding-left: 18px; color: #c5d4d0; font-size: var(--fs-md); line-height: 1.6; }
 .requirements li { margin-bottom: 6px; text-wrap: pretty; }

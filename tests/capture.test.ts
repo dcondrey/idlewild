@@ -229,6 +229,14 @@ test('unscaled SDK traces normalize to the same bounded shape regardless of offs
   for (let step = 0; step < 5; step++) assert.equal(flat.ingest({ breathing: { upperTrace: [{ value: 7, stable: true, timestamp: EPOCH * 1000 + step * 1000 }] } }, step).signals.breath.value, 0);
 });
 
+test('SDK breath traces and rates carry no stable flag and are valid once warmed up; an explicit false stays unstable', () => {
+  const mapper = createMetricsMapper({ sessionId: 's', epochUs: BigInt(EPOCH) * 1000n });
+  const quality = (timeMs: number, stable?: boolean) => mapper.ingest({ breathing: { upperTrace: [{ value: Math.sin(timeMs / 700), timestamp: EPOCH * 1000 + timeMs * 1000, ...(stable === undefined ? {} : { stable }) }] } }, timeMs).signals.breath.quality;
+  for (let timeMs = 0; timeMs < 6000; timeMs += 250) quality(timeMs);
+  assert.equal(quality(6000), 'valid');
+  assert.equal(quality(6250, false), 'unstable');
+});
+
 test('normalized breath reports unstable until the trace window has warmed up', () => {
   const mapper = createMetricsMapper({ sessionId: 's', epochUs: BigInt(EPOCH) * 1000n });
   const quality = (timeMs: number) => mapper.ingest({ breathing: { upperTrace: [{ value: Math.sin(timeMs / 700), stable: true, timestamp: EPOCH * 1000 + timeMs * 1000 }] } }, timeMs).signals.breath.quality;

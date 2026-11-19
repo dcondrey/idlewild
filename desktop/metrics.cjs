@@ -156,7 +156,7 @@ function createMetricsMapper({ sessionId, epochUs }) {
             raw: rawValue,
             signal: {
               value: unit === 'boolean' ? Number(rawValue) : rawValue,
-              quality: sample.stable === true && (confidence === null || confidence >= threshold) ? 'valid' : 'unstable',
+              quality: (!own(sample, 'stable') || sample.stable !== false) && (confidence === null || confidence >= threshold) ? 'valid' : 'unstable',
               confidence: confidence === null ? null : confidence / 100,
               sampledAtMs,
               unit,
