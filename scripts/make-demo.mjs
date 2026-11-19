@@ -67,6 +67,8 @@ try {
   await say('Rex: chest and shoulders follow the breathing trace.', 6000);
   await pick('bubbles');
   await say('Bubbles rise on inhale and release on exhale.', 6000);
+  await say('', 300);
+  await page.screenshot({ path: path.join(output, 'screenshot-bubbles.png') });
   await pick('star');
   await say('Star glows with breath and shimmers with the pulse waveform.', 6000);
 
@@ -77,7 +79,10 @@ try {
     await say('Playback of a real SmartSpectra session recorded earlier. The panel says RECORDED TAKE: this is not live input.', 6000);
     await pick('rex');
     await page.locator('#play').click();
-    await say('The SDK breathing trace and expression estimates drive Rex. Pulse was not reported in that session, so none is shown.', 7000);
+    await page.waitForTimeout(2500);
+  await say('', 100);
+  await page.screenshot({ path: path.join(output, 'screenshot-replay.png') });
+  await say('The SDK breathing trace and expression estimates drive Rex. Pulse was not reported in that session, so none is shown.', 7000);
   }
 
   await say('Export: control JSON, procedural sound, baked GLB with breathing curves, CSV, and video with the signal panel.', 3500);

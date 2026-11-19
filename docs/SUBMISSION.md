@@ -35,6 +35,8 @@ Idlewild is a desktop performance studio for animators and game makers. You brea
 
 {% embed VIDEO_URL %}
 
+![Rex playing a recorded SmartSpectra take, with the signal panel showing breath quality and the RECORDED TAKE label](SCREENSHOT_URL)
+
 ### Code
 
 {% embed https://github.com/dcondrey/idlewild %}
