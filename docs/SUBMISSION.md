@@ -28,7 +28,7 @@ Deadline: November 22, 2026, 11:59 PM PST. Required: a published DEV post using 
 
 ### What I Built
 
-Idlewild is a desktop performance studio for animators and game makers. You breathe, move and perform in front of a webcam; SmartSpectra measures your chest breathing, breathing rate and pulse rate, on-device tracking follows your face and body, and a character performs with you. Record once, replay the same performance on any character, then export video, procedural sound, a baked GLB with real breathing curves and CSV curves for your animation tools. Idle loops and cutscenes get breathing captured from a real person instead of a sine wave.
+Idlewild is a desktop performance studio for animators and game makers. You breathe, move and perform in front of a webcam; SmartSpectra measures your chest breathing and, when your chest and face are well framed, breathing rate and pulse rate; on-device tracking follows your face and body, and a character performs with you. Record once, replay the same performance on any character, then export video, procedural sound, a baked GLB with real breathing curves and CSV curves for your animation tools. Idle loops and cutscenes get breathing captured from a real person instead of a sine wave.
 
 ### Demo
 
@@ -42,8 +42,8 @@ Idlewild is a desktop performance studio for animators and game makers. You brea
 
 - **Chest breathing trace** drives chest, shoulder and head motion on Rex, Sprite and the Rain runner; bubbles rise on inhale and release on exhale; the star glows; the sound's breath layer swells. The trace has no declared units, so Idlewild centers and scales it against its own recent range.
 - **Breathing rate** sets slow, bounded scene pacing. Faster breathing is never rewarded, and the runner's pace is chosen, not breath-driven.
-- **Pulse rate** warms colors and glow and is shown with its trend. It is never turned into fake heartbeats.
-- **Pulse waveform** (uncalibrated arterial trace) adds a fine shimmer and a subtle tremolo.
+- **Pulse rate**, when SmartSpectra reports it, warms colors and glow and is shown with its trend. It is never turned into fake heartbeats.
+- **Pulse waveform** (uncalibrated arterial trace), when reported, adds a fine shimmer and a subtle tremolo.
 - **Blink and talking** move eyelids and jaw when no face is tracked locally. **HRV and expression estimates** are opt-in.
 - Every signal carries its quality and confidence onto an on-stage panel that is also composited into exported video. Missing or stale input fades out and is never invented. SmartSpectra frames and local MediaPipe tracking from the same camera are merged onto one timeline.
 
